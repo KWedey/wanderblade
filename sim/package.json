@@ -1,0 +1,12 @@
+{
+  "name": "@wanderblade/sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/run.ts"
+  },
+  "dependencies": {
+    "@wanderblade/core": "*"
+  }
+}
