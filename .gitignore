@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.omc/
+.planning/
+sim/out/
+.DS_Store
