@@ -10,7 +10,7 @@ import {
   type Rarity,
   type Recap,
 } from '@wanderblade/core';
-import { formatDuration, formatNumber, formatPercent } from './format';
+import { formatDuration, formatGold, formatNumber, formatPercent, formatRate } from './format';
 import type { LogEntry } from './flavor';
 
 const LOG_LIMIT = 40;
@@ -51,6 +51,11 @@ export interface ViewModel {
   bossResult: 'win' | 'fail' | null;
   levelCost: number;
   canAffordLevel: boolean;
+  goldPerSec: number;
+  /** Goal-gradient chips: the nearest road waypoint and the cheapest power buy. */
+  marchGoal: string;
+  purchaseGoal: string;
+  purchaseReady: boolean;
   skills: SkillVM[];
   gear: Record<GearSlot, GearVM | null>;
   worldsEdgeReached: boolean;
@@ -67,7 +72,8 @@ export interface ViewHandlers {
 
 export interface View {
   renderPanels(vm: ViewModel): void;
-  renderGold(value: number): void;
+  /** Per-animation-frame updates: the gold odometer and the zone-bar sweep [0,1]. */
+  renderFrame(gold: number, zoneSweep: number): void;
   pushLog(entries: LogEntry[]): void;
   showRecap(recap: Recap, elapsedSec: number): void;
   isRecapOpen(): boolean;
@@ -124,12 +130,17 @@ function template(): string {
     <section class="stats">
       <div class="stat gold-stat">
         <span class="stat-value gold" data-role="gold">0</span>
-        <span class="stat-label">gold</span>
+        <span class="stat-label">gold <span class="gold-rate" data-role="gold-rate"></span></span>
       </div>
       <div class="stat dps-stat">
         <span class="stat-value dps" data-role="dps">0</span>
         <span class="stat-label">DPS</span>
       </div>
+    </section>
+
+    <section class="goal-strip">
+      <span class="goal-chip" data-role="goal-march"></span>
+      <span class="goal-chip" data-role="goal-purchase"></span>
     </section>
 
     <section class="boss-panel" data-role="boss-panel" hidden>
@@ -215,7 +226,10 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const leaguesEl = q(root, '[data-role="leagues"]');
   const zoneFillEl = q(root, '[data-role="zone-fill"]');
   const goldEl = q(root, '[data-role="gold"]');
+  const goldRateEl = q(root, '[data-role="gold-rate"]');
   const dpsEl = q(root, '[data-role="dps"]');
+  const goalMarchEl = q(root, '[data-role="goal-march"]');
+  const goalPurchaseEl = q(root, '[data-role="goal-purchase"]');
 
   const bossPanelEl = q(root, '[data-role="boss-panel"]');
   const bossNameEl = q(root, '[data-role="boss-name"]');
@@ -281,14 +295,29 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     handlers.onCollectRecap();
   });
 
+  // The zone bar is driven per-frame by renderFrame (not renderPanels), so the
+  // sweep stays smooth; DPS is tracked across paints to punch on increases.
+  let lastDps = -1;
+
   function renderPanels(vm: ViewModel): void {
     regionEl.textContent = vm.regionName;
     zoneEl.textContent = vm.atGate
       ? 'At the Gate'
       : `Zone ${vm.zoneInRegion}/${vm.zonesPerRegion}`;
     leaguesEl.textContent = `${formatLeagues(vm.leagues)} leagues`;
-    zoneFillEl.style.width = `${Math.min(1, Math.max(0, vm.zoneProgress)) * 100}%`;
     dpsEl.textContent = formatNumber(vm.dps);
+    if (vm.dps > lastDps && lastDps >= 0) {
+      // Restart the punch even if it's mid-flight (rapid purchases).
+      dpsEl.classList.remove('punch');
+      void dpsEl.offsetWidth;
+      dpsEl.classList.add('punch');
+    }
+    lastDps = vm.dps;
+
+    goldRateEl.textContent = formatRate(vm.goldPerSec);
+    goalMarchEl.textContent = vm.marchGoal;
+    goalPurchaseEl.textContent = vm.purchaseGoal;
+    goalPurchaseEl.classList.toggle('ready', vm.purchaseReady);
 
     // Boss gate.
     bossPanelEl.hidden = !vm.atGate;
@@ -369,8 +398,21 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     }
   }
 
-  function renderGold(value: number): void {
-    goldEl.textContent = formatNumber(value);
+  // Per-frame path: only touch the DOM when the rendered string/scale actually
+  // changed, so 60–120Hz updates cost nothing while a digit isn't moving.
+  let lastGoldText = '';
+  let lastSweep = -1;
+
+  function renderFrame(gold: number, zoneSweep: number): void {
+    const text = formatGold(gold);
+    if (text !== lastGoldText) {
+      lastGoldText = text;
+      goldEl.textContent = text;
+    }
+    if (Math.abs(zoneSweep - lastSweep) > 0.0005) {
+      lastSweep = zoneSweep;
+      zoneFillEl.style.transform = `scaleX(${zoneSweep})`;
+    }
   }
 
   function pushLog(entries: LogEntry[]): void {
@@ -408,5 +450,5 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     seedEl.textContent = String(seed);
   }
 
-  return { renderPanels, renderGold, pushLog, showRecap, isRecapOpen, setSeed };
+  return { renderPanels, renderFrame, pushLog, showRecap, isRecapOpen, setSeed };
 }

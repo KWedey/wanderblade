@@ -24,6 +24,34 @@ export function formatNumber(n: number): string {
   return n.toExponential(2);
 }
 
+/**
+ * Odometer format for the live gold counter — tuned so low-order digits visibly
+ * churn at every scale (the "numbers go fast" fix, DECISIONS.md #12):
+ *   0..999       → one decimal ("42.7") so the tail moves even at ~0.5 gold/s
+ *   1e3..1e6-1   → full digits with separators ("12,847")
+ *   ≥1e6         → ~6 significant figures + suffix ("1.23456M", "123.456M")
+ * Costs and stats keep the compact `formatNumber`; only the counter churns.
+ */
+export function formatGold(n: number): string {
+  if (!Number.isFinite(n)) return '∞';
+  if (n < 0) return '-' + formatGold(-n);
+  if (n < 1000) return n.toFixed(1);
+  if (n < 1_000_000) return Math.floor(n).toLocaleString('en-US');
+
+  const tier = Math.floor(Math.log10(n) / 3);
+  if (tier >= SUFFIXES.length) return n.toExponential(4);
+  const scaled = n / Math.pow(1000, tier);
+  const intDigits = scaled >= 100 ? 3 : scaled >= 10 ? 2 : 1;
+  return scaled.toFixed(6 - intDigits) + SUFFIXES[tier];
+}
+
+/** Compact per-second rate: "+0.5/s", "+12.4/s", "+1.23K/s". */
+export function formatRate(perSec: number): string {
+  if (!Number.isFinite(perSec)) return '∞';
+  const body = perSec < 100 ? perSec.toFixed(1) : formatNumber(perSec);
+  return `+${body}/s`;
+}
+
 /** Whole-number percent for meters/readouts: 0.78 → "78%". */
 export function formatPercent(ratio: number): string {
   if (!Number.isFinite(ratio)) return '∞';

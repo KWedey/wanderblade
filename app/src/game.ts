@@ -8,9 +8,11 @@ import {
   buyHeroLevel as coreBuyHeroLevel,
   buySkill as coreBuySkill,
   challengeBoss,
+  enemyGold,
   heroDps,
   initialState,
   killsPerZone,
+  killTime,
   levelCost,
   readiness,
   skillCost,
@@ -31,7 +33,7 @@ import {
   zoneInRegion,
   type LogEntry,
 } from './flavor';
-import { formatDuration } from './format';
+import { formatDuration, formatPercent } from './format';
 import { clearSave, readSave, writeSave } from './save';
 import type { GearVM, SkillVM, View, ViewModel } from './view';
 
@@ -43,8 +45,15 @@ const RECAP_SEC = 60;
 const SUSPEND_TICK_SEC = 90;
 /** How long a boss win/fail flourish stays on screen. */
 const BOSS_RESULT_MS = 2600;
-/** Gold counter easing per animation frame. */
-const GOLD_EASE = 0.18;
+/**
+ * Gold count-up smoothing rate in 1/s, applied as `1 - exp(-rate * dt)` per
+ * frame so the counter converges identically on 60Hz and 120Hz displays.
+ */
+const GOLD_SMOOTH_RATE = 8;
+/** Faster settle when gold drops so a purchase reads as one crisp debit. */
+const GOLD_SMOOTH_RATE_DOWN = 18;
+/** Cap on display-clock extrapolation past the last engine tick (throttled tabs). */
+const MAX_EXTRAPOLATE_SEC = 0.6;
 
 function randomSeed(): number {
   return Math.floor(Math.random() * 0xffffffff) >>> 0;
@@ -54,7 +63,11 @@ export class Game {
   private state: GameState;
   private displayGold: number;
   private lastTickMs = 0;
+  private lastFrameMs = 0;
   private lastSaveMs = 0;
+  /** Current-zone kill duration/payout, cached per state change (not per frame). */
+  private killDurSec = 1;
+  private goldPerKill = 0;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private rafId: number | null = null;
   private bossResult: 'win' | 'fail' | null = null;
@@ -123,15 +136,41 @@ export class Game {
     this.maybeSave(now);
   };
 
-  private readonly animate = (): void => {
-    const target = this.state.gold;
+  /**
+   * Display-only estimate [0,1] of progress through the current kill. The
+   * engine's kill schedule is absolute (state.nextKillAtSec), so between ticks
+   * we extrapolate the game clock on the wall clock; every tick re-grounds it.
+   * Never feeds back into core state — pure presentation.
+   */
+  private killProgress(): number {
+    const sinceTickSec = this.view.isRecapOpen()
+      ? 0 // world paused behind the recap — freeze the sweep too
+      : Math.min((performance.now() - this.lastTickMs) / 1000, MAX_EXTRAPOLATE_SEC);
+    const remainingSec = this.state.nextKillAtSec - (this.state.timeSec + sinceTickSec);
+    const p = 1 - remainingSec / this.killDurSec;
+    return p < 0 ? 0 : p > 1 ? 1 : p;
+  }
+
+  private readonly animate = (frameMs: number): void => {
+    const frameDtSec =
+      this.lastFrameMs > 0 ? Math.min((frameMs - this.lastFrameMs) / 1000, 0.25) : 1 / 60;
+    this.lastFrameMs = frameMs;
+
+    // The counter chases confirmed gold *plus* the current enemy's accruing
+    // share, so the low digits climb continuously and glide into the exact
+    // payout on the kill (enemyGold is deterministic — no snap-back).
+    const p = this.killProgress();
+    const target = this.state.gold + this.goldPerKill * p;
     const diff = target - this.displayGold;
-    if (Math.abs(diff) < 0.5) {
-      this.displayGold = target;
-    } else {
-      this.displayGold += diff * GOLD_EASE;
-    }
-    this.view.renderGold(this.displayGold);
+    const rate = diff >= 0 ? GOLD_SMOOTH_RATE : GOLD_SMOOTH_RATE_DOWN;
+    this.displayGold += diff * (1 - Math.exp(-rate * frameDtSec));
+
+    // Zone bar sweeps with the kill while marching; parked at a gate the zone
+    // count is frozen, so hold the bar at the whole-kill mark.
+    const sweep = this.state.gate.atGate
+      ? this.state.killsInZone / killsPerZone
+      : Math.min(1, (this.state.killsInZone + p) / killsPerZone);
+    this.view.renderFrame(this.displayGold, sweep);
     this.rafId = requestAnimationFrame(this.animate);
   };
 
@@ -238,6 +277,10 @@ export class Game {
   // --- Rendering ---------------------------------------------------------
 
   private renderAll(): void {
+    // Every state change funnels through here, so the frame-loop caches stay
+    // fresh without recomputing engine math 60× a second.
+    this.killDurSec = killTime(this.state);
+    this.goldPerKill = enemyGold(this.state.zone);
     this.view.renderPanels(this.buildViewModel());
   }
 
@@ -272,6 +315,38 @@ export class Game {
     });
 
     const heroLevelCost = levelCost(s.hero.level);
+    const goldPerSec = this.goldPerKill / this.killDurSec;
+
+    // Goal gradient: the nearest waypoint on the road…
+    let marchGoal: string;
+    if (s.gate.atGate) {
+      if (onCooldown) {
+        marchGoal = `Rematch in ${formatDuration(s.gate.cooldownUntilSec - s.timeSec)}`;
+      } else if (r >= 1) {
+        marchGoal = 'Boss ready — challenge!';
+      } else {
+        marchGoal = `Farming gear — boss ${formatPercent(r)}`;
+      }
+    } else {
+      const killsLeft = killsPerZone - s.killsInZone;
+      const nextIsGate = zoneInRegion(s.zone) === zonesPerRegion;
+      marchGoal = `${killsLeft} kill${killsLeft === 1 ? '' : 's'} to ${
+        nextIsGate ? 'the Boss Gate' : `Zone ${zoneInRegion(s.zone) + 1}`
+      }`;
+    }
+
+    // …and the cheapest buyable power bump, with a live ETA.
+    let purchaseName = `Hero Lv ${s.hero.level + 1}`;
+    let purchaseCost = heroLevelCost;
+    for (const skill of skills) {
+      if (!skill.unlocked || skill.atMax || skill.cost >= purchaseCost) continue;
+      purchaseCost = skill.cost;
+      purchaseName = `${skill.name} ${skill.level + 1}`;
+    }
+    const purchaseReady = s.gold >= purchaseCost;
+    const purchaseGoal = purchaseReady
+      ? `${purchaseName} ready — tap it!`
+      : `${purchaseName} in ~${formatDuration((purchaseCost - s.gold) / goldPerSec)}`;
 
     return {
       regionName: regionName(region),
@@ -290,6 +365,10 @@ export class Game {
       bossResult: this.currentBossResult(),
       levelCost: heroLevelCost,
       canAffordLevel: s.gold >= heroLevelCost,
+      goldPerSec,
+      marchGoal,
+      purchaseGoal,
+      purchaseReady,
       skills,
       gear: {
         weapon: this.gearVM('weapon'),
