@@ -81,7 +81,7 @@ describe('hero damage model', () => {
     ).toBeCloseTo(15, 10);
   });
 
-  it('heroDps = (base + gear) * skillMult * (1 + mastery); initial is d0', () => {
+  it('heroDps = (base + gear) * skillMult; initial is d0', () => {
     const s = initialState(1);
     expect(heroDps(s)).toBeCloseTo(d0, 10);
 

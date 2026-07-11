@@ -19,10 +19,6 @@ export class Collector {
   goldEarned = 0;
   drops = 0;
   equips = 0;
-  leaguesTraveled = 0;
-  bossWins = 0;
-  zonesEntered = 0;
-  regionsEntered = 0;
 
   // Headline milestones.
   firstPurchaseSec: number | null = null;
@@ -48,10 +44,6 @@ export class Collector {
     this.goldEarned += recap.goldEarned;
     this.drops += recap.drops;
     this.equips += recap.equips;
-    this.leaguesTraveled += recap.leaguesTraveled;
-    this.bossWins += recap.bossWins;
-    this.zonesEntered += recap.zonesEntered;
-    this.regionsEntered += recap.regionsEntered;
   }
 
   /**

@@ -27,8 +27,10 @@ const EIGHT_HOUR_SEC = 8 * SEC_PER_HOUR;
 
 /**
  * Advance sub-step cap. Small enough that a single advance never approaches the
- * core's EVENT_CAP (kill-time floor is 0.3s → ≤ 12k kills/hour), so the kill
- * event stream is never truncated and the trash kill-time deltas stay exact.
+ * core's EVENT_CAP (50k): the kill-time floor is minKillTimeSec = 2s → ≤ 1,800
+ * kills/hour, so a one-hour sub-step yields at most ~1,800 kill events, far
+ * under the cap. The kill event stream is never truncated and the trash
+ * kill-time deltas stay exact.
  */
 const SAMPLE_STEP_SEC = SEC_PER_HOUR;
 

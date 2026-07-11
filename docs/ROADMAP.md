@@ -1,24 +1,24 @@
 # Wanderblade — Roadmap
 
-**Current milestone: M0.** Every milestone ends in something you can feel — pacing in a sim, a build on a phone.
+**Current milestone: M1 (M1a complete, M1b next).** Every milestone ends in something you can feel — pacing in a sim, a build on a phone.
 
-## M0 — Vision + Economy Simulator *(now)*
+## M0 — Vision + Economy Simulator *(complete)*
 
 - [x] Concept chosen (Wanderblade — see DECISIONS.md #3)
 - [x] Design docs scaffolded and reviewed (3-lens review applied)
-- [ ] `packages/core` — pure TS game rules (deterministic, seeded PRNG — DECISIONS.md #6)
-- [ ] `sim/` — fast-forward harness with the deterministic bot policy from ECONOMY.md
-- [ ] Tune constants until all **M0-gating** pacing targets pass on a 10-day run
+- [x] `packages/core` — pure TS game rules (deterministic, seeded PRNG — DECISIONS.md #6)
+- [x] `sim/` — fast-forward harness with the deterministic bot policy from ECONOMY.md
+- [x] Tune constants until all **M0-gating** pacing targets pass on a 10-day run
 
-**Exit:** every M0-gating target in ECONOMY.md passes in simulation. (M0 pacing is a pre-Bestiary baseline — re-tuned in M2 by design.)
+**Exit: MET** — `npm run sim` prints `OVERALL M0 EXIT: PASS (all targets, all seeds)` on 3 seeds × 10 days. (M0 pacing is a pre-Bestiary baseline — re-tuned in M2 by design.)
 
-## M1 — Grey-box core loop
+## M1 — Grey-box core loop *(now)*
 
 Ordered deliberately: prove the fun with the cheapest possible UI *before* building the renderer — the loop's pull must survive without spectacle.
 
-- [ ] **M1a — Loop with minimal UI:** counters, upgrade buttons, log feed — no animation. Auto-fight math, gold/loot, hero levels, gear + auto-equip, 1–2 skills, first two regions + first **boss gate** (Readiness meter, Challenge button, auto-challenge — DESIGN.md).
-- [ ] Save/load (local persistence; prestige-persistent vs run-local state separated from day one — see DESIGN.md Prestige)
-- [ ] Offline progress + "Back on the Road" recap
+- [x] **M1a — Loop with minimal UI:** counters, upgrade buttons, log feed — no animation. Auto-fight math, gold/loot, hero levels, gear + auto-equip, 1–2 skills, first two regions + first **boss gate** (Readiness meter, Challenge button, auto-challenge — DESIGN.md).
+- [x] Save/load (local persistence; prestige-persistent vs run-local state separated from day one — see DESIGN.md Prestige)
+- [x] Offline progress + "Back on the Road" recap
 - [ ] Playable in a mobile browser on a real phone → **playtest checkpoint: is the pull real?**
 - [ ] **M1b — Road renderer v0:** simple-shapes diorama (hero walks, monsters spawn, numbers pop). The single biggest build in M1, started only after the loop proves out.
 - [ ] **M1b — Road Play v1:** Trailside Glints + Roadside Discoveries as live-only overlays on the renderer; tune the active-income multiplier by playtest.

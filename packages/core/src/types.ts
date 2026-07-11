@@ -74,7 +74,8 @@ export interface GameState {
   lifetime: LifetimeStats;
   /**
    * Set once the final region's boss falls. Past this point the road scales
-   * endlessly (zones keep incrementing, no further gates) — prototype behavior.
+   * endlessly (zones keep incrementing; gates still form at every region end) —
+   * prototype behavior.
    */
   worldsEdgeReached: boolean;
 }

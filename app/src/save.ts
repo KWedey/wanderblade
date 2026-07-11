@@ -2,7 +2,7 @@
 // serialized state string with a schema version and a wall-clock timestamp so
 // a cold load can compute offline elapsed time and advance the same code path.
 
-import { deserialize, serialize, type GameState } from '@wanderblade/core';
+import { deserialize, serialize, GEAR_SLOTS, type GameState } from '@wanderblade/core';
 
 const SAVE_KEY = 'wanderblade-save-v1';
 const SAVE_VERSION = 1;
@@ -33,6 +33,79 @@ export function writeSave(state: GameState): void {
   }
 }
 
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/** A gear slot is either empty (null) or a well-formed item the view can paint. */
+function isValidGearItem(v: unknown): boolean {
+  if (v === null) return true;
+  if (typeof v !== 'object') return false;
+  const item = v as Record<string, unknown>;
+  return isFiniteNumber(item.power) && typeof item.rarity === 'string' && isFiniteNumber(item.zone);
+}
+
+/**
+ * Runtime shape-guard for a deserialized GameState. `deserialize` is a bare
+ * JSON.parse, so a same-version but partial or hand-edited payload ('{}', 'null',
+ * a missing hero/gate) would parse cleanly and then crash the first render or
+ * `advance`. Validate exactly the fields the app and engine dereference; on any
+ * miss the caller treats it as a fresh run.
+ */
+function isValidState(v: unknown): v is GameState {
+  if (typeof v !== 'object' || v === null) return false;
+  const s = v as Record<string, unknown>;
+
+  // Flat numeric fields the engine advances and the view reads every frame.
+  if (
+    !isFiniteNumber(s.seed) ||
+    !isFiniteNumber(s.rngState) ||
+    !isFiniteNumber(s.timeSec) ||
+    !isFiniteNumber(s.nextKillAtSec) ||
+    !isFiniteNumber(s.killIndex) ||
+    !isFiniteNumber(s.zone) ||
+    !isFiniteNumber(s.killsInZone) ||
+    !isFiniteNumber(s.leagues) ||
+    !isFiniteNumber(s.gold)
+  ) {
+    return false;
+  }
+  if (typeof s.worldsEdgeReached !== 'boolean') return false;
+
+  // hero.level + the skills map (skillMult iterates its values).
+  const hero = s.hero as Record<string, unknown> | null;
+  if (typeof hero !== 'object' || hero === null || !isFiniteNumber(hero.level)) return false;
+  const skills = hero.skills as Record<string, unknown> | null;
+  if (typeof skills !== 'object' || skills === null) return false;
+  for (const level of Object.values(skills)) {
+    if (!isFiniteNumber(level)) return false;
+  }
+
+  // gear: every slot present, each empty or a well-formed item.
+  const gear = s.gear as Record<string, unknown> | null;
+  if (typeof gear !== 'object' || gear === null) return false;
+  for (const slot of GEAR_SLOTS) {
+    if (!(slot in gear) || !isValidGearItem(gear[slot])) return false;
+  }
+
+  // gate + lifetime: objects the engine mutates in place during advance.
+  const gate = s.gate as Record<string, unknown> | null;
+  if (typeof gate !== 'object' || gate === null) return false;
+  if (typeof gate.atGate !== 'boolean' || !isFiniteNumber(gate.cooldownUntilSec)) return false;
+
+  const lifetime = s.lifetime as Record<string, unknown> | null;
+  if (typeof lifetime !== 'object' || lifetime === null) return false;
+  if (
+    !isFiniteNumber(lifetime.kills) ||
+    !isFiniteNumber(lifetime.goldEarned) ||
+    !isFiniteNumber(lifetime.bossKills)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 /** Read and deserialize the save, or null if absent/unreadable/wrong version. */
 export function readSave(): LoadedSave | null {
   let raw: string | null;
@@ -53,7 +126,9 @@ export function readSave(): LoadedSave | null {
     ) {
       return null;
     }
-    return { state: deserialize(envelope.state), savedAt: envelope.savedAt };
+    const state = deserialize(envelope.state);
+    if (!isValidState(state)) return null;
+    return { state, savedAt: envelope.savedAt };
   } catch {
     return null;
   }

@@ -50,7 +50,7 @@ function bestCandidate(state: GameState): Candidate | null {
       const dDps = (heroBaseDamage(level + 1) - base) * mult;
       const ratio = dDps / cost;
       // Skip once damage overflows to Infinity (ΔDPS → NaN): a hero at level
-      // ~4370 has base = 5·1.12^level = Infinity, so no finite improvement.
+      // ~4370 has base = 25·1.12^level = Infinity, so no finite improvement.
       if (Number.isFinite(ratio) && ratio > 0) {
         candidates.push({ kind: 'hero', id: null, cost, ratio });
       }

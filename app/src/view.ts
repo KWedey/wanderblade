@@ -167,7 +167,7 @@ function template(): string {
 
   <div class="toast" data-role="toast" hidden></div>
 
-  <button class="debug-toggle" type="button" data-role="debug-toggle" aria-label="Debug">⚙</button>
+  <button class="debug-toggle" type="button" data-role="debug-toggle" aria-label="Debug" title="Debug: time-warp & reset">⚙</button>
   <div class="debug-drawer" data-role="debug-drawer" hidden>
     <div class="debug-title">Debug</div>
     <div class="debug-seed">seed <span data-role="seed">—</span></div>

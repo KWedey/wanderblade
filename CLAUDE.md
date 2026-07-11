@@ -3,7 +3,7 @@
 A mobile idle RPG: a lone wandering swordfighter crosses a transforming fantasy realm on foot — auto-battle, loot, upgrades, region bosses — built for 30–90 second check-ins with offline progress at its heart.
 
 **Stack:** TypeScript + web UI (canvas diorama), wrapped with Capacitor for iOS/Android.
-**Current milestone:** M0 (economy simulator) — see `docs/ROADMAP.md`.
+**Current milestone:** M1 — M0 (economy sim) complete with all pacing targets passing; M1a (playable minimal-UI loop) built; M1b (road renderer + Road Play) next. See `docs/ROADMAP.md`.
 
 ## Source of truth
 

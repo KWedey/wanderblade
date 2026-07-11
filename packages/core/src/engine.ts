@@ -4,8 +4,10 @@
 // Determinism contract (see docs/DECISIONS.md #6):
 //   advance(s, a + b) produces the exact same state AND events as
 //   advance(advance(s, a), b). All randomness flows through the seeded RNG,
-//   consumed once per kill in kill-index order; the clock advances by kill time
-//   (event-stepped), and sub-kill leftover time is carried on state.carrySec.
+//   consumed once per kill in kill-index order; the clock is event-stepped per
+//   kill against an absolute nextKillAtSec schedule (accumulated one kill at a
+//   time and compared against an absolute target), which is what makes a split
+//   advance bit-identical to the whole.
 
 import {
   dropChance,
@@ -221,11 +223,10 @@ function completeZone(
     zone: nextZone,
     region: Math.floor(nextZone / zonesPerRegion),
   });
-  if (nextZone % zonesPerRegion === 0) {
-    const newRegion = nextZone / zonesPerRegion;
-    recap.regionsEntered += 1;
-    emit(events, { type: 'region', timeSec: clock, region: newRegion, zone: nextZone });
-  }
+  // No region-advance emit here: a step forward within a region never lands on a
+  // region boundary. The region-end case (nextZone % zonesPerRegion === 0 would
+  // require z to be a region end) is caught by the isRegionEnd gate above, which
+  // returns early — so that branch is unreachable from this point.
 }
 
 /** Process exactly one kill: gold, drop roll, then leagues/zone (unless parked). */
@@ -329,6 +330,10 @@ export function challengeBoss(state: GameState): { won: boolean; events: GameEve
   const r = readiness(state);
   if (r >= 1.0) {
     winBoss(state, events, emptyRecap(0), state.timeSec);
+    // Re-prime the kill schedule to the new zone's cadence, mirroring the
+    // auto-challenge path (the advance loop's `nextKillAtSec += killTime(state)`
+    // after a win): the next kill completes one full new-zone killTime from now.
+    state.nextKillAtSec = state.timeSec + killTime(state);
     return { won: true, events };
   }
   state.gate.cooldownUntilSec = state.timeSec + bossRetryCooldownSec;
@@ -369,6 +374,12 @@ export function summarizeEvents(events: GameEvent[]): Recap {
   const recap = emptyRecap(0);
   let minTime = Infinity;
   let maxTime = -Infinity;
+  // Reconstruct the parked/marching state from the stream so the league count
+  // matches the engine: processKill awards leagues only while `!gate.atGate`, a
+  // 'gate' event marks the park (leagues pause), and a 'bossWin' un-parks it. The
+  // gate-forming kill precedes its 'gate' event, so it still earns its league —
+  // exactly as the engine credits it.
+  let atGate = false;
   for (const e of events) {
     if (e.timeSec < minTime) minTime = e.timeSec;
     if (e.timeSec > maxTime) maxTime = e.timeSec;
@@ -376,7 +387,7 @@ export function summarizeEvents(events: GameEvent[]): Recap {
       case 'kill':
         recap.kills += 1;
         recap.goldEarned += e.gold;
-        recap.leaguesTraveled += leaguePerKill;
+        if (!atGate) recap.leaguesTraveled += leaguePerKill;
         break;
       case 'drop':
         recap.drops += 1;
@@ -390,10 +401,13 @@ export function summarizeEvents(events: GameEvent[]): Recap {
       case 'region':
         recap.regionsEntered += 1;
         break;
+      case 'gate':
+        atGate = true;
+        break;
       case 'bossWin':
         recap.bossWins += 1;
+        atGate = false;
         break;
-      case 'gate':
       case 'bossFail':
       case 'edge':
         break;

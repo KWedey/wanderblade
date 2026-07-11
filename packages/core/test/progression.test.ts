@@ -49,7 +49,7 @@ describe('progression sanity', () => {
       if (e.type !== 'equip') continue;
       expect(e.power).toBeGreaterThan(e.previousPower);
     }
-    // Drop rate is in the right ballpark (5% per kill).
+    // Drop rate is in the right ballpark (0.6% per kill).
     const recap = summarizeEvents(events);
     expect(recap.drops / recap.kills).toBeGreaterThan(dropChance * 0.4);
     expect(recap.drops / recap.kills).toBeLessThan(dropChance * 2.2);

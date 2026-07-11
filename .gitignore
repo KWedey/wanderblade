@@ -6,3 +6,5 @@ coverage/
 .planning/
 sim/out/
 .DS_Store
+.ar-findings*
+.ar-verdict

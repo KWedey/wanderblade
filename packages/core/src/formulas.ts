@@ -43,7 +43,7 @@ export function skillCost(skillLevel: number): number {
   return skillCostBase * Math.pow(skillCostRate, skillLevel);
 }
 
-/** Hero base damage from levels: base(level) = d0 * rD^level (= 5 * 1.12^level). */
+/** Hero base damage from levels: base(level) = d0 * rD^level (= 25 * 1.12^level). */
 export function heroBaseDamage(level: number): number {
   return d0 * Math.pow(rD, level);
 }

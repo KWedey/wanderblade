@@ -2,6 +2,9 @@
   "name": "wanderblade",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "packages/core",
     "sim",
