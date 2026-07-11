@@ -39,7 +39,15 @@ The Idle Slayer lesson, adopted and inverted: active play lives in the grind str
 
 - **Trailside Glints (v1):** kills spin loot into gentle arcs across the road; tap a glint before it fades for bonus gold. Density scales with kill speed. Occasionally an oversized **jackpot glint** (a gilded road champion dripping with loot) swaggers through. Uncaught glints simply fade — the idle player loses nothing.
 - **Roadside Discoveries (v1):** roughly once per check-in, a point of interest drifts into view — a wayside shrine, a half-buried chest, a lookout over the next biome. Tap to investigate for bonus gold, a small buff charm, or a **Wayfarer's Log** entry (a light second collection axis beside the Bestiary).
+- **Hero-tap Rally (M1b Phase 5, gated on the phone playtest):** tapping the hero (or the fray) fires a rally flourish **and** grants capped, fast-decaying bonus gold — a real reward, never a no-op, applied through a single audited gold-only helper outside `advance()` so the seeded kill/drop stream, RNG, and schedule are untouched. Per-second cap keeps total active uplift ≈1.5–2× idle. Promoted from "deferred" after the M1a playtest asked for a tappable character (ROADMAP M1b).
 - **Deferred candidates:** *Heroic Finisher* (tap to land killing blows on tough foes; small capped Momentum multiplier) — revisit once tap-feel is proven; *Focus the Hunt* (aim the grind at an unmastered species) — M2+, needs the Bestiary.
+
+### Presentation layer (M1b — "The Living Road")
+The display layer's one binding contract: **it never feeds back into the engine.** `packages/core` stays pure; affordability and purchases read real `state.gold`, never the displayed value.
+
+- **Living counter (DECISIONS.md #12):** the gold display is a full-digit odometer whose target is `state.gold` plus the current enemy's accruing partial gold (`enemyGold(zone) × kill progress`), extrapolated between engine ticks and snapped to engine truth on each kill — kill gold is deterministic, so the glide lands exactly on the payout. Frame-rate-independent smoothing; faster settle on spends so purchases read as one crisp debit.
+- **Goal-gradient strip:** two chips under the stats — the nearest road waypoint (kills to next zone / gate status) and the cheapest power buy with a live ETA, flipping to a call-to-action when affordable. Answers "what am I marching toward?" at a glance without adding min-max surface (pillar 5).
+- **Art register (DECISIONS.md #13):** vibrant 16-bit Pixel & Parchment — DB32 palette, hard edges, wood/parchment chrome, Pixelify Sans UI + VT323 mono numerals.
 
 ### Bestiary (the mastery spine)
 - Every species has kill-count mastery tiers. Completing a tier grants a small **permanent global damage bonus** and completion credit.
@@ -99,6 +107,7 @@ Bosses are opt-in set-piece events, not passive walls (DECISIONS.md #9).
 - "Realm remixes" on a New Road: literal region reshuffling (big build) vs. a fresh power-run down the same road. Lean: **same road for v1**; remix is a v2 novelty lever.
 - Roadwise head-start tuning: does skipping early zones starve Bestiary/gear-set completion, and how do collections keep filling without forcing replay of trivial zones?
 - Materials/forging system — v1 leans **gold-only** for simplicity.
-- Art direction specifics — deferred; grey-box first (M1), art pass in M3.
+
+*(Art direction specifics graduated from this list: vibrant 16-bit Pixel & Parchment, decided at the M1b re-scope — DECISIONS.md #13. Bespoke per-biome scene art remains M3.)*
 
 *(Random road events graduated from this list into the shipped design as Roadside Discoveries.)*

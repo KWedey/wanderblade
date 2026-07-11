@@ -4,7 +4,7 @@
 
 **Working title:** Wanderblade
 **Platform:** iOS / Android (TypeScript + web UI, wrapped with Capacitor)
-**Status:** Pre-production (M0) — see [ROADMAP.md](ROADMAP.md)
+**Status:** M1 — grey-box loop playable; M1b "Living Road" presentation redesign underway — see [ROADMAP.md](ROADMAP.md)
 
 ## The fantasy
 
@@ -32,7 +32,8 @@ Offline progress is the beating heart: the hero keeps walking and fighting while
 
 ## Reference bar
 
-- **Egg Inc / Idle Miner Tycoon** — production polish; a lively world you enjoy watching.
+- **Egg Inc / Idle Miner Tycoon** — a lively world you enjoy watching (their *liveliness*, not their slick vector polish).
+- **Vibrant 16-bit pixel fantasy (Secret of Mana / Shovel Knight register)** — the look: sunlit pixel biomes, chunky readable UI, numbers that roll (DECISIONS.md #13).
 - **Idle Slayer** — the optional active-play layer atop an auto-running hero (catching coins, chests, bonus moments) and a prestige economy that makes resetting feel like power, not loss.
 - **Classic side-scrolling auto-battlers** — structural legibility; the proven loop.
 
