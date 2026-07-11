@@ -119,15 +119,14 @@ body {
 .wordmark {
   font-size: 15px;
   letter-spacing: 0.18em;
-  font-weight: 700;
   color: var(--tan);
   text-indent: 0.18em;
 }
 
 .region {
+  letter-spacing: 0.04em;
   margin-top: 6px;
   font-size: 30px;
-  font-weight: 700;
   color: var(--parchment);
   text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.45);
 }
@@ -232,8 +231,9 @@ body {
 .goal-chip {
   flex: 1;
   padding: 7px 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 2px solid var(--wood-shadow);
+  background: var(--wood-shadow);
+  border: 2px solid var(--wood);
+  box-shadow: var(--drop);
   font-size: 16px;
   color: var(--ink-dim);
   text-align: center;
@@ -267,9 +267,9 @@ body {
 }
 
 .boss-name {
+  letter-spacing: 0.05em;
   margin-top: 3px;
   font-size: 22px;
-  font-weight: 700;
   color: var(--parchment);
 }
 
@@ -321,6 +321,7 @@ body {
 }
 
 .challenge-btn {
+  letter-spacing: 0.05em;
   width: 100%;
   min-height: var(--touch);
   border: 3px solid var(--wood);
@@ -328,7 +329,6 @@ body {
   color: var(--parchment);
   font-family: var(--font-ui);
   font-size: 19px;
-  font-weight: 700;
   cursor: pointer;
   box-shadow: var(--drop);
 }
@@ -383,7 +383,6 @@ body {
 .panel-title {
   margin: 0 0 10px;
   font-size: 15px;
-  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--tan);
@@ -418,15 +417,15 @@ body {
 }
 
 .upgrade-name {
+  letter-spacing: 0.05em;
   grid-area: name;
   font-size: 18px;
-  font-weight: 700;
 }
 
 .upgrade-detail {
   grid-area: detail;
   font-size: 14px;
-  color: var(--ink-dim);
+  color: var(--parchment);
 }
 
 .upgrade-cost {
@@ -459,7 +458,8 @@ body {
 }
 
 .upgrade-btn.locked .upgrade-detail {
-  color: var(--rarity-rare);
+  color: var(--parchment);
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 /* Skill at its rank cap — reads as earned/complete, not merely disabled. */
@@ -499,7 +499,6 @@ body {
 
 .gear-name {
   font-size: 14px;
-  font-weight: 600;
   color: var(--ink-dim);
   line-height: 1.15;
 }
@@ -605,7 +604,6 @@ body {
   background: var(--torch);
   border: 3px solid var(--gold);
   color: #fff;
-  font-weight: 700;
   box-shadow: var(--drop);
   animation: toastIn 0.3s ease;
 }
@@ -721,7 +719,6 @@ body {
   font-size: 14px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  font-weight: 700;
   color: var(--wood-light);
 }
 
@@ -757,6 +754,7 @@ body {
 }
 
 .recap-btn {
+  letter-spacing: 0.05em;
   width: 100%;
   min-height: var(--touch);
   border: 3px solid var(--wood-shadow);
@@ -764,7 +762,6 @@ body {
   color: #fff;
   font-family: var(--font-ui);
   font-size: 19px;
-  font-weight: 700;
   cursor: pointer;
   box-shadow: var(--drop);
 }

@@ -35,12 +35,23 @@ export function formatNumber(n: number): string {
 export function formatGold(n: number): string {
   if (!Number.isFinite(n)) return '∞';
   if (n < 0) return '-' + formatGold(-n);
-  if (n < 1000) return n.toFixed(1);
+  if (n < 1000) {
+    // Round before branching: 999.97.toFixed(1) would print "1000.0".
+    const r = Math.round(n * 10) / 10;
+    return r < 1000 ? r.toFixed(1) : '1,000';
+  }
   if (n < 1_000_000) return Math.floor(n).toLocaleString('en-US');
 
-  const tier = Math.floor(Math.log10(n) / 3);
+  let tier = Math.floor(Math.log10(n) / 3);
   if (tier >= SUFFIXES.length) return n.toExponential(4);
-  const scaled = n / Math.pow(1000, tier);
+  let scaled = n / Math.pow(1000, tier);
+  // toFixed rounds the mantissa up to 1000.000 at the very top of a tier —
+  // promote to the next suffix so the display never shows 4 integer digits.
+  if (scaled >= 999.9995) {
+    tier += 1;
+    if (tier >= SUFFIXES.length) return n.toExponential(4);
+    scaled = n / Math.pow(1000, tier);
+  }
   const intDigits = scaled >= 100 ? 3 : scaled >= 10 ? 2 : 1;
   return scaled.toFixed(6 - intDigits) + SUFFIXES[tier];
 }

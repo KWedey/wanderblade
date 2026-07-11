@@ -158,7 +158,7 @@ function template(): string {
     <section class="panel upgrades">
       <h2 class="panel-title">Upgrades</h2>
       <button class="upgrade-btn hero-btn" type="button" data-role="hero-btn">
-        <span class="upgrade-name">Hero Level <span data-role="hero-level">0</span></span>
+        <span class="upgrade-name">Hero Lv <span data-role="hero-level">1</span></span>
         <span class="upgrade-detail">Level up your blade</span>
         <span class="upgrade-cost" data-role="hero-cost"></span>
       </button>
@@ -343,8 +343,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     toastEl.hidden = !showWin;
     if (showWin) toastEl.textContent = 'Victory! The gate opens.';
 
-    // Hero level.
-    heroLevelEl.textContent = String(vm.heroLevel);
+    // Hero level — the button names the level being BOUGHT (the reward),
+    // matching the goal chip's "Hero Lv N" framing.
+    heroLevelEl.textContent = String(vm.heroLevel + 1);
     heroCostEl.textContent = `${formatNumber(vm.levelCost)} g`;
     heroBtn.disabled = !vm.canAffordLevel;
     heroBtn.classList.toggle('affordable', vm.canAffordLevel);

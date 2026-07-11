@@ -24,6 +24,7 @@ import {
   type GameState,
   type GearSlot,
 } from '@wanderblade/core';
+import { killProgress, smoothStep, zoneSweep } from './anim';
 import {
   bossName,
   describeEvent,
@@ -67,7 +68,11 @@ export class Game {
   private lastSaveMs = 0;
   /** Current-zone kill duration/payout, cached per state change (not per frame). */
   private killDurSec = 1;
+  /** Schedule the cached killDurSec was grounded against (see groundKillSchedule). */
+  private killSchedAtSec = -1;
   private goldPerKill = 0;
+  /** Live media query — read per frame so an OS toggle applies immediately. */
+  private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private rafId: number | null = null;
   private bossResult: 'win' | 'fail' | null = null;
@@ -140,15 +145,13 @@ export class Game {
    * Display-only estimate [0,1] of progress through the current kill. The
    * engine's kill schedule is absolute (state.nextKillAtSec), so between ticks
    * we extrapolate the game clock on the wall clock; every tick re-grounds it.
-   * Never feeds back into core state — pure presentation.
+   * Never feeds back into core state — pure presentation (math in anim.ts).
    */
-  private killProgress(): number {
+  private currentKillProgress(): number {
     const sinceTickSec = this.view.isRecapOpen()
       ? 0 // world paused behind the recap — freeze the sweep too
       : Math.min((performance.now() - this.lastTickMs) / 1000, MAX_EXTRAPOLATE_SEC);
-    const remainingSec = this.state.nextKillAtSec - (this.state.timeSec + sinceTickSec);
-    const p = 1 - remainingSec / this.killDurSec;
-    return p < 0 ? 0 : p > 1 ? 1 : p;
+    return killProgress(this.state.nextKillAtSec, this.state.timeSec, sinceTickSec, this.killDurSec);
   }
 
   private readonly animate = (frameMs: number): void => {
@@ -158,19 +161,25 @@ export class Game {
 
     // The counter chases confirmed gold *plus* the current enemy's accruing
     // share, so the low digits climb continuously and glide into the exact
-    // payout on the kill (enemyGold is deterministic — no snap-back).
-    const p = this.killProgress();
+    // payout on the kill (enemyGold is deterministic — no snap-back). Under
+    // prefers-reduced-motion the decorative glide is suppressed: the counter
+    // and zone bar step once per kill instead of animating continuously.
+    const reduce = this.reduceMotion.matches;
+    const p = reduce ? 0 : this.currentKillProgress();
     const target = this.state.gold + this.goldPerKill * p;
-    const diff = target - this.displayGold;
-    const rate = diff >= 0 ? GOLD_SMOOTH_RATE : GOLD_SMOOTH_RATE_DOWN;
-    this.displayGold += diff * (1 - Math.exp(-rate * frameDtSec));
+    this.displayGold = reduce
+      ? target
+      : smoothStep(
+          this.displayGold,
+          target,
+          target >= this.displayGold ? GOLD_SMOOTH_RATE : GOLD_SMOOTH_RATE_DOWN,
+          frameDtSec,
+        );
 
-    // Zone bar sweeps with the kill while marching; parked at a gate the zone
-    // count is frozen, so hold the bar at the whole-kill mark.
-    const sweep = this.state.gate.atGate
-      ? this.state.killsInZone / killsPerZone
-      : Math.min(1, (this.state.killsInZone + p) / killsPerZone);
-    this.view.renderFrame(this.displayGold, sweep);
+    this.view.renderFrame(
+      this.displayGold,
+      zoneSweep(this.state.gate.atGate, this.state.killsInZone, p, killsPerZone),
+    );
     this.rafId = requestAnimationFrame(this.animate);
   };
 
@@ -276,11 +285,29 @@ export class Game {
 
   // --- Rendering ---------------------------------------------------------
 
+  /**
+   * Re-ground the killProgress divisor only when the engine actually
+   * rescheduled a kill. A mid-kill purchase raises DPS (shrinking
+   * killTime) without moving nextKillAtSec — refreshing the divisor then
+   * would snap the sweep backward and overshoot the gold debit; the stale
+   * duration stays correct for the in-flight kill and self-heals on its
+   * completion.
+   */
+  private groundKillSchedule(): void {
+    if (this.state.nextKillAtSec !== this.killSchedAtSec) {
+      this.killDurSec = killTime(this.state);
+      this.killSchedAtSec = this.state.nextKillAtSec;
+    }
+  }
+
   private renderAll(): void {
     // Every state change funnels through here, so the frame-loop caches stay
     // fresh without recomputing engine math 60× a second.
-    this.killDurSec = killTime(this.state);
-    this.goldPerKill = enemyGold(this.state.zone);
+    this.groundKillSchedule();
+    const g = enemyGold(this.state.zone);
+    // Finite guard: enemyGold overflows to Infinity in the deep endless tail;
+    // Infinity * 0 would poison displayGold with NaN.
+    this.goldPerKill = Number.isFinite(g) ? g : 0;
     this.view.renderPanels(this.buildViewModel());
   }
 
@@ -315,7 +342,9 @@ export class Game {
     });
 
     const heroLevelCost = levelCost(s.hero.level);
-    const goldPerSec = this.goldPerKill / this.killDurSec;
+    // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
+    // reflect a purchase immediately instead of lagging one kill behind.
+    const goldPerSec = this.goldPerKill / killTime(s);
 
     // Goal gradient: the nearest waypoint on the road…
     let marchGoal: string;
