@@ -182,7 +182,8 @@ export class Game {
   // --- Offline / warp reconciliation ------------------------------------
 
   private applyOfflineReturn(elapsedSec: number): void {
-    if (elapsedSec <= 0) {
+    // Sub-2s gaps (instant reloads) have nothing worth reconciling or announcing.
+    if (elapsedSec < 2) {
       this.renderAll();
       return;
     }
