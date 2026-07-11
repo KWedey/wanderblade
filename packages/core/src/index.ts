@@ -8,7 +8,6 @@ export type { Rng } from './rng';
 
 // --- Constants -----------------------------------------------------------
 export {
-  CONSTANTS,
   hp0,
   rH,
   g0,
@@ -17,7 +16,6 @@ export {
   d0,
   rD,
   levelCostBase,
-  c0,
   rC,
   skillCostBase,
   skillCostRate,

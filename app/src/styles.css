@@ -52,7 +52,6 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-.tnum,
 .stat-value,
 .leagues,
 .zone,
@@ -503,9 +502,6 @@ body {
   animation: logIn 0.25s ease;
 }
 
-.log-kill {
-  color: var(--ink-dim);
-}
 .log-equip {
   color: var(--ink);
   border-left-color: var(--rarity-uncommon);
@@ -612,7 +608,6 @@ body {
   margin: 8px 0 10px;
   font-size: 12px;
   color: var(--ink-dim);
-  font-variant-numeric: tabular-nums;
 }
 
 .debug-seed span {

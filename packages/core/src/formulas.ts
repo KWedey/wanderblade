@@ -65,15 +65,14 @@ export function gearPowerTotal(gear: GearState): number {
 }
 
 /**
- * Hero DPS: (base(level) + gearPower) * skillMult * (1 + mastery).
+ * Hero DPS: (base(level) + gearPower) * skillMult.
  * Mastery (Bestiary) is 0 in the M0 baseline — see ECONOMY.md "Bestiary caveat".
  */
 export function heroDps(state: GameState): number {
   const base = heroBaseDamage(state.hero.level);
   const gear = gearPowerTotal(state.gear);
   const mult = skillMult(state.hero.skills);
-  const mastery = 0;
-  return (base + gear) * mult * (1 + mastery);
+  return (base + gear) * mult;
 }
 
 /** The zone the current region's boss sits at (that region's last zone). */

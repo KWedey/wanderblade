@@ -3,9 +3,8 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import type { SeedResult, ValidatorResult } from './types';
-import { VALIDATOR_NAMES } from './validators';
+import { VALIDATOR_NAMES, fmtTime } from './validators';
 
-const SEC_PER_DAY = 86_400;
 const SEC_PER_HOUR = 3_600;
 
 type Align = 'l' | 'r';
@@ -56,14 +55,6 @@ function fmtReadiness(r: number): string {
 
 function fmtHours(sec: number): string {
   return `${(sec / SEC_PER_HOUR).toFixed(1)}h`;
-}
-
-function fmtTime(sec: number | null): string {
-  if (sec === null) return 'never';
-  if (sec < 90) return `${sec.toFixed(1)}s`;
-  if (sec < SEC_PER_HOUR) return `${(sec / 60).toFixed(1)}m`;
-  if (sec < SEC_PER_DAY) return `${(sec / SEC_PER_HOUR).toFixed(2)}h`;
-  return `${(sec / SEC_PER_DAY).toFixed(2)}d`;
 }
 
 /** Full per-seed report: headline, gate walls, check-in timeline, validators. */

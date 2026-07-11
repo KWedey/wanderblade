@@ -1,6 +1,5 @@
 // Every tunable in one place. Values below are the M0-tuned economy: they were
-// tuned in `sim/` against docs/ECONOMY.md's 10-day pacing targets. The CONSTANTS
-// object at the bottom bundles everything for ergonomic access.
+// tuned in `sim/` against docs/ECONOMY.md's 10-day pacing targets.
 //
 // Naming: terse math symbols (hp0, rH, ...) mirror ECONOMY.md's formulas.
 
@@ -40,10 +39,8 @@ export const d0 = 25;
 export const rD = 1.12;
 
 /** Hero level cost: levelCost(level) = levelCostBase * rC^level. */
-export const levelCostBase = 10; // a.k.a. c0
+export const levelCostBase = 10;
 export const rC = 1.15;
-/** Alias for levelCostBase to match the ECONOMY symbol name. */
-export const c0 = levelCostBase;
 
 /** Skill upgrade cost: skillCost(lvl) = skillCostBase * skillCostRate^lvl. */
 export const skillCostBase = 50;
@@ -149,37 +146,3 @@ export const SKILLS: Record<string, SkillDef> = {
 
 /** Ordered skill ids (stable order → deterministic skillMult product). */
 export const SKILL_IDS: readonly string[] = ['cleave', 'warcry'];
-
-/** Bundle of every tunable, for callers that prefer a single object. */
-export const CONSTANTS = {
-  hp0,
-  rH,
-  g0,
-  rG,
-  bossHpMult,
-  d0,
-  rD,
-  levelCostBase,
-  c0,
-  rC,
-  skillCostBase,
-  skillCostRate,
-  skillMultPerLevel,
-  gearPowerBase,
-  gearPowerRate,
-  dropChance,
-  RARITY_WEIGHTS,
-  RARITY_MULTIPLIERS,
-  RARITIES,
-  GEAR_SLOTS,
-  killsPerZone,
-  zonesPerRegion,
-  regionsCount,
-  leaguePerKill,
-  enrageWindowSec,
-  autoChallengeReadiness,
-  bossRetryCooldownSec,
-  minKillTimeSec,
-  SKILLS,
-  SKILL_IDS,
-} as const;

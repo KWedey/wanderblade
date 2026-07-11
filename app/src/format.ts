@@ -11,7 +11,7 @@ const SUFFIXES = [
  * counters read as clean integers ("+12 gold", not "+12.3 gold").
  */
 export function formatNumber(n: number): string {
-  if (!Number.isFinite(n)) return '∞'; // ∞
+  if (!Number.isFinite(n)) return '∞';
   if (n < 0) return '-' + formatNumber(-n);
   if (n < 1000) return Math.floor(n).toString();
 

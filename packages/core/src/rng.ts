@@ -1,7 +1,7 @@
 // Deterministic, serializable PRNG (mulberry32).
 //
 // All randomness in the core flows through this. The internal 32-bit state is
-// exposed via getState/setState so it can be persisted on GameState.rngState and
+// exposed via getState so it can be persisted on GameState.rngState and
 // reconstructed exactly — which is what makes offline progress reproducible.
 
 export interface Rng {
@@ -9,8 +9,6 @@ export interface Rng {
   next(): number;
   /** Current 32-bit stream state (>>> 0). */
   getState(): number;
-  /** Restore the stream to a previous state. */
-  setState(state: number): void;
 }
 
 /**
@@ -28,9 +26,6 @@ export function createRng(seed: number): Rng {
     },
     getState(): number {
       return a >>> 0;
-    },
-    setState(state: number): void {
-      a = state >>> 0;
     },
   };
 }

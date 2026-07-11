@@ -83,7 +83,7 @@ export function parseArgs(argv: readonly string[]): SimConfig {
   return config;
 }
 
-export function printHelp(): void {
+function printHelp(): void {
   process.stdout.write(
     [
       'Wanderblade economy simulator (M0 pacing harness)',

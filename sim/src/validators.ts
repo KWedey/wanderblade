@@ -7,7 +7,7 @@ import type { SeedResult, ValidatorResult } from './types';
 const SEC_PER_DAY = 86_400;
 const SEC_PER_HOUR = 3_600;
 
-function fmtTime(sec: number | null): string {
+export function fmtTime(sec: number | null): string {
   if (sec === null) return 'never';
   if (sec < 90) return `${sec.toFixed(1)}s`;
   if (sec < SEC_PER_HOUR) return `${(sec / 60).toFixed(1)}m`;
