@@ -303,13 +303,19 @@ export const HERO_INK: InkSet = {
   outline: INK.black,
   hair: INK.wood,
   skin: INK.parchment,
+  // A face has to read at 14px: a lit cheek, a dark eye, one tunic highlight.
+  skinLit: lighten(INK.parchment, 0.35),
+  eye: '#241016',
   scarf: INK.rose,
   tunic: INK.blue,
+  tunicLit: lighten(INK.blue, 0.28),
   belt: INK.woodLight,
   pants: INK.plum,
   boot: INK.wood,
   steel: '#ffffff',
   steelDark: INK.ice,
+  // A fuller down the blade: a solid white bar read as a parallelogram.
+  steelFuller: '#8fa9c9',
   grip: INK.woodLight,
 };
 
@@ -328,7 +334,11 @@ export function sceneryInk(skin: RealmSkin): InkSet {
     outline: INK.black,
     leaf: skin.leaf,
     leafDark: skin.leafDark,
+    // A third green and a bark shadow: two flat tones made every canopy read
+    // as a lozenge with nothing inside it.
+    leafLite: lighten(skin.leaf, 0.3),
     bark: skin.bark,
+    barkDark: mixHex(skin.bark, '#000000', 0.35),
     rock: skin.rock,
     rockLight: skin.rockLight,
     grassBlade: skin.grassBlade,

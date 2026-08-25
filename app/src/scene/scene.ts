@@ -832,6 +832,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           Math.sin(wx * 0.019 + 2.1) * groundY * 0.13,
       );
       ctx.fillRect(x, baseY - h, 3, h);
+      // Two value bands and a lit cap: a single flat fill read as a grey wall.
+      ctx.fillStyle = mixHex(skin.range, '#000000', 0.16);
+      ctx.fillRect(x, baseY - Math.floor(h * 0.42), 3, Math.floor(h * 0.42));
+      ctx.fillStyle = mixHex(skin.range, '#ffffff', 0.3);
+      ctx.fillRect(x, baseY - h, 3, Math.max(1, Math.floor(h * 0.09)));
+      ctx.fillStyle = skin.range;
     }
     void span;
   }
@@ -942,26 +948,52 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const trunkW = 3 + Math.floor(depth * 6);
       const fade = 0.58 - depth * 0.4;
       const bark = mixHex(skin.bark, haze, fade);
-      const leaf = mixHex(skin.leafDark, haze, fade * 0.9);
-      const leafLit = mixHex(skin.leaf, haze, fade * 0.9);
+      const barkDark = mixHex(mixHex(skin.bark, '#000000', 0.4), haze, fade);
+      const leafDark = mixHex(skin.leafDark, haze, fade * 0.9);
+      const leaf = mixHex(skin.leaf, haze, fade * 0.9);
+      const leafLite = mixHex(lighten(skin.leaf, 0.3), haze, fade * 0.9);
       const crownY = Math.floor(groundY * (0.2 + depth * 0.3));
 
-      ctx.fillStyle = bark;
-      ctx.fillRect(x, crownY, trunkW, footY - crownY);
-      ctx.fillStyle = mixHex(bark, '#000000', 0.25);
-      ctx.fillRect(x + trunkW - 1, crownY, 1, footY - crownY);
+      // Cast shadow. A trunk meeting turf on a clean line reads as a decal.
+      ctx.fillStyle = mixHex(skin.turf, '#000000', 0.3);
+      ctx.fillRect(x - trunkW, footY - 1, trunkW * 3, 2);
 
-      // Canopy runs off the top of the frame with a ragged per-row width; a
-      // visible tree-top or a clean slab edge puts the empty band straight back.
+      // Tapered trunk with a root flare and vertical bark streaks. Uniform
+      // grey-mauve columns with dead-straight sides were named outright.
+      for (let y = crownY; y < footY; y++) {
+        const f = (y - crownY) / Math.max(1, footY - crownY);
+        const flare = f > 0.9 ? Math.round((f - 0.9) * 10 * 2) : 0;
+        const w = trunkW + flare;
+        ctx.fillStyle = bark;
+        ctx.fillRect(x - flare, y, w, 1);
+        if (hash01(i * 3.1 + y * 0.37) > 0.62) {
+          ctx.fillStyle = barkDark;
+          ctx.fillRect(x + 1 + Math.floor(hash01(y * 1.7 + i) * Math.max(1, w - 2)), y, 1, 1);
+        }
+      }
+
+      // Canopy as broken clumps, not centred slabs. Each row is one to three
+      // sub-rects at hashed offsets so the silhouette notches instead of
+      // stepping in clean 90-degree corners.
       const cx = x + Math.floor(trunkW / 2);
       const cw = trunkW * 3 + 10;
-      for (let k = 0; k < 7; k++) {
-        const y = crownY - k * 7;
-        if (y + 8 < 0) break;
-        const jitter = Math.floor(hash01(i * 11.3 + k * 3.1) * 7) - 3;
-        const w = Math.max(4, Math.floor(cw * (1 - k * 0.08)) + jitter);
-        ctx.fillStyle = k % 2 === 0 ? leaf : leafLit;
-        ctx.fillRect(cx - Math.floor(w / 2), y - 8, w, 9);
+      for (let k = 0; k < 8; k++) {
+        const y = crownY - k * 6;
+        if (y + 7 < 0) break;
+        const rowW = Math.max(5, Math.floor(cw * (1 - k * 0.06)));
+        const lobes = 1 + Math.floor(hash01(i * 4.3 + k * 2.9) * 3);
+        for (let n = 0; n < lobes; n++) {
+          const t = lobes === 1 ? 0.5 : n / (lobes - 1);
+          const lw = Math.max(4, Math.floor(rowW * (0.42 + hash01(i * 7.7 + k + n) * 0.5)));
+          const lx = Math.round(cx - rowW / 2 + t * (rowW - lw) + (hash01(i + k * 5.1 + n) - 0.5) * 5);
+          ctx.fillStyle = k === 0 ? leafDark : k > 5 ? leafLite : leaf;
+          ctx.fillRect(lx, y - 7, lw, 8);
+          // Shadowed underside on the lowest clump of each lobe.
+          if (k < 2) {
+            ctx.fillStyle = leafDark;
+            ctx.fillRect(lx, y, lw, 1);
+          }
+        }
       }
     }
   }
@@ -1084,7 +1116,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       if (x < -30 || x > vw + 30) continue;
       switch (prop.kind) {
         case 'rock':
-          drawSprite(ctx, sprites.rock, x, groundY + 3);
+          drawShadow(x, sprites.rock.width);
+          drawSprite(ctx, sprites.rock, x, groundY + 1);
           break;
         case 'tuft':
           drawSprite(ctx, sprites.tuft, x, groundY + 2);
@@ -1214,7 +1247,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  function drawMonsters(sprites: SkinnedSprites, skin: RealmSkin): void {
+  function drawMonsters(sprites: SkinnedSprites): void {
     // Back to front, so the one being fought overlaps the line behind it.
     for (let i = queue.length - 1; i >= 0; i--) {
       const m = queue[i]!;
@@ -1227,7 +1260,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const lunge =
         i === 0 && !model.reduceMotion
           ? Math.round(Math.max(0, Math.sin(clockSec * 3.4 + m.bob)) ** 2 * 6)
-          : 0;
+          : model.reduceMotion
+            ? 0
+            : // Queued creatures sway on their own phase. Two of a kind
+              // standing in identical poses was called out by name.
+              Math.round(Math.sin(clockSec * 1.6 + m.bob * 2.3) * 2);
       const x = m.x + m.spread - lunge;
       if (x < -40 || x > vw + 60) continue;
       drawShadow(x, sprite.width - 2);
@@ -1248,12 +1285,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       if (remaining >= 1 || remaining <= 0.02) continue;
       const w = sprite.width;
       const bx = Math.floor(x - w / 2);
-      const by = groundY - sprite.height - 5 + bob;
+      const by = groundY - sprite.height - 2 + bob;
       ctx.fillStyle = OUTLINE_INK;
       ctx.fillRect(bx - 1, by - 1, w + 2, 4);
       ctx.fillStyle = '#45283c';
       ctx.fillRect(bx, by, w, 2);
-      ctx.fillStyle = remaining < 0.3 ? '#d95763' : skin.accent;
+      // Never the accent: a yellow bar over a creature read as a wind-up
+      // telegraph rather than as its health.
+      ctx.fillStyle = remaining < 0.3 ? '#d95763' : '#6abe30';
       ctx.fillRect(bx, by, Math.max(0, Math.round(w * remaining)), 2);
     }
   }
@@ -1356,6 +1395,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function drawMomentumMeter(skin: RealmSkin): void {
+    // Hidden at rest: a full-width empty bar labelled x1.0 is the frame
+    // announcing that nothing is happening.
+    if (model.momentum <= 0.02) return;
     const segs = 14;
     const segW = 4;
     const segH = 5;
@@ -1420,7 +1462,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawGround(skin);
     drawFence(sprites, skin);
     drawProps(sprites);
-    drawMonsters(sprites, skin);
+    drawMonsters(sprites);
     drawHero();
     drawArcs();
     drawParticles();

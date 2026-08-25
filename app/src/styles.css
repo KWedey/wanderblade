@@ -55,9 +55,13 @@
   --font-ui: 'Pixelify Sans', 'Segoe UI', system-ui, sans-serif;
   --font-num: 'VT323', ui-monospace, monospace;
 
-  /* Hard pixel shadows — offset only, never blurred. */
-  --drop: 0 4px 0 rgba(0, 0, 0, 0.4);
-  --drop-pressed: 0 1px 0 rgba(0, 0, 0, 0.4);
+  /* Hard pixel shadows: offset only, never blurred, and a solid palette
+     colour. A translucent black is a soft shadow no matter the blur radius,
+     and reads as web chrome rather than as pixel art (DECISIONS.md #13). */
+  --drop: 0 4px 0 #241016;
+  --drop-pressed: 0 2px 0 #241016;
+  --bevel-lit: #a9713f;
+  --bevel-dark: #341d18;
 
   --touch: 56px;
 
@@ -66,6 +70,20 @@
 
 * {
   box-sizing: border-box;
+  /* DECISIONS.md #13 bans rounded corners outright. Enforced here rather than
+     per-rule so a UA default on a button or input cannot reintroduce one. */
+  border-radius: 0;
+}
+
+/* The pixel faces are vector outlines; without this the browser anti-aliases
+   them and the panel stops sharing the world's grid. */
+body,
+button,
+input,
+select {
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
 }
 
 html {
@@ -231,6 +249,13 @@ body {
   gap: 12px;
   background: var(--panel);
   border-top: 4px solid var(--panel-edge);
+  /* Chunky pixel bevel: lit inner edge, dark outer, both hard. A single flat
+     fill with one border is what read as "a web slab from another app". */
+  box-shadow:
+    inset 0 4px 0 var(--bevel-lit),
+    inset 0 -4px 0 var(--bevel-dark),
+    inset 4px 0 0 var(--bevel-dark),
+    inset -4px 0 0 var(--bevel-dark);
 }
 
 /* Portrait: a bottom sheet under the world. */
@@ -984,4 +1009,34 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+
+/* --- Panel cards on the world's grid ---------------------------------------
+   Hard 2px outlines, a lit top edge and a dark bottom edge, all solid palette
+   colours. No radius, no blur, no alpha. This is the rule the panel broke for
+   three rounds: the fills were never the problem, the chrome was. */
+.upgrade,
+.gear-slot,
+.portal-panel,
+.portal-stats div,
+.log,
+.goal-chip,
+.boss-banner,
+.portal-btn,
+.abandon-btn,
+.strike-hint {
+  border-width: 2px;
+  border-style: solid;
+  box-shadow:
+    inset 0 2px 0 var(--bevel-lit),
+    inset 0 -2px 0 var(--bevel-dark);
+}
+
+.upgrade.affordable,
+.portal-btn {
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 0.35),
+    inset 0 -2px 0 var(--bevel-dark),
+    var(--drop);
 }
