@@ -29,6 +29,7 @@ import {
   monsterInk,
   OUTLINE_INK,
   realmSkin,
+  REALM_SKIN_COUNT,
   sceneryInk,
   type RealmSkin,
 } from './palette';
@@ -191,7 +192,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   const skinCache = new Map<number, SkinnedSprites>();
   function skinnedFor(region: number): SkinnedSprites {
-    const key = region % 7;
+    const key = region % REALM_SKIN_COUNT;
     const cached = skinCache.get(key);
     if (cached) return cached;
     const skin = realmSkin(key);
@@ -210,6 +211,48 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   const props = buildProps();
+
+  // Ground texture (grass blades, fringe dots, soil strata) is a deterministic
+  // function of index and the current turf geometry, so it is baked once per
+  // resize instead of re-hashed on every one of the ~60 frames it draws per
+  // second.
+  interface GroundBlade { x0: number; y: number; toneAlt: boolean; tall: boolean; dot: boolean }
+  interface GroundFringe { x0: number; tuft: boolean }
+  interface GroundStrata { x0: number; y: number; len: number }
+  let groundBlades: GroundBlade[] = [];
+  let groundFringe: GroundFringe[] = [];
+  let groundStrata: GroundStrata[] = [];
+
+  function buildGroundTexture(): void {
+    const belowH = Math.max(8, sceneBottomY - groundY);
+    const turfH = Math.max(6, Math.floor(belowH * 0.76));
+
+    groundBlades = [];
+    for (let i = 0; i < 2200; i++) {
+      const depth = hash01(i * 1.7);
+      groundBlades.push({
+        x0: hash01(i * 4.1 + 3) * PROP_SPAN,
+        y: groundY + 3 + Math.floor(depth * (turfH - 4)),
+        toneAlt: i % 3 === 0,
+        tall: depth < 0.45,
+        dot: i % 5 === 0,
+      });
+    }
+
+    groundFringe = [];
+    for (let i = 0; i < 140; i++) {
+      groundFringe.push({ x0: hash01(i * 6.3 + 11) * PROP_SPAN, tuft: i % 3 === 0 });
+    }
+
+    groundStrata = [];
+    for (let i = 0; i < 46; i++) {
+      groundStrata.push({
+        x0: hash01(i * 2.3) * PROP_SPAN,
+        y: groundY + turfH + 3 + Math.floor(hash01(i * 7.7) * Math.max(1, belowH - turfH - 4)),
+        len: 4 + Math.floor(hash01(i) * 8),
+      });
+    }
+  }
 
   // --- Mutable scene state ---
   let pixelScale = 4;
@@ -288,6 +331,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     heroX = Math.floor(vw * (landscape ? HERO_X_FRAC : 0.3));
     engageGap = Math.max(MIN_ENGAGE_GAP, Math.floor(vw * ENGAGE_GAP_FRAC));
     if (collectAnchorCss) setCollectAnchor(collectAnchorCss.x, collectAnchorCss.y);
+    buildGroundTexture();
   }
 
   function setCollectAnchor(clientX: number, clientY: number): void {
@@ -436,7 +480,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   function strikeAt(clientX: number | null, clientY: number | null): StrikeOutcome {
     heroFlash = 0.12;
-    swingCooldown = 0;
+    // Restart the auto-attack cadence rather than zeroing it — zero would go
+    // negative on the very next step() and fire an immediate duplicate swing.
+    swingCooldown = 1 / SWINGS_PER_SEC;
     swing(true);
 
     if (clientX === null || clientY === null) return { caughtArc: false, caughtValue: 0 };
@@ -640,32 +686,31 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     ctx.fillRect(0, groundY + turfH, vw, 2);
 
     // Blade texture over the whole turf band — the single biggest reason a flat
-    // fill reads as ground rather than as a colored rectangle. Two tones, short
-    // strokes: one tone at one length is a rain effect, not grass.
-    for (let i = 0; i < 2200; i++) {
-      const x = Math.floor(wrap(hash01(i * 4.1 + 3) * PROP_SPAN - scrollGround, PROP_SPAN));
+    // fill reads as ground rather than as a colored rectangle. Positions are
+    // baked by buildGroundTexture(); only the scroll offset moves per frame.
+    for (const b of groundBlades) {
+      const x = Math.floor(wrap(b.x0 - scrollGround, PROP_SPAN));
       if (x > vw) continue;
-      const depth = hash01(i * 1.7);
-      const y = groundY + 3 + Math.floor(depth * (turfH - 4));
-      ctx.fillStyle = i % 3 === 0 ? skin.turfLip : skin.grassBlade;
-      ctx.fillRect(x, y, 1, depth < 0.45 ? 2 : 1);
-      if (i % 5 === 0) ctx.fillRect(x + 1, y + 1, 1, 1);
+      ctx.fillStyle = b.toneAlt ? skin.turfLip : skin.grassBlade;
+      ctx.fillRect(x, b.y, 1, b.tall ? 2 : 1);
+      if (b.dot) ctx.fillRect(x + 1, b.y + 1, 1, 1);
     }
-    // Fringe standing proud of the horizon line.
-    for (let i = 0; i < 140; i++) {
-      const x = Math.floor(wrap(hash01(i * 6.3 + 11) * PROP_SPAN - scrollGround, PROP_SPAN));
+    // Fringe standing proud of the horizon line. Its own fill: the blade loop
+    // above leaves fillStyle on whichever tone it happened to end on.
+    ctx.fillStyle = skin.grassBlade;
+    for (const f of groundFringe) {
+      const x = Math.floor(wrap(f.x0 - scrollGround, PROP_SPAN));
       if (x > vw) continue;
       ctx.fillRect(x, groundY - 1, 1, 1);
-      if (i % 3 === 0) ctx.fillRect(x, groundY - 2, 1, 1);
+      if (f.tuft) ctx.fillRect(x, groundY - 2, 1, 1);
     }
 
     // Soil strata: long horizontal marks, not scattered dots.
     ctx.fillStyle = skin.soilDark;
-    for (let i = 0; i < 46; i++) {
-      const x = Math.floor(wrap(hash01(i * 2.3) * PROP_SPAN - scrollGround, PROP_SPAN));
+    for (const s of groundStrata) {
+      const x = Math.floor(wrap(s.x0 - scrollGround, PROP_SPAN));
       if (x > vw) continue;
-      const y = groundY + turfH + 3 + Math.floor(hash01(i * 7.7) * Math.max(1, belowH - turfH - 4));
-      ctx.fillRect(x, y, 4 + Math.floor(hash01(i) * 8), 1);
+      ctx.fillRect(x, s.y, s.len, 1);
     }
   }
 

@@ -263,6 +263,9 @@ const REALM_SKINS: RealmSkin[] = [
   },
 ];
 
+/** Number of named realm skins the endless tail cycles through. */
+export const REALM_SKIN_COUNT = REALM_SKINS.length;
+
 /** Skin for a 0-based region index; the endless tail cycles the named realms. */
 export function realmSkin(region: number): RealmSkin {
   const i = region < 0 ? 0 : region % REALM_SKINS.length;

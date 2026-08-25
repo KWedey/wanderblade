@@ -149,8 +149,7 @@ export class Game {
     if (dtSec > 0) {
       // The strike buffer is drained on the same boundary the engine advances
       // on, so plugging it into `advance` is a one-argument change.
-      const strikes = this.drainStrikes();
-      void strikes;
+      this.drainStrikes();
       if (dtSec > SUSPEND_TICK_SEC) {
         this.applyOfflineReturn(dtSec);
       } else {
