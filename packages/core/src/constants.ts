@@ -49,7 +49,7 @@ export const gearPowerRate = rH;
  * base, so frequent drops make the equipped set track the frontier exactly and
  * every boss becomes the same fight. Scarcity is what makes a build vary.
  */
-export const dropChance = 0.006;
+export const dropChance = 0.008;
 
 /** Rarity roll weights (sum = 100). */
 export const RARITY_WEIGHTS: Record<Rarity, number> = {
@@ -74,9 +74,9 @@ export const RARITIES: readonly Rarity[] = ['common', 'uncommon', 'rare', 'epic'
 export const GEAR_SLOTS = ['weapon', 'armor', 'trinket'] as const;
 
 // --- Realm structure -----------------------------------------------------
-export const killsPerZone = 20;
+export const killsPerZone = 1200;
 /** Zones in a realm's road. Clearing the last one makes the portal available. */
-export const zonesPerRealm = 20;
+export const zonesPerRealm = 50;
 /** Leagues gained per Road kill. Zone length = 1 league. */
 export const leaguePerKill = 1 / killsPerZone;
 
@@ -85,7 +85,7 @@ export const leaguePerKill = 1 / killsPerZone;
  * Idle walking floor for a Road kill, in seconds. Momentum divides *through*
  * this floor (see `killTime`), so active play is never capped by it.
  */
-export const minKillTimeSec = 2;
+export const minKillTimeSec = 0.35;
 
 /** Nominal seconds per hero swing against a guardian at zero momentum. */
 export const bossSwingSec = 1;
@@ -99,7 +99,7 @@ export const MOMENTUM_HALF_LIFE_SEC = 2;
  * Attack-speed bonus at full momentum: multiplier = 1 + this * momentum.
  * Tuned to 0.6 so a capped boss fight lands mid-band (1.4x-1.8x faster).
  */
-export const MOMENTUM_MAX_BONUS = 0.6;
+export const MOMENTUM_MAX_BONUS = 0.75;
 
 // --- Loot arcs (the Road's active gold layer) ----------------------------
 /** Seconds a kill's loot arc stays catchable. */
@@ -107,13 +107,19 @@ export const ARC_FLIGHT_SEC = 1.5;
 /**
  * A caught arc pays this multiple of its base gold. The kill already credited
  * 1.0x at full value, so a catch pays only the increment and idle loses nothing.
- * Tuned with MOMENTUM_MAX_BONUS so capped Road play lands at 1.6 * 1.25 = 2.0x.
+ * Tuned with MOMENTUM_MAX_BONUS so capped Road play lands at 1.75 * 1.15 ~= 2.0x.
  */
-export const ARC_CATCH_MULT = 1.25;
+export const ARC_CATCH_MULT = 1.15;
 
 // --- Portal guardian -----------------------------------------------------
-/** Guardian HP = this * enemyHp(realm, last zone). */
-export const bossHpMult = 900;
+/** Guardian HP = this * enemyHp(realm, last zone) * BOSS_REALM_GAIN^realm. */
+export const bossHpMult = 30000;
+/**
+ * Guardians scale slightly faster than their realm. Without it the earnings
+ * bonus, which funds hero levels, would shrink every later fight to seconds;
+ * with it the Ascendancy tree's bounded power stays the real advantage.
+ */
+export const BOSS_REALM_GAIN = 1.22;
 
 // --- Ascendancy ----------------------------------------------------------
 /**
@@ -146,8 +152,8 @@ export const ASC_NODES: Record<string, AscNodeDef> = {
     id: 'edge',
     name: "Wanderer's Edge",
     maxRank: 12,
-    costBase: 3,
-    costRate: 1.45,
+    costBase: 18,
+    costRate: 1.6,
     effect: 'damage',
     perRank: 0.12,
   },
@@ -155,8 +161,8 @@ export const ASC_NODES: Record<string, AscNodeDef> = {
     id: 'heft',
     name: 'Ironhand',
     maxRank: 12,
-    costBase: 4,
-    costRate: 1.45,
+    costBase: 22,
+    costRate: 1.6,
     effect: 'gearPower',
     perRank: 0.12,
   },
@@ -164,8 +170,8 @@ export const ASC_NODES: Record<string, AscNodeDef> = {
     id: 'fury',
     name: 'Relentless',
     maxRank: 8,
-    costBase: 6,
-    costRate: 1.6,
+    costBase: 34,
+    costRate: 1.75,
     effect: 'attackSpeed',
     perRank: 0.05,
   },

@@ -6,6 +6,7 @@ import {
   initialState,
   killTime,
   momentumAt,
+  minKillTimeSec,
   momentumMultiplier,
   MOMENTUM_HALF_LIFE_SEC,
   MOMENTUM_MAX_BONUS,
@@ -54,7 +55,7 @@ describe('the momentum curve', () => {
 
 describe('one shared curve drives both phases', () => {
   it('shortens Road kill time and boss swing interval by the same factor', () => {
-    const s = portalReady(2, 500);
+    const s = portalReady(2, 4 * 3600);
     const roadRatio = killTime(s, 0) / killTime(s, 1);
     const bossRatio = swingInterval(s, 0) / swingInterval(s, 1);
     expect(roadRatio).toBeCloseTo(bossRatio, 10);
@@ -62,9 +63,11 @@ describe('one shared curve drives both phases', () => {
   });
 
   it('beats the idle kill-time floor rather than being swallowed by it', () => {
-    const s = initialState(1); // zone 0: raw kill time is under the floor
-    expect(killTime(s, 0)).toBeCloseTo(2, 10);
-    expect(killTime(s, 1)).toBeCloseTo(2 / (1 + MOMENTUM_MAX_BONUS), 10);
+    const s = initialState(1);
+    // Enough gear that the raw kill time is well under the floor.
+    s.gear.weapon = { power: 1e4, rarity: 'epic', realm: 0, zone: 0 };
+    expect(killTime(s, 0)).toBeCloseTo(minKillTimeSec, 10);
+    expect(killTime(s, 1)).toBeCloseTo(minKillTimeSec / (1 + MOMENTUM_MAX_BONUS), 10);
   });
 });
 
@@ -90,11 +93,11 @@ describe('strikes are inputs into advance', () => {
   });
 
   it('striking makes the guardian fall faster', () => {
-    const idle = portalReady(22, 400);
+    const idle = portalReady(22, 4 * 3600);
     enterPortal(idle);
     advance(idle, 1200);
 
-    const active = portalReady(22, 400);
+    const active = portalReady(22, 4 * 3600);
     enterPortal(active);
     advance(active, 1200, strikesAt(active.timeSec, 1200, sustainStrikeRate()));
 

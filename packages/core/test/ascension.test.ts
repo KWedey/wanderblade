@@ -27,8 +27,8 @@ function advanceToVictory(s: GameState): void {
 }
 
 /** Enter the portal and advance until the guardian falls. */
-function felled(seed: number, weaponPower: number): GameState {
-  const s = portalReady(seed, weaponPower);
+function felled(seed: number, bossSeconds: number): GameState {
+  const s = portalReady(seed, bossSeconds);
   enterPortal(s);
   advanceToVictory(s);
   return s;
@@ -36,7 +36,7 @@ function felled(seed: number, weaponPower: number): GameState {
 
 describe('the ascension transaction', () => {
   it('banks the boss payout plus the whole pending balance, exactly once', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     const pending = s.ascendancy.pending;
     const payout = ascendancyBossPayout(s.realm);
     enterPortal(s);
@@ -49,7 +49,7 @@ describe('the ascension transaction', () => {
   });
 
   it('resets realm-local power and starts the next realm on the Road at level 0', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     s.hero.level = 30;
     s.hero.skills.cleave = 4;
     s.leagues = 12;
@@ -72,7 +72,7 @@ describe('the ascension transaction', () => {
   });
 
   it('preserves banked Ascendancy, purchased nodes, collection, stats, and the RNG stream', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     s.ascendancy.banked = 100;
     buyAscendancyNode(s, 'edge');
     const nodesBefore = { ...s.ascendancy.nodes };
@@ -95,7 +95,7 @@ describe('the ascension transaction', () => {
   });
 
   it('increments the earnings bonus exactly once per victory, and never DPS', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     enterPortal(s);
     advanceToVictory(s);
 
@@ -115,7 +115,7 @@ describe('the ascension transaction', () => {
   });
 
   it('emits bossVictory then ascend, once each', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     enterPortal(s);
     const events = advance(s, 86_400);
     const victories = events.filter((e) => e.type === 'bossVictory');
@@ -129,11 +129,11 @@ describe('the ascension transaction', () => {
 
 describe('ascension is atomic and idempotent', () => {
   it('runs exactly once however the elapsed time is split', () => {
-    const one = portalReady(11, 4000);
+    const one = portalReady(11, 3600);
     enterPortal(one);
     advance(one, 86_400);
 
-    const many = portalReady(11, 4000);
+    const many = portalReady(11, 3600);
     enterPortal(many);
     for (let i = 0; i < 24; i++) advance(many, 3600);
 
@@ -143,7 +143,7 @@ describe('ascension is atomic and idempotent', () => {
   });
 
   it('runs exactly once across a save/reload boundary', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     enterPortal(s);
     advance(s, 86_400);
     const bankedAfter = s.ascendancy.banked;
@@ -157,7 +157,7 @@ describe('ascension is atomic and idempotent', () => {
   });
 
   it('spends the remaining offline time on the next realm road', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     enterPortal(s);
     // The guardian falls early in this window; the rest must be Road time.
     const events = advance(s, 86_400);
@@ -173,7 +173,7 @@ describe('ascension is atomic and idempotent', () => {
   });
 
   it('chains multiple realms inside one advance', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     enterPortal(s);
     advance(s, 86_400);
     expect(s.realm).toBe(1);
@@ -186,7 +186,7 @@ describe('ascension is atomic and idempotent', () => {
 
 describe('pending Ascendancy accrual', () => {
   it('accrues on zone clears and stops once the portal is open', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     s.zone = 0;
     s.killsInZone = 0;
     s.portalReady = false;
@@ -204,7 +204,7 @@ describe('pending Ascendancy accrual', () => {
   });
 
   it('cannot be spent before it is banked', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     s.ascendancy.pending = 1e6;
     s.ascendancy.banked = 0;
     expect(buyAscendancyNode(s, 'edge')).toBe(false);
@@ -214,7 +214,7 @@ describe('pending Ascendancy accrual', () => {
 
 describe('the Ascendancy tree', () => {
   it('spends banked currency and raises DPS', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     s.ascendancy.banked = 500;
     const dpsBefore = heroDps(s);
     expect(buyAscendancyNode(s, 'edge')).toBe(true);
@@ -223,7 +223,7 @@ describe('the Ascendancy tree', () => {
   });
 
   it('refuses unknown nodes, unaffordable ranks, and ranks past the cap', () => {
-    const s = portalReady(11, 4000);
+    const s = portalReady(11, 3600);
     expect(buyAscendancyNode(s, 'nope')).toBe(false);
     s.ascendancy.banked = 0;
     expect(buyAscendancyNode(s, 'edge')).toBe(false);
@@ -236,8 +236,8 @@ describe('the Ascendancy tree', () => {
   });
 
   it('carries its combat power into the next realm', () => {
-    const bare = felled(11, 4000);
-    const geared = felled(11, 4000);
+    const bare = felled(11, 3600);
+    const geared = felled(11, 3600);
     geared.ascendancy.banked += 1e6;
     for (let i = 0; i < 12; i++) buyAscendancyNode(geared, 'edge');
     expect(heroDps(geared)).toBeGreaterThan(heroDps(bare));

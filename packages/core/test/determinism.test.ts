@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { advance, enterPortal, initialState, serialize } from '../src/index';
-import { clone, portalReady, strikesAt } from './helpers';
+import { clone, portalReady, ROAD_KILL0_SEC, strikesAt } from './helpers';
 
 // The load-bearing invariant (docs/DECISIONS.md #6):
 //   advance(s, a + b) === advance(advance(s, a), b), exactly — same state AND
@@ -84,13 +84,14 @@ describe('split-advance determinism: strikes', () => {
   });
 
   it('is invariant when a strike and a kill share an instant', () => {
-    // Zone 0 kills land on the 2s floor; strike exactly on those instants.
-    const strikes = [2, 4, 6, 8, 10];
+    // Strike exactly on the instants zone-0 kills land on.
+    const strikes = [1, 2, 3, 4, 5].map((n) => n * ROAD_KILL0_SEC);
+    const span = 6 * ROAD_KILL0_SEC;
     const single = initialState(8);
-    const evSingle = advance(single, 12, strikes);
+    const evSingle = advance(single, 2 * span, strikes);
 
     const split = initialState(8);
-    const evSplit = advance(split, 6, strikes).concat(advance(split, 6, strikes));
+    const evSplit = advance(split, span, strikes).concat(advance(split, span, strikes));
 
     expect(JSON.stringify(evSplit)).toBe(JSON.stringify(evSingle));
     expect(serialize(split)).toBe(serialize(single));
@@ -119,11 +120,11 @@ describe('split-advance determinism: boss phase', () => {
 
   for (const [a, b] of splits) {
     it(`idle boss, split ${a}+${b}: identical boss HP and state`, () => {
-      const single = portalReady(51, 300);
+      const single = portalReady(51, 4 * 3600);
       enterPortal(single);
       advance(single, a + b);
 
-      const split = portalReady(51, 300);
+      const split = portalReady(51, 4 * 3600);
       enterPortal(split);
       advance(split, a);
       advance(split, b);
@@ -135,11 +136,11 @@ describe('split-advance determinism: boss phase', () => {
     it(`struck boss, split ${a}+${b}: identical boss HP and state`, () => {
       const strikes = strikesAt(0, a + b, 3);
 
-      const single = portalReady(51, 300);
+      const single = portalReady(51, 4 * 3600);
       enterPortal(single);
       advance(single, a + b, strikes);
 
-      const split = portalReady(51, 300);
+      const split = portalReady(51, 4 * 3600);
       enterPortal(split);
       advance(split, a, strikes);
       advance(split, b, strikes);
@@ -150,11 +151,11 @@ describe('split-advance determinism: boss phase', () => {
   }
 
   it('reaches the same boss HP offline as it does live, tick by tick', () => {
-    const offline = portalReady(52, 300);
+    const offline = portalReady(52, 4 * 3600);
     enterPortal(offline);
     advance(offline, 3600);
 
-    const live = portalReady(52, 300);
+    const live = portalReady(52, 4 * 3600);
     enterPortal(live);
     for (let i = 0; i < 14_400; i++) advance(live, 0.25); // 250 ms client ticks
 
@@ -164,19 +165,22 @@ describe('split-advance determinism: boss phase', () => {
 });
 
 describe('split-advance determinism: ascension', () => {
+  // The guardian falls at ~3600s and the next realm's Road runs out the rest.
+  // Event equality only holds below EVENT_CAP, which each half gets in full,
+  // so the window stays short enough that neither side truncates.
   const splits: Array<[number, number]> = [
-    [43_200, 43_200],
-    [1, 86_399],
-    [12_345.5, 74_054.5],
+    [3600, 3600],
+    [1, 7199],
+    [1234.5, 5965.5],
   ];
 
   for (const [a, b] of splits) {
     it(`victory mid-advance, split ${a}+${b}: identical next-realm state`, () => {
-      const single = portalReady(53, 4000);
+      const single = portalReady(53, 3600);
       enterPortal(single);
       const evSingle = advance(single, a + b);
 
-      const split = portalReady(53, 4000);
+      const split = portalReady(53, 3600);
       enterPortal(split);
       const evSplit = advance(split, a).concat(advance(split, b));
 
@@ -187,24 +191,24 @@ describe('split-advance determinism: ascension', () => {
   }
 
   it('survives a many-way split across the victory instant', () => {
-    const one = portalReady(53, 4000);
+    const one = portalReady(53, 3600);
     enterPortal(one);
-    advance(one, 86_400);
+    advance(one, 7200);
 
-    const many = portalReady(53, 4000);
+    const many = portalReady(53, 3600);
     enterPortal(many);
-    for (let i = 0; i < 1440; i++) advance(many, 60);
+    for (let i = 0; i < 120; i++) advance(many, 60);
 
     expect(serialize(many)).toBe(serialize(one));
     expect(one.realm).toBe(1);
   });
 
   it('does not reset the RNG stream on ascension', () => {
-    const s = portalReady(53, 4000);
+    const s = portalReady(53, 3600);
     const rngAtEntry = s.rngState;
     const killIndexAtEntry = s.killIndex;
     enterPortal(s);
-    advance(s, 86_400);
+    advance(s, 7200);
     expect(s.lifetime.ascensions).toBe(1);
     // Road kills after ascension advanced the stream; it never rewound.
     expect(s.killIndex).toBeGreaterThan(killIndexAtEntry);

@@ -19,7 +19,7 @@ describe('performance smoke', () => {
   });
 
   it('advances a 10-day boss stretch in well under 10s', () => {
-    const s = portalReady(7, 1);
+    const s = portalReady(7, 30 * 86_400);
     enterPortal(s);
 
     const t0 = Date.now();

@@ -8,14 +8,14 @@ import {
   serialize,
   summarizeEvents,
 } from '../src/index';
-import { portalReady, strikesAt } from './helpers';
+import { portalReady, roadAt, ROAD_KILL0_SEC, strikesAt } from './helpers';
 
 // The contract that keeps idle honest: a kill credits full base gold the moment
 // it lands, so an uncaught arc costs nothing. A catch pays only the increment.
 describe('loot arcs', () => {
   it('leaves idle gold untouched — uncaught arcs still pay in full', () => {
     const s = initialState(31);
-    advance(s, 2.001); // one kill at the walking floor
+    advance(s, ROAD_KILL0_SEC + 1e-6); // one kill at the walking pace
     expect(s.lifetime.kills).toBe(1);
     expect(s.gold).toBeCloseTo(1, 10); // enemyGold(0, 0) = 1
     expect(s.arcs).toHaveLength(1);
@@ -26,12 +26,12 @@ describe('loot arcs', () => {
 
   it('pays the catch increment on top of the base gold already credited', () => {
     const s = initialState(31);
-    advance(s, 2.001);
+    advance(s, ROAD_KILL0_SEC + 1e-6);
     const afterKill = s.gold;
     expect(s.arcs).toHaveLength(1);
 
-    // One strike mid-flight, before the next kill at t=4.
-    const events = advance(s, 0.5, [2.5]);
+    // One strike mid-flight, before the next kill lands.
+    const events = advance(s, ROAD_KILL0_SEC / 2, [1.5 * ROAD_KILL0_SEC]);
     const catches = events.filter((e) => e.type === 'arcCatch');
     expect(catches).toHaveLength(1);
     expect(s.gold).toBeCloseTo(afterKill * ARC_CATCH_MULT, 10);
@@ -39,24 +39,25 @@ describe('loot arcs', () => {
   });
 
   it('cannot catch an arc that has already landed', () => {
-    const s = initialState(31);
-    advance(s, 2.001);
+    // A slow zone, so the arc expires long before the next kill spawns another.
+    const s = roadAt(31, 20, 10);
+    advance(s, 10.001);
     const afterKill = s.gold;
-    const events = advance(s, 1.6, [2 + ARC_FLIGHT_SEC + 0.05]);
+    const events = advance(s, 3, [10 + ARC_FLIGHT_SEC + 0.05]);
     expect(events.filter((e) => e.type === 'arcCatch')).toHaveLength(0);
     expect(s.gold).toBe(afterKill);
   });
 
   it('catches at most one arc per strike, oldest first', () => {
     const s = initialState(31);
-    advance(s, 4.001); // two kills, both arcs in flight at t=4
-    expect(s.arcs.length).toBeGreaterThanOrEqual(1);
+    advance(s, 4.001); // several kills, their arcs still in flight at t=4
+    expect(s.arcs.length).toBeGreaterThanOrEqual(2);
     const events = advance(s, 0.2, [4.1]);
     expect(events.filter((e) => e.type === 'arcCatch')).toHaveLength(1);
   });
 
   it('never spawns or catches arcs during the boss phase', () => {
-    const s = portalReady(32, 400);
+    const s = portalReady(32, 4 * 3600);
     enterPortal(s);
     expect(s.arcs).toEqual([]);
     const events = advance(s, 600, strikesAt(s.timeSec, 600, 4));

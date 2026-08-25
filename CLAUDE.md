@@ -33,7 +33,9 @@ npx vitest run -t "split-advance determinism"
 npx vitest packages/core/test           # watch mode
 ```
 
-**The gate is `npm run verify`.** All three stages must pass before any task is complete. There is no vitest config file — vitest uses defaults from the repo root and resolves `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
+**The gate is `npm run verify`.** All three stages must pass before any task is complete. `vitest.config.ts` sets only a 30 s `testTimeout` — the long-gap tests replay millions of kills on purpose — and vitest otherwise uses defaults, resolving `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
+
+**A fresh worktree needs its own `npm install`.** Without the local `node_modules/@wanderblade/*` symlinks, vitest silently resolves the core from the parent checkout and the tests grade someone else's code; `tsc` and `tsx` do not, because they follow tsconfig `paths`.
 
 **Lint is not a style checker.** `eslint.config.js` polices the two invariants `tsc` cannot express, and nothing else:
 

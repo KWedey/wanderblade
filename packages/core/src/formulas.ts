@@ -6,6 +6,7 @@ import {
   ASC_NODE_IDS,
   ASC_PER_ZONE,
   ASC_REALM_GROWTH,
+  BOSS_REALM_GAIN,
   bossHpMult,
   bossSwingSec,
   d0,
@@ -61,7 +62,9 @@ export function goldPerKill(state: GameState): number {
 
 /** Guardian HP for `realm`: a multiple of that realm's final-zone enemy. */
 export function bossHp(realm: number): number {
-  return bossHpMult * enemyHp(realm, zonesPerRealm - 1);
+  return (
+    bossHpMult * enemyHp(realm, zonesPerRealm - 1) * Math.pow(BOSS_REALM_GAIN, realm)
+  );
 }
 
 /** Power of a drop rolled at zone `z` of `realm` at `rarity`. */

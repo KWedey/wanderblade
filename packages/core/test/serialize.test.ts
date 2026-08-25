@@ -36,7 +36,7 @@ describe('serialize / deserialize', () => {
   });
 
   it('round-trips a mid-fight boss state, preserving partial guardian HP', () => {
-    const s = portalReady(78, 300);
+    const s = portalReady(78, 4 * 3600);
     enterPortal(s);
     advance(s, 900, strikesAt(s.timeSec, 900, 3));
     expect(s.boss.hpRemaining).toBeGreaterThan(0);
@@ -65,7 +65,9 @@ describe('serialize / deserialize', () => {
     const s = initialState(3);
     advance(s, 1000);
     const json = serialize(s);
-    expect(() => JSON.parse(json)).not.toThrow();
+    expect(() => {
+      JSON.parse(json);
+    }).not.toThrow();
     expect(serialize(deserialize(json))).toBe(json);
   });
 });

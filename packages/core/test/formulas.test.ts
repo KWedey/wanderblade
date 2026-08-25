@@ -10,6 +10,7 @@ import {
   ASC_PER_ZONE,
   ASC_REALM_GROWTH,
   attackSpeedMultiplier,
+  BOSS_REALM_GAIN,
   bossEtaSec,
   bossHp,
   bossHpMult,
@@ -67,7 +68,9 @@ describe('enemy formulas', () => {
 
   it("bossHp scales off the realm's final-zone enemy", () => {
     expect(bossHp(0)).toBeCloseTo(bossHpMult * enemyHp(0, zonesPerRealm - 1), 4);
-    expect(bossHp(2) / bossHp(0)).toBeCloseTo(realmScale(2), 6);
+    // Guardians rubber-band a little ahead of their realm (DECISIONS.md #23).
+    expect(bossHp(2) / bossHp(0)).toBeCloseTo(realmScale(2) * BOSS_REALM_GAIN ** 2, 6);
+    expect(bossHp(2) / bossHp(0)).toBeGreaterThan(realmScale(2));
   });
 });
 
@@ -201,11 +204,11 @@ describe('Ascendancy accrual formulas', () => {
     );
   });
 
-  it("the guardian payout dominates a realm's road accrual", () => {
+  it('the guardian payout is worth several zones, at every realm', () => {
     for (const realm of [0, 1, 4]) {
-      expect(ascendancyBossPayout(realm)).toBeGreaterThan(
-        ascendancyPerZone(realm) * zonesPerRealm * 0.3,
-      );
+      const zones = ascendancyBossPayout(realm) / ascendancyPerZone(realm);
+      expect(zones).toBeGreaterThanOrEqual(5);
+      expect(zones).toBeLessThan(zonesPerRealm);
     }
   });
 });

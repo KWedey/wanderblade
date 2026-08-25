@@ -8,13 +8,14 @@ import {
   leaguePerKill,
   summarizeEvents,
   zonesPerRealm,
+  type GameEvent,
 } from '../src/index';
-import { strikesAt } from './helpers';
+import { nearPortal, ROAD_KILL0_SEC, strikesAt } from './helpers';
 
 describe('road progression sanity', () => {
-  it('the first kill lands at the 2s floor and pays gold', () => {
+  it('the first kill lands on schedule and pays gold', () => {
     const s = initialState(1);
-    const events = advance(s, 2.001);
+    const events = advance(s, ROAD_KILL0_SEC + 1e-6);
     expect(s.lifetime.kills).toBe(1);
     expect(s.gold).toBeCloseTo(1, 6); // enemyGold(0, 0) = 1
     expect(s.leagues).toBeCloseTo(leaguePerKill, 6);
@@ -23,21 +24,25 @@ describe('road progression sanity', () => {
 
   it('clears a zone every killsPerZone kills and emits the step', () => {
     const s = initialState(1);
-    const events = advance(s, 2 * killsPerZone + 0.001);
+    const events: GameEvent[] = [];
+    while (s.zone === 0 && s.timeSec < 200_000) events.push(...advance(s, 60));
+
     expect(s.zone).toBe(1);
-    expect(s.killsInZone).toBe(0);
-    expect(events.filter((e) => e.type === 'zone')).toHaveLength(1);
     expect(s.collection.zonesCleared).toBe(1);
+    const step = events.findIndex((e) => e.type === 'zone');
+    expect(step).toBeGreaterThanOrEqual(0);
+    expect(events.slice(0, step).filter((e) => e.type === 'kill')).toHaveLength(killsPerZone);
+    expect(events.filter((e) => e.type === 'zone')).toHaveLength(1);
   });
 
   it('opens the portal after the last zone, exactly once', () => {
-    const s = initialState(9);
-    const events = advance(s, 30 * 86_400);
+    const s = nearPortal(9, 1);
+    const events = advance(s, 5);
     expect(s.portalReady).toBe(true);
     expect(s.zone).toBe(zonesPerRealm - 1);
     expect(events.filter((e) => e.type === 'portalReady')).toHaveLength(1);
 
-    const more = advance(s, 86_400);
+    const more = advance(s, 3600);
     expect(more.filter((e) => e.type === 'portalReady')).toHaveLength(0);
   });
 

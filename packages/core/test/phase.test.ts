@@ -9,7 +9,7 @@ import {
   initialState,
   zonesPerRealm,
 } from '../src/index';
-import { idleTo, portalReady, strikesAt } from './helpers';
+import { idleTo, nearPortal, portalReady, strikesAt } from './helpers';
 
 // Subsumes the deleted gate.test.ts / boss.test.ts / autochallenge.test.ts:
 // the readiness meter, the retry cooldown, and auto-challenge are gone, and the
@@ -30,25 +30,25 @@ describe('phase exclusivity and manual entry', () => {
   });
 
   it('never enters the portal on its own, however long it advances', () => {
-    const s = initialState(9);
-    // 30 days of pure idle: the road finishes and the portal opens, but nothing
+    const s = nearPortal(9, 60);
+    // A week of pure idle: the portal opens on the first kill, but nothing
     // in advance may cross into the boss phase.
-    advance(s, 30 * 86_400);
+    advance(s, 7 * 86_400);
     expect(s.portalReady).toBe(true);
     expect(s.phase).toBe('road');
     expect(s.lifetime.ascensions).toBe(0);
   });
 
   it('never enters the portal on its own while the player is striking, either', () => {
-    const s = initialState(9);
-    advance(s, 30 * 86_400);
+    const s = nearPortal(9, 60);
+    advance(s, 7 * 86_400);
     const t = s.timeSec;
     advance(s, 600, strikesAt(t, 600, 4));
     expect(s.phase).toBe('road');
   });
 
   it('enters only on the explicit action, at full guardian HP', () => {
-    const s = portalReady(4, 500);
+    const s = portalReady(4, 4 * 3600);
     const res = enterPortal(s);
     expect(res.entered).toBe(true);
     expect(s.phase).toBe('boss');
@@ -58,14 +58,15 @@ describe('phase exclusivity and manual entry', () => {
   });
 
   it('refuses a second entry while already in the boss phase', () => {
-    const s = portalReady(4, 500);
+    const s = portalReady(4, 4 * 3600);
     enterPortal(s);
     expect(enterPortal(s).entered).toBe(false);
   });
 
   it('keeps farming the final zone once the portal is open, without advancing it', () => {
-    const s = initialState(9);
-    advance(s, 30 * 86_400);
+    const s = nearPortal(9, 60);
+    advance(s, 3600);
+    expect(s.portalReady).toBe(true);
     expect(s.zone).toBe(zonesPerRealm - 1);
     const killsBefore = s.lifetime.kills;
     advance(s, 3600);
@@ -77,7 +78,7 @@ describe('phase exclusivity and manual entry', () => {
 
 describe('the boss phase pays nothing', () => {
   it('freezes gold, gear, road position, pending Ascendancy, and collection', () => {
-    const s = portalReady(6, 400);
+    const s = portalReady(6, 4 * 3600);
     enterPortal(s);
     const before = {
       gold: s.gold,
@@ -106,7 +107,7 @@ describe('the boss phase pays nothing', () => {
   });
 
   it('emits no Road events during the fight', () => {
-    const s = portalReady(6, 400);
+    const s = portalReady(6, 4 * 3600);
     enterPortal(s);
     const events = advance(s, 1800, strikesAt(s.timeSec, 1800, 4));
     const roadTypes = ['kill', 'drop', 'equip', 'arcCatch', 'zone', 'portalReady'];
@@ -114,7 +115,7 @@ describe('the boss phase pays nothing', () => {
   });
 
   it('does not consume the RNG stream', () => {
-    const s = portalReady(6, 400);
+    const s = portalReady(6, 4 * 3600);
     enterPortal(s);
     const rngBefore = s.rngState;
     const killIndexBefore = s.killIndex;
@@ -124,7 +125,7 @@ describe('the boss phase pays nothing', () => {
   });
 
   it('locks every purchase for the duration of the attempt', () => {
-    const s = portalReady(6, 400);
+    const s = portalReady(6, 4 * 3600);
     s.gold = 1e9;
     s.hero.level = 20;
     s.ascendancy.banked = 1e6;
@@ -138,7 +139,7 @@ describe('the boss phase pays nothing', () => {
   });
 
   it('has no death, enrage, or automatic failure — HP only ever falls', () => {
-    const s = portalReady(6, 1);
+    const s = portalReady(6, 30 * 86_400);
     enterPortal(s);
     let last = s.boss.hpRemaining;
     for (let i = 0; i < 20; i++) {
@@ -152,7 +153,7 @@ describe('the boss phase pays nothing', () => {
 
 describe('abandonment', () => {
   it('resets only boss damage, keeping the Road build and pending Ascendancy', () => {
-    const s = portalReady(6, 400);
+    const s = portalReady(6, 4 * 3600);
     const goldBefore = s.gold;
     const pendingBefore = s.ascendancy.pending;
     const levelBefore = s.hero.level;
@@ -172,7 +173,7 @@ describe('abandonment', () => {
   });
 
   it('restores full guardian HP on re-entry', () => {
-    const s = portalReady(6, 400);
+    const s = portalReady(6, 4 * 3600);
     enterPortal(s);
     const full = s.boss.hpMax;
     advance(s, 600);
@@ -182,12 +183,12 @@ describe('abandonment', () => {
   });
 
   it('is a no-op on the Road', () => {
-    const s = portalReady(6, 400);
+    const s = portalReady(6, 4 * 3600);
     expect(abandonBoss(s).abandoned).toBe(false);
   });
 
   it('resumes Road income immediately', () => {
-    const s = portalReady(6, 400);
+    const s = portalReady(6, 4 * 3600);
     enterPortal(s);
     advance(s, 600);
     abandonBoss(s);

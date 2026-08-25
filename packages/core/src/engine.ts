@@ -182,7 +182,7 @@ function pickRarity(r: number): Rarity {
 /** One tier up the rarity ladder; the top tier stays put. */
 function upgradeRarity(r: Rarity): Rarity {
   const i = RARITIES.indexOf(r);
-  return (RARITIES[Math.min(RARITIES.length - 1, i + 1)] ?? r) as Rarity;
+  return RARITIES[Math.min(RARITIES.length - 1, i + 1)] ?? r;
 }
 
 // --- advance internals ---------------------------------------------------
@@ -256,7 +256,11 @@ function processKill(
   state.lifetime.goldEarned += gold;
   recap.kills += 1;
   recap.goldEarned += gold;
-  emit(events, { type: 'kill', timeSec: clock, realm, zone: z, killIndex: state.killIndex, gold });
+  // Built only under the cap: a ten-day gap is millions of kills, and the
+  // object churn — not the math — is what makes reconciliation slow.
+  if (events.length < EVENT_CAP) {
+    events.push({ type: 'kill', timeSec: clock, realm, zone: z, killIndex: state.killIndex, gold });
+  }
 
   // One RNG draw every kill keeps the stream keyed to killIndex; two more only
   // when a drop actually occurs.
