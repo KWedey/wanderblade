@@ -5,73 +5,120 @@ export interface SimConfig {
   days: number;
   seed: number;
   seeds: number;
-  checkinsPerDay: number;
+  /** Minutes per active session. */
+  sessionMin: number;
+  /** Active sessions per day. */
+  sessionsPerDay: number;
   csv: boolean;
+  /** Skip the multi-realm and long-return probes; keep the fast pacing ones. */
+  quick: boolean;
 }
 
-/** One discrete check-in (post active-session touch of the bot player). */
-export interface CheckinRecord {
-  index: number;
+/** Which player is being simulated. */
+export type PolicyName = 'road-idle' | 'road-active';
+
+/** One realm's full Road → Portal Boss → Ascension lifecycle. */
+export interface RealmRecord {
+  realm: number;
+  startSec: number;
+  portalReadySec: number | null;
+  portalEnterSec: number | null;
+  victorySec: number | null;
+  /** Seconds spent on the Road before entering (includes any overfarm). */
+  roadSec: number | null;
+  /** Seconds spent in the boss phase across all attempts. */
+  bossSec: number;
+  /** Active (striking) seconds inside this realm. */
+  activeSec: number;
+  abandons: number;
+  /** Predicted seconds-to-kill at entry, at zero momentum. */
+  bossEtaAtEntrySec: number | null;
+  /** The same prediction at sustained full momentum — the fight's active length. */
+  bossActiveEtaAtEntrySec: number | null;
+  gearPowerAtEntry: number;
+  dpsAtEntry: number;
+  goldPeak: number;
+  pendingAtVictory: number | null;
+  bankedAfter: number | null;
+  earningsMultAfter: number | null;
+  treePurchasesTotal: number;
+}
+
+/** A periodic snapshot of the run, for the CSV timeline. */
+export interface Sample {
   timeSec: number;
-  day: number;
-  /** Whether this check-in falls after the first 24h (validator 3 scope). */
-  afterDay1: boolean;
-  /** Zone / region as the player returns, before spending. */
-  arrivalZone: number;
-  arrivalRegion: number;
-  arrivalGold: number;
-  leagues: number;
-  heroLevel: number;
+  phase: string;
+  realm: number;
+  zone: number;
+  gold: number;
   gearPower: number;
   dps: number;
-  readiness: number;
-  /** Purchases the bot made this check-in. */
-  purchases: number;
-  /** If this check-in seeded an 8h-return probe, its purchase count. */
-  eightHourProbePurchases: number | null;
+  heroLevel: number;
+  pending: number;
+  banked: number;
+  bossHpFrac: number;
+  earningsMult: number;
 }
 
-/** Per-gate wall timing (region boss gate). */
-export interface GateRecord {
-  region: number;
-  zone: number;
-  formSec: number;
-  crossSec: number | null;
-  /** Seconds parked at the gate (crossSec - formSec), or run-end lower bound. */
-  parkedSec: number;
-  crossed: boolean;
-}
-
-/** A single PASS/FAIL target result for one seed. */
+/** A single PASS/FAIL result. */
 export interface ValidatorResult {
-  id: number;
+  id: string;
   name: string;
   pass: boolean;
-  /** Soft warning (still a PASS, but flagged — e.g. boss down too fast). */
-  warn: boolean;
   detail: string;
 }
 
-/** Everything measured for one seed's 10-day run. */
+/** A controlled A/B measurement taken from a cloned mid-run state. */
+export interface Uplift {
+  label: string;
+  idle: number;
+  active: number;
+  ratio: number;
+}
+
+/** Everything measured for one seed's run. */
 export interface SeedResult {
   seed: number;
   config: SimConfig;
-  checkins: CheckinRecord[];
-  gates: GateRecord[];
-  validators: ValidatorResult[];
-  // Headline milestones.
-  firstPurchaseSec: number | null;
-  firstBossSec: number | null;
-  firstBossTooFast: boolean;
-  maxTrashKillTime: number;
-  maxTrashKillTimeZone: number;
-  maxTrashKillTimeSec: number;
-  finalZone: number;
-  finalRegion: number;
-  finalLeagues: number;
-  worldsEdgeReached: boolean;
+  realms: RealmRecord[];
+  samples: Sample[];
+  correctness: ValidatorResult[];
+  pacing: ValidatorResult[];
+  /** Income-rate multiplier over 20 minutes, road position held. */
+  roadUplift: Uplift[];
+  /** The same window with road progression left in. Reported, not banded. */
+  roadWindowUplift: Uplift[];
+  /** Guardian time-to-kill from the same build: zero taps vs capped-rate strikes. */
+  bossUplift: Uplift[];
+  /** Upgrades affordable after an 8-hour idle return. */
+  eightHourBuys: number[];
+  /** Zones of road progress after a 24-hour idle return. */
+  twentyFourHourZones: number[];
+  /** Realm 0 start → portal available, for each policy. */
+  portalReachSec: { idle: number | null; active: number | null };
+  /** Prompt ascension versus farming a ready realm twice as long. */
+  promptVsOverfarm: { promptBanked: number; overfarmBanked: number; horizonSec: number } | null;
+  /** Abandoning an underprepared attempt versus farming the road instead. */
+  abandonProbe: {
+    investedSec: number;
+    lostBossSec: number;
+    roadGoldGained: number;
+    etaImprovement: number;
+  } | null;
   totalKills: number;
-  /** Median purchases across all 8h-return probes. */
-  eightHourMedian: number;
-  eightHourSamples: number[];
+  finalRealm: number;
+  victories: number;
+
+  /** Phase-contract breaches seen live; empty is the passing case. */
+  correctnessLive: string[];
+  offlineMatchesLive: boolean;
+  offlineMatchesLiveDetail: string;
+  replayIdentical: boolean;
+  replayIdenticalDetail: string;
+  abandonClean: boolean;
+  abandonCleanDetail: string;
+  remainingTimeCarried: boolean;
+  remainingTimeCarriedDetail: string;
+  earningsBonusIsolated: boolean;
+  earningsBonusIsolatedDetail: string;
 }

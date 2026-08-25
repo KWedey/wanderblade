@@ -1,168 +1,320 @@
-// Drives one seed's run: the first active session, then discrete check-ins at
-// the configured cadence, with untouched advance() between touches. Produces a
-// SeedResult (validators are computed separately in validators.ts).
+// The multi-realm driver: runs one seeded player through a day-structured
+// schedule, records every realm lifecycle, and watches the phase contract live.
 
 import {
   advance,
+  attackSpeedMultiplier,
+  bossEtaSec,
+  bossHp,
+  deserialize,
+  earningsMultiplier,
+  enterPortal,
   gearPowerTotal,
   heroDps,
   initialState,
-  readiness,
-  summarizeEvents,
+  serialize,
+  type GameEvent,
   type GameState,
 } from '@wanderblade/core';
-import { botBuy, botTouch } from './bot';
-import { Collector, regionOf } from './collector';
-import type { CheckinRecord, SimConfig, SeedResult } from './types';
+import { botTouch } from './bot';
+import { CAP_RATE, runActive, runIdle, SEC_PER_DAY, strikeTimes, type RunHooks } from './policy';
+import type { PolicyName, RealmRecord, Sample, SimConfig } from './types';
 
-const SEC_PER_DAY = 86_400;
-const SEC_PER_HOUR = 3_600;
-
-/** First active session length and bot cadence within it. */
-const ACTIVE_SESSION_SEC = 10 * 60; // minutes 0-10
-const ACTIVE_STEP_SEC = 5;
-
-/** 8h-return probe (validator 4): time away modeled as a return after 8h. */
-const EIGHT_HOUR_SEC = 8 * SEC_PER_HOUR;
+/** How often a Road clone is kept as a probe fixture. */
+const ROAD_STATE_INTERVAL_SEC = 3600;
 
 /**
- * Advance sub-step cap. Small enough that a single advance never approaches the
- * core's EVENT_CAP (50k): the kill-time floor is minKillTimeSec = 2s → ≤ 1,800
- * kills/hour, so a one-hour sub-step yields at most ~1,800 kill events, far
- * under the cap. The kill event stream is never truncated and the trash
- * kill-time deltas stay exact.
+ * A "prepared build" in the pacing band's sense: the client previews the
+ * guardian's estimated duration before entry, so the modelled player farms on
+ * rather than committing to a fight the preview says will take all week.
  */
-const SAMPLE_STEP_SEC = SEC_PER_HOUR;
+const PREPARED_MAX_ETA_SEC = 90 * 60;
+/** Even an unpromising realm gets committed to eventually. */
+const PREPARE_PATIENCE_SEC = 3 * SEC_PER_DAY;
 
-/** Advance `seconds` of game time in event-cap-safe sub-steps, folding events. */
-function runInterval(state: GameState, seconds: number, collector: Collector): void {
-  let remaining = seconds;
-  while (remaining > 0) {
-    const step = Math.min(SAMPLE_STEP_SEC, remaining);
-    const events = advance(state, step);
-    collector.processEvents(events);
-    collector.addRecap(summarizeEvents(events));
-    remaining -= step;
+/** The duration the portal preview would show, at sustained full momentum. */
+export function previewEtaSec(state: GameState): number {
+  const dps = heroDps(state) * attackSpeedMultiplier(state, 1);
+  if (!(dps > 0)) return Infinity;
+  return bossHp(state.realm) / dps;
+}
+
+/** Portal-entry timing. `prompt` commits at the first chance after it opens. */
+export type EntryStrategy = 'prompt' | 'overfarm-2x';
+
+export interface RunOptions {
+  policy: PolicyName;
+  entry: EntryStrategy;
+  /** Stop once this many victories have landed. */
+  maxVictories?: number;
+  /** Stop the moment the current realm's portal opens. */
+  stopAtPortalReady?: boolean;
+  /** Play without pause — the "hours of active play" the pacing band means. */
+  continuous?: boolean;
+  sampleEverySec?: number;
+}
+
+export interface RunResult {
+  state: GameState;
+  realms: RealmRecord[];
+  samples: Sample[];
+  /** Phase-contract breaches observed live. Empty is the passing case. */
+  violations: string[];
+  totalActiveSec: number;
+  /** Realm index → a clone taken the instant that realm's portal was entered. */
+  snapshots: Map<number, GameState>;
+  /** Periodic Road clones, the fixtures the windowed probes replay from. */
+  roadStates: GameState[];
+}
+
+export function clone(s: GameState): GameState {
+  return deserialize(serialize(s));
+}
+
+function blankRealm(realm: number, startSec: number): RealmRecord {
+  return {
+    realm,
+    startSec,
+    portalReadySec: null,
+    portalEnterSec: null,
+    victorySec: null,
+    roadSec: null,
+    bossSec: 0,
+    activeSec: 0,
+    abandons: 0,
+    bossEtaAtEntrySec: null,
+    bossActiveEtaAtEntrySec: null,
+    gearPowerAtEntry: 0,
+    dpsAtEntry: 0,
+    goldPeak: 0,
+    pendingAtVictory: null,
+    bankedAfter: null,
+    earningsMultAfter: null,
+    treePurchasesTotal: 0,
+  };
+}
+
+function sampleOf(s: GameState): Sample {
+  return {
+    timeSec: s.timeSec,
+    phase: s.phase,
+    realm: s.realm,
+    zone: s.zone,
+    gold: s.gold,
+    gearPower: gearPowerTotal(s.gear),
+    dps: heroDps(s),
+    heroLevel: s.hero.level,
+    pending: s.ascendancy.pending,
+    banked: s.ascendancy.banked,
+    bossHpFrac: s.boss.hpMax > 0 ? s.boss.hpRemaining / s.boss.hpMax : 0,
+    earningsMult: earningsMultiplier(s.ascendancy.victories),
+  };
+}
+
+/**
+ * Watches the live run for anything the phase contract forbids. This is the
+ * correctness evidence, gathered from the real run rather than asserted after.
+ */
+class ContractWatch {
+  readonly violations: string[] = [];
+  private prev: GameState;
+
+  constructor(state: GameState) {
+    this.prev = clone(state);
+  }
+
+  private note(msg: string): void {
+    if (this.violations.length < 20) this.violations.push(msg);
+  }
+
+  check(state: GameState, events: GameEvent[]): void {
+    const t = state.timeSec.toFixed(1);
+    const wasBoss = this.prev.phase === 'boss';
+
+    if (!wasBoss && state.phase === 'boss' && !events.some((e) => e.type === 'portalEnter')) {
+      this.note(`t=${t}: entered the boss phase with no explicit action`);
+    }
+    if (wasBoss && state.phase === 'boss') {
+      const frozen: Array<[string, number]> = [
+        ['gold', state.gold - this.prev.gold],
+        ['pendingAscendancy', state.ascendancy.pending - this.prev.ascendancy.pending],
+        ['leagues', state.leagues - this.prev.leagues],
+        ['zone', state.zone - this.prev.zone],
+        ['kills', state.lifetime.kills - this.prev.lifetime.kills],
+        ['gearFound', state.collection.gearFound - this.prev.collection.gearFound],
+        ['zonesCleared', state.collection.zonesCleared - this.prev.collection.zonesCleared],
+        ['killIndex', state.killIndex - this.prev.killIndex],
+        ['rngState', state.rngState - this.prev.rngState],
+      ];
+      for (const [name, delta] of frozen) {
+        if (delta !== 0) this.note(`t=${t}: ${name} moved during boss elapsed time`);
+      }
+      if (state.boss.hpRemaining > this.prev.boss.hpRemaining) {
+        this.note(`t=${t}: guardian HP regenerated`);
+      }
+    }
+    const finite = [state.gold, state.ascendancy.banked, state.boss.hpRemaining, heroDps(state)];
+    if (finite.some((v) => !Number.isFinite(v))) {
+      this.note(`t=${t}: a non-finite value reached client state`);
+    }
+    this.prev = clone(state);
   }
 }
 
-/** Median of a numeric list (0 if empty). */
-function median(xs: readonly number[]): number {
-  if (xs.length === 0) return 0;
-  const sorted = [...xs].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[mid] as number;
-  return ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
-}
-
-/**
- * 8h-return probe: from a freshly-spent steady-state snapshot, advance 8h with
- * no touches (auto-challenge still active), then measure how many purchases the
- * bot can afford on return. Runs on a clone; never affects the main run.
- */
-function eightHourProbe(state: GameState): number {
-  // structuredClone (not core's JSON serialize) so a non-finite balance in the
-  // endless tail round-trips exactly — JSON.stringify(Infinity) is `null`.
-  const clone = structuredClone(state);
-  const scratch = new Collector();
-  runInterval(clone, EIGHT_HOUR_SEC, scratch);
-  return botBuy(clone, scratch);
-}
-
-export function simulateSeed(seed: number, config: SimConfig): SeedResult {
-  const totalSec = config.days * SEC_PER_DAY;
-  const interval = SEC_PER_DAY / config.checkinsPerDay;
-
+/** Run one seeded player for `days`, or until an early-stop condition fires. */
+export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): RunResult {
   const state = initialState(seed);
-  const collector = new Collector();
-  const checkins: CheckinRecord[] = [];
+  const realms: RealmRecord[] = [blankRealm(0, 0)];
+  const samples: Sample[] = [];
+  const watch = new ContractWatch(state);
+  const active = opts.policy === 'road-active';
+  const sessionSec = opts.continuous ? SEC_PER_DAY : config.sessionMin * 60;
+  const gapSec = opts.continuous
+    ? 0
+    : Math.max(0, SEC_PER_DAY / config.sessionsPerDay - sessionSec);
+  const sampleEvery = opts.sampleEverySec ?? 900;
 
-  // --- First active session (minutes 0-10): bot touches every 5s ----------
-  let t = 0;
-  while (t < ACTIVE_SESSION_SEC) {
-    runInterval(state, ACTIVE_STEP_SEC, collector);
-    t += ACTIVE_STEP_SEC;
-    botTouch(state, collector);
-  }
-  let clock = ACTIVE_SESSION_SEC;
+  const snapshots = new Map<number, GameState>();
+  const roadStates: GameState[] = [];
+  let totalActiveSec = 0;
+  let stop = false;
+  let overfarmUntilSec: number | null = null;
+  let nextSampleAt = 0;
+  let nextRoadStateAt = 0;
 
-  // --- Discrete check-ins at the configured cadence -----------------------
-  // Check-ins land at k·interval; any within the active session are skipped
-  // (the player was already actively playing then).
-  let checkinIndex = 0;
-  for (let k = 1; k * interval <= totalSec + 1e-6; k++) {
-    const tc = k * interval;
-    if (tc <= ACTIVE_SESSION_SEC) continue;
+  const current = (): RealmRecord => realms[realms.length - 1] as RealmRecord;
 
-    runInterval(state, tc - clock, collector);
-    clock = tc;
+  const hooks: RunHooks = {
+    onEvents: (events) => {
+      watch.check(state, events);
+      for (const e of events) {
+        if (e.type === 'portalReady') {
+          const r = current();
+          if (r.portalReadySec === null) r.portalReadySec = e.timeSec;
+          if (opts.entry === 'overfarm-2x') {
+            overfarmUntilSec = e.timeSec + (e.timeSec - r.startSec);
+          }
+          if (opts.stopAtPortalReady) stop = true;
+        } else if (e.type === 'bossVictory') {
+          current().pendingAtVictory = e.pendingBanked;
+        } else if (e.type === 'ascend') {
+          const r = current();
+          r.victorySec = e.timeSec;
+          r.bankedAfter = e.banked;
+          r.earningsMultAfter = earningsMultiplier(e.victories);
+          if (r.portalEnterSec !== null) r.bossSec += e.timeSec - r.portalEnterSec;
+          realms.push(blankRealm(e.toRealm, e.timeSec));
+          overfarmUntilSec = null;
+          if (opts.maxVictories !== undefined && e.victories >= opts.maxVictories) stop = true;
+        }
+      }
+    },
+    onSlice: () => {
+      const r = current();
+      if (state.gold > r.goldPeak) r.goldPeak = state.gold;
+      if (state.timeSec >= nextSampleAt && samples.length < 5000) {
+        samples.push(sampleOf(state));
+        nextSampleAt = state.timeSec + sampleEvery;
+      }
+      if (
+        state.phase === 'road' &&
+        state.timeSec >= nextRoadStateAt &&
+        roadStates.length < 200
+      ) {
+        roadStates.push(clone(state));
+        nextRoadStateAt = state.timeSec + ROAD_STATE_INTERVAL_SEC;
+      }
+    },
+  };
 
-    // Snapshot arrival (pre-spend) state.
-    const arrivalZone = state.zone;
-    const arrivalGold = state.gold;
-    const dps = heroDps(state);
-    const rdy = readiness(state);
-    const gearPower = gearPowerTotal(state.gear);
-    const leagues = state.leagues;
-    const heroLevel = state.hero.level;
+  /** Commit to the portal if the strategy says the moment has come. */
+  const maybeEnter = (): void => {
+    if (stop || state.phase !== 'road' || !state.portalReady) return;
+    if (
+      opts.entry === 'overfarm-2x' &&
+      overfarmUntilSec !== null &&
+      state.timeSec < overfarmUntilSec
+    ) {
+      return;
+    }
+    botTouch(state);
+    const r = current();
+    if (
+      r.portalReadySec !== null &&
+      state.timeSec - r.portalReadySec < PREPARE_PATIENCE_SEC &&
+      previewEtaSec(state) > PREPARED_MAX_ETA_SEC
+    ) {
+      return; // the preview says this fight is not worth committing to yet
+    }
+    const res = enterPortal(state);
+    if (!res.entered) return;
+    r.portalEnterSec = state.timeSec;
+    r.roadSec = state.timeSec - r.startSec;
+    r.gearPowerAtEntry = gearPowerTotal(state.gear);
+    r.dpsAtEntry = heroDps(state);
+    r.bossEtaAtEntrySec = bossEtaSec(state, 0);
+    r.bossActiveEtaAtEntrySec = bossEtaSec(state, 1);
+    snapshots.set(r.realm, clone(state));
+    hooks.onEvents?.(res.events);
+  };
 
-    const purchases = botTouch(state, collector);
-    const afterDay1 = tc >= SEC_PER_DAY;
+  const horizon = config.days * SEC_PER_DAY;
+  while (state.timeSec < horizon && !stop) {
+    maybeEnter();
 
-    // 8h-return probe from this freshly-spent steady-state (after day 1 only),
-    // provided a full 8h window still fits inside the run horizon.
-    let probe: number | null = null;
-    if (afterDay1 && tc + EIGHT_HOUR_SEC <= totalSec) {
-      probe = eightHourProbe(state);
+    const session = Math.min(sessionSec, horizon - state.timeSec);
+    if (session > 0) {
+      const realmAtStart = current();
+      if (active) {
+        runActive(state, session, CAP_RATE, hooks);
+        totalActiveSec += session;
+        realmAtStart.activeSec += session;
+      } else {
+        runIdle(state, session, hooks);
+        botTouch(state);
+      }
     }
 
-    checkins.push({
-      index: checkinIndex++,
-      timeSec: tc,
-      day: Math.floor(tc / SEC_PER_DAY) + 1,
-      afterDay1,
-      arrivalZone,
-      arrivalRegion: regionOf(arrivalZone),
-      arrivalGold,
-      leagues,
-      heroLevel,
-      gearPower,
-      dps,
-      readiness: rdy,
-      purchases,
-      eightHourProbePurchases: probe,
-    });
+    maybeEnter();
+    const gap = Math.min(gapSec, horizon - state.timeSec);
+    if (gap > 0) {
+      runIdle(state, gap, hooks);
+      botTouch(state);
+    }
   }
 
-  // Ensure the clock reaches the full horizon even if cadence left a remainder.
-  if (clock < totalSec) {
-    runInterval(state, totalSec - clock, collector);
+  // Attribute any unfinished attempt's elapsed time to the realm it belongs to.
+  const last = current();
+  if (state.phase === 'boss' && last.portalEnterSec !== null && last.victorySec === null) {
+    last.bossSec += state.timeSec - last.portalEnterSec;
   }
 
-  const gates = collector.gateRecords(totalSec);
-  const probeSamples = checkins
-    .map((c) => c.eightHourProbePurchases)
-    .filter((p): p is number => p !== null);
-
-  const result: SeedResult = {
-    seed,
-    config,
-    checkins,
-    gates,
-    validators: [], // filled by validators.ts
-    firstPurchaseSec: collector.firstPurchaseSec,
-    firstBossSec: collector.firstBossSec,
-    firstBossTooFast: collector.firstBossSec !== null && collector.firstBossSec < 5 * 60,
-    maxTrashKillTime: collector.maxTrashKillTime,
-    maxTrashKillTimeZone: collector.maxTrashKillTimeZone,
-    maxTrashKillTimeSec: collector.maxTrashKillTimeSec,
-    finalZone: state.zone,
-    finalRegion: regionOf(state.zone),
-    finalLeagues: state.leagues,
-    worldsEdgeReached: state.worldsEdgeReached,
-    totalKills: collector.kills,
-    eightHourMedian: median(probeSamples),
-    eightHourSamples: probeSamples,
+  return {
+    state,
+    realms,
+    samples,
+    violations: watch.violations,
+    totalActiveSec,
+    snapshots,
+    roadStates,
   };
-  return result;
+}
+
+/**
+ * Elapsed seconds for a cloned state to fell its guardian at `rate` strikes/s,
+ * or null if it is still standing after `capSec`.
+ */
+export function timeToKill(start: GameState, rate: number, capSec: number): number | null {
+  const s = clone(start);
+  const t0 = s.timeSec;
+  let victoryAt: number | null = null;
+  let left = capSec;
+  while (left > 1e-9 && victoryAt === null) {
+    const dt = Math.min(300, left);
+    const from = s.timeSec;
+    const events = advance(s, dt, rate > 0 ? strikeTimes(from, dt, rate) : []);
+    for (const e of events) if (e.type === 'bossVictory') victoryAt = e.timeSec;
+    left -= dt;
+  }
+  return victoryAt === null ? null : victoryAt - t0;
 }

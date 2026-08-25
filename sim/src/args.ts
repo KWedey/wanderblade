@@ -1,28 +1,35 @@
-// Dependency-free argv parsing for the sim harness.
-//
-// Supported flags (all optional):
-//   --days N              simulated days per seed        (default 10)
-//   --seed N              first RNG seed                 (default 1)
-//   --seeds N             number of consecutive seeds    (default 3)
-//   --checkins-per-day N  discrete check-ins per day     (default 4)
-//   --csv                 write sim/out/run-<seed>.csv   (default off)
-//
-// Both `--flag value` and `--flag=value` forms are accepted.
+// Dependency-free argv parsing. Both `--flag value` and `--flag=value` work;
+// the flag list lives once, in HELP below.
 
 import type { SimConfig } from './types';
 
 const DEFAULTS: SimConfig = {
-  days: 10,
+  days: 14,
   seed: 1,
   seeds: 3,
-  checkinsPerDay: 4,
+  sessionMin: 20,
+  sessionsPerDay: 2,
   csv: false,
+  quick: false,
 };
 
+export const HELP = `Wanderblade economy simulator
+
+  npm run sim -- [options]
+
+  --days N             simulated days per seed           (default ${DEFAULTS.days})
+  --seed N             first RNG seed                    (default ${DEFAULTS.seed})
+  --seeds N            number of consecutive seeds       (default ${DEFAULTS.seeds})
+  --session-min N      minutes per active session        (default ${DEFAULTS.sessionMin})
+  --sessions-per-day N active sessions per day           (default ${DEFAULTS.sessionsPerDay})
+  --csv                write sim/out/run-<seed>.csv
+  --quick              only the fast pacing probes (P1, P2, P5, P6)
+  --help               this message
+
+The harness always exits 0. Read the printed PASS/FAIL summary.`;
+
 function parseIntFlag(raw: string | undefined, flag: string): number {
-  if (raw === undefined) {
-    throw new Error(`Flag ${flag} requires a numeric value`);
-  }
+  if (raw === undefined) throw new Error(`Flag ${flag} requires a numeric value`);
   const n = Number(raw);
   if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0) {
     throw new Error(`Flag ${flag} requires a positive integer (got "${raw}")`);
@@ -30,15 +37,13 @@ function parseIntFlag(raw: string | undefined, flag: string): number {
   return n;
 }
 
-export function parseArgs(argv: readonly string[]): SimConfig {
+export function parseArgs(argv: readonly string[]): SimConfig | 'help' {
   const config: SimConfig = { ...DEFAULTS };
 
   for (let i = 0; i < argv.length; i++) {
     const token = argv[i];
     if (token === undefined) continue;
-    if (!token.startsWith('--')) {
-      throw new Error(`Unexpected argument "${token}"`);
-    }
+    if (!token.startsWith('--')) throw new Error(`Unexpected argument "${token}"`);
 
     const eq = token.indexOf('=');
     const name = eq >= 0 ? token.slice(0, eq) : token;
@@ -55,6 +60,8 @@ export function parseArgs(argv: readonly string[]): SimConfig {
     };
 
     switch (name) {
+      case '--help':
+        return 'help';
       case '--days':
         config.days = parseIntFlag(takeValue(), '--days');
         break;
@@ -64,38 +71,25 @@ export function parseArgs(argv: readonly string[]): SimConfig {
       case '--seeds':
         config.seeds = parseIntFlag(takeValue(), '--seeds');
         break;
-      case '--checkins-per-day':
-        config.checkinsPerDay = parseIntFlag(takeValue(), '--checkins-per-day');
+      case '--session-min':
+        config.sessionMin = parseIntFlag(takeValue(), '--session-min');
+        break;
+      case '--sessions-per-day':
+        config.sessionsPerDay = parseIntFlag(takeValue(), '--sessions-per-day');
         break;
       case '--csv':
         config.csv = true;
         break;
-      case '--help':
-      case '-h':
-        printHelp();
-        process.exit(0);
+      case '--quick':
+        config.quick = true;
         break;
       default:
         throw new Error(`Unknown flag "${name}"`);
     }
   }
 
+  if (config.sessionMin * 60 * config.sessionsPerDay > 86_400) {
+    throw new Error('Active sessions cannot exceed a full day');
+  }
   return config;
-}
-
-function printHelp(): void {
-  process.stdout.write(
-    [
-      'Wanderblade economy simulator (M0 pacing harness)',
-      '',
-      'Usage: npm run sim -- [flags]',
-      '',
-      '  --days N              simulated days per seed        (default 10)',
-      '  --seed N              first RNG seed                 (default 1)',
-      '  --seeds N             number of consecutive seeds    (default 3)',
-      '  --checkins-per-day N  discrete check-ins per day     (default 4)',
-      '  --csv                 write sim/out/run-<seed>.csv',
-      '',
-    ].join('\n') + '\n',
-  );
 }
