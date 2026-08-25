@@ -138,8 +138,6 @@ body {
 
 .hud-realm {
   text-align: left;
-  /* Long realm names must shrink rather than shove the gold counter sideways. */
-  min-width: 0;
 }
 
 .hud-gold {
@@ -239,23 +237,46 @@ body {
   max-height: 52%;
 }
 
-/* Portrait has no room for a three-column HUD at desktop type sizes. */
+/* Portrait cannot fit realm, gold and DPS on one line at any readable size, so
+   the counter takes the first row and the realm gets the full width below it. */
 @media (max-aspect-ratio: 1/1) {
+  .hud {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'gold dps'
+      'realm realm';
+    gap: 8px 10px;
+  }
+
+  .hud-realm {
+    grid-area: realm;
+  }
+
+  .hud-gold {
+    grid-area: gold;
+    align-items: flex-start;
+  }
+
+  .hud-dps {
+    grid-area: dps;
+  }
+
   .wordmark {
     display: none;
   }
 
   .region {
     margin-top: 0;
-    font-size: 17px;
+    font-size: 20px;
   }
 
   .header-sub {
     font-size: 14px;
+    white-space: nowrap;
   }
 
   .gold {
-    font-size: 30px;
+    font-size: 40px;
   }
 
   .dps {
