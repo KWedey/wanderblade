@@ -3,7 +3,7 @@
 // this is UI-only and never feeds back into game math.
 
 import type { GameEvent, GearSlot, Rarity } from '@wanderblade/core';
-import { zonesPerRegion } from '@wanderblade/core';
+import { zonesPerRealm } from '@wanderblade/core';
 import { formatNumber } from './format';
 
 /** One rendered log line. `kind` drives its CSS accent. */
@@ -13,11 +13,9 @@ export interface LogEntry {
     | 'kill'
     | 'equip'
     | 'zone'
-    | 'region'
-    | 'gate'
-    | 'bossWin'
-    | 'bossFail'
-    | 'edge'
+    | 'portal'
+    | 'boss'
+    | 'ascend'
     | 'info';
 }
 
@@ -40,24 +38,20 @@ function toRoman(n: number): string {
   return ROMAN[n] ?? String(n);
 }
 
-/** Named biome for a 0-based region index; endless regions become "Beyond the Edge II…". */
-export function regionName(region: number): string {
-  const named = REGION_NAMES[region];
+/** Named realm for a 0-based realm index; later realms count on past the named set. */
+export function realmName(realm: number): string {
+  const named = REGION_NAMES[realm];
   if (named) return named;
-  // World's Edge is the last named region; the endless tail counts up from II.
-  const beyondIndex = region - REGION_NAMES.length + 2;
+  const beyondIndex = realm - REGION_NAMES.length + 2;
   return `Beyond the Edge ${toRoman(beyondIndex)}`;
 }
 
-/** Region index that a global zone belongs to. */
-export function regionOfZone(zone: number): number {
-  return Math.floor(zone / zonesPerRegion);
+/** 1-based zone number within its realm (1..zonesPerRealm). */
+export function zoneNumber(zone: number): number {
+  return zone + 1;
 }
 
-/** 1-based zone number within its region (1..zonesPerRegion). */
-export function zoneInRegion(zone: number): number {
-  return (zone % zonesPerRegion) + 1;
-}
+export { zonesPerRealm };
 
 const ENEMY_NAMES: string[][] = [
   ['Ashen Wolf', 'Bramble Boar', 'Thornback Lynx', 'Green Sprite', 'Moss Troll'],
@@ -72,8 +66,8 @@ const ENEMY_NAMES: string[][] = [
 const ENEMY_FALLBACK = ['Echo of the Void', 'Nameless Horror', 'Wandering Shade', 'Rift Beast'];
 
 /** Deterministic-looking enemy name; presentational only, keyed off kill index. */
-function enemyName(zone: number, killIndex: number): string {
-  const pool = ENEMY_NAMES[regionOfZone(zone)] ?? ENEMY_FALLBACK;
+function enemyName(realm: number, killIndex: number): string {
+  const pool = ENEMY_NAMES[realm] ?? ENEMY_FALLBACK;
   const idx = ((killIndex % pool.length) + pool.length) % pool.length;
   return pool[idx] ?? ENEMY_FALLBACK[0]!;
 }
@@ -133,7 +127,7 @@ function article(word: string): string {
 export function describeEvent(e: GameEvent): LogEntry | null {
   switch (e.type) {
     case 'kill': {
-      const name = enemyName(e.zone, e.killIndex);
+      const name = enemyName(e.realm, e.killIndex);
       return {
         kind: 'kill',
         text: `Felled ${article(name)} ${name} — +${formatNumber(e.gold)} gold`,
@@ -146,35 +140,31 @@ export function describeEvent(e: GameEvent): LogEntry | null {
         kind: 'equip',
         text: `Equipped ${gearName(e.slot, e.rarity)} (power ${formatNumber(e.power)})`,
       };
+    case 'arcCatch':
+      return null;
     case 'zone':
       return {
         kind: 'zone',
-        text: `Pressed on — ${regionName(regionOfZone(e.zone))} Zone ${zoneInRegion(e.zone)}`,
+        text: `Pressed on — ${realmName(e.realm)} Zone ${zoneNumber(e.zone)}`,
       };
-    case 'region':
-      return { kind: 'region', text: `Entered ${regionName(e.region)}!` };
-    case 'gate':
+    case 'portalReady':
       return {
-        kind: 'gate',
-        text: `Reached the gate — ${bossName(e.region)} looms ahead`,
+        kind: 'portal',
+        text: `The portal stands open — ${bossName(e.realm)} waits beyond`,
       };
-    case 'bossWin':
+    case 'portalEnter':
+      return { kind: 'portal', text: `Stepped through to face ${bossName(e.realm)}` };
+    case 'abandon':
+      return { kind: 'boss', text: `Withdrew from ${bossName(e.realm)} — the road again` };
+    case 'bossVictory':
+      return { kind: 'boss', text: `Slew ${bossName(e.realm)}!` };
+    case 'ascend':
       return {
-        kind: 'bossWin',
-        text: `Slew ${bossName(e.region)} — ${regionName(e.region + 1)} lies open`,
+        kind: 'ascend',
+        text: `Ascended — ${realmName(e.toRealm)} lies open (${formatNumber(e.banked)} Ascendancy banked)`,
       };
-    case 'bossFail':
-      return {
-        kind: 'bossFail',
-        text: `${capitalize(bossName(e.region))} — too strong… for now`,
-      };
-    case 'edge':
-      return { kind: 'edge', text: 'You reach World’s Edge — the road runs on beyond' };
     default:
       return null;
   }
 }
 
-function capitalize(s: string): string {
-  return s.length ? s[0]!.toUpperCase() + s.slice(1) : s;
-}

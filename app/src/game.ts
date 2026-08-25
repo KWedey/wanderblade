@@ -4,36 +4,31 @@
 // module only orchestrates and translates state into a ViewModel.
 
 import {
+  abandonBoss,
   advance,
+  bossEtaSec,
+  buyAscendancyNode as coreBuyAscendancyNode,
   buyHeroLevel as coreBuyHeroLevel,
   buySkill as coreBuySkill,
-  challengeBoss,
-  enemyGold,
+  enterPortal,
+  goldPerKill,
   heroDps,
   initialState,
   killsPerZone,
   killTime,
   levelCost,
-  readiness,
+  momentumAt,
   skillCost,
   SKILLS,
   SKILL_IDS,
   summarizeEvents,
-  zonesPerRegion,
+  zonesPerRealm,
   type GameEvent,
   type GameState,
   type GearSlot,
 } from '@wanderblade/core';
 import { killProgress, smoothStep, zoneSweep } from './anim';
-import {
-  bossName,
-  describeEvent,
-  gearName,
-  regionName,
-  regionOfZone,
-  zoneInRegion,
-  type LogEntry,
-} from './flavor';
+import { bossName, describeEvent, gearName, realmName, zoneNumber, type LogEntry } from './flavor';
 import { formatDuration, formatPercent } from './format';
 import { clearSave, readSave, writeSave } from './save';
 import type { GearVM, SkillVM, View, ViewModel } from './view';
@@ -73,8 +68,10 @@ export class Game {
   private goldPerKill = 0;
   /** Live media query — read per frame so an OS toggle applies immediately. */
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  private bossResult: 'win' | 'fail' | null = null;
+  private bossResult: 'win' | null = null;
   private bossResultUntilMs = 0;
+  /** Strike timestamps banked since the last tick, in game seconds. */
+  private pendingStrikes: number[] = [];
 
   constructor(private readonly view: View) {
     const loaded = readSave();
@@ -131,7 +128,9 @@ export class Game {
       if (dtSec > SUSPEND_TICK_SEC) {
         this.applyOfflineReturn(dtSec);
       } else {
-        this.ingestEvents(advance(this.state, dtSec));
+        const strikes = this.pendingStrikes;
+        this.pendingStrikes = [];
+        this.ingestEvents(advance(this.state, dtSec, strikes));
       }
     }
 
@@ -149,7 +148,7 @@ export class Game {
     const sinceTickSec = this.view.isRecapOpen()
       ? 0 // world paused behind the recap — freeze the sweep too
       : Math.min((performance.now() - this.lastTickMs) / 1000, MAX_EXTRAPOLATE_SEC);
-    return killProgress(this.state.nextKillAtSec, this.state.timeSec, sinceTickSec, this.killDurSec);
+    return killProgress(this.state.nextActionAtSec, this.state.timeSec, sinceTickSec, this.killDurSec);
   }
 
   private readonly animate = (frameMs: number): void => {
@@ -176,7 +175,7 @@ export class Game {
 
     this.view.renderFrame(
       this.displayGold,
-      zoneSweep(this.state.gate.atGate, this.state.killsInZone, p, killsPerZone),
+      zoneSweep(this.state.phase === 'boss', this.state.killsInZone, p, killsPerZone),
     );
     requestAnimationFrame(this.animate);
   };
@@ -198,9 +197,30 @@ export class Game {
     if (coreBuySkill(this.state, id)) this.renderAll();
   }
 
-  challenge(): void {
-    this.ingestEvents(challengeBoss(this.state).events);
+  /** Manual portal entry — the only way into the boss phase (DECISIONS.md #15). */
+  enterPortal(): void {
+    this.ingestEvents(enterPortal(this.state).events);
     this.renderAll();
+  }
+
+  abandonBoss(): void {
+    this.ingestEvents(abandonBoss(this.state).events);
+    this.renderAll();
+  }
+
+  buyAscendancyNode(id: string): void {
+    if (coreBuyAscendancyNode(this.state, id)) this.renderAll();
+  }
+
+  /** One Strike, stamped on the engine clock and queued for the next advance. */
+  strike(): void {
+    const sinceTickSec = Math.min(
+      (performance.now() - this.lastTickMs) / 1000,
+      MAX_EXTRAPOLATE_SEC,
+    );
+    const at = this.state.timeSec + sinceTickSec;
+    const last = this.pendingStrikes[this.pendingStrikes.length - 1];
+    this.pendingStrikes.push(last !== undefined && at <= last ? last + 1e-6 : at);
   }
 
   collectRecap(): void {
@@ -218,6 +238,7 @@ export class Game {
     this.state = initialState(randomSeed());
     this.displayGold = 0;
     this.bossResult = null;
+    this.pendingStrikes = [];
     this.view.setSeed(this.state.seed);
     this.view.pushLog([{ kind: 'info', text: 'A new blade sets out. The road begins again.' }]);
     writeSave(this.state);
@@ -239,7 +260,7 @@ export class Game {
     // Never flood the log with an offline kill stream — surface only milestones.
     const milestones: LogEntry[] = [];
     for (const e of events) {
-      if (e.type === 'region' || e.type === 'bossWin' || e.type === 'bossFail' || e.type === 'edge') {
+      if (e.type === 'portalReady' || e.type === 'bossVictory' || e.type === 'ascend') {
         const line = describeEvent(e);
         if (line) milestones.push(line);
       }
@@ -262,20 +283,19 @@ export class Game {
   private ingestEvents(events: GameEvent[]): void {
     const lines: LogEntry[] = [];
     for (const e of events) {
-      if (e.type === 'bossWin') this.setBossResult('win');
-      else if (e.type === 'bossFail') this.setBossResult('fail');
+      if (e.type === 'bossVictory') this.setBossResult('win');
       const line = describeEvent(e);
       if (line) lines.push(line);
     }
     this.view.pushLog(lines);
   }
 
-  private setBossResult(result: 'win' | 'fail'): void {
+  private setBossResult(result: 'win'): void {
     this.bossResult = result;
     this.bossResultUntilMs = performance.now() + BOSS_RESULT_MS;
   }
 
-  private currentBossResult(): 'win' | 'fail' | null {
+  private currentBossResult(): 'win' | null {
     if (this.bossResult && performance.now() <= this.bossResultUntilMs) return this.bossResult;
     this.bossResult = null;
     return null;
@@ -292,9 +312,9 @@ export class Game {
    * completion.
    */
   private groundKillSchedule(): void {
-    if (this.state.nextKillAtSec !== this.killSchedAtSec) {
-      this.killDurSec = killTime(this.state);
-      this.killSchedAtSec = this.state.nextKillAtSec;
+    if (this.state.nextActionAtSec !== this.killSchedAtSec) {
+      this.killDurSec = killTime(this.state, this.momentum());
+      this.killSchedAtSec = this.state.nextActionAtSec;
     }
   }
 
@@ -302,7 +322,7 @@ export class Game {
     // Every state change funnels through here, so the frame-loop caches stay
     // fresh without recomputing engine math 60× a second.
     this.groundKillSchedule();
-    const g = enemyGold(this.state.zone);
+    const g = goldPerKill(this.state);
     // Finite guard: enemyGold overflows to Infinity in the deep endless tail;
     // Infinity * 0 would poison displayGold with NaN.
     this.goldPerKill = Number.isFinite(g) ? g : 0;
@@ -315,18 +335,21 @@ export class Game {
     return { power: item.power, rarity: item.rarity, name: gearName(slot, item.rarity) };
   }
 
+  /** Live momentum on the engine clock, for display and schedule grounding. */
+  private momentum(): number {
+    return momentumAt(this.state.momentum, this.state.timeSec);
+  }
+
   private buildViewModel(): ViewModel {
     const s = this.state;
-    const region = regionOfZone(s.zone);
-    const r = readiness(s);
-    const onCooldown = s.gate.atGate && s.timeSec < s.gate.cooldownUntilSec;
+    const inBoss = s.phase === 'boss';
 
     const skills: SkillVM[] = SKILL_IDS.map((id) => {
       const def = SKILLS[id]!;
       const level = s.hero.skills[id] ?? 0;
       const unlocked = s.hero.level >= def.unlockLevel;
       const atMax = level >= def.maxLevel;
-      const cost = skillCost(level);
+      const cost = skillCost(level, s.realm);
       return {
         id,
         name: def.name,
@@ -335,30 +358,25 @@ export class Game {
         unlocked,
         atMax,
         unlockLevel: def.unlockLevel,
-        canAfford: unlocked && !atMax && s.gold >= cost,
+        canAfford: !inBoss && unlocked && !atMax && s.gold >= cost,
       };
     });
 
-    const heroLevelCost = levelCost(s.hero.level);
+    const heroLevelCost = levelCost(s.hero.level, s.realm);
     // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
     // reflect a purchase immediately instead of lagging one kill behind.
-    const goldPerSec = this.goldPerKill / killTime(s);
+    const goldPerSec = inBoss ? 0 : this.goldPerKill / killTime(s, this.momentum());
 
-    // Goal gradient: the nearest waypoint on the road…
     let marchGoal: string;
-    if (s.gate.atGate) {
-      if (onCooldown) {
-        marchGoal = `Rematch in ${formatDuration(s.gate.cooldownUntilSec - s.timeSec)}`;
-      } else if (r >= 1) {
-        marchGoal = 'Boss ready — challenge!';
-      } else {
-        marchGoal = `Farming gear — boss ${formatPercent(r)}`;
-      }
+    if (inBoss) {
+      marchGoal = `${bossName(s.realm)} — ${formatPercent(1 - s.boss.hpRemaining / s.boss.hpMax)} felled`;
+    } else if (s.portalReady) {
+      marchGoal = 'The portal stands open — enter when ready';
     } else {
       const killsLeft = killsPerZone - s.killsInZone;
-      const nextIsGate = zoneInRegion(s.zone) === zonesPerRegion;
+      const lastZone = s.zone === zonesPerRealm - 1;
       marchGoal = `${killsLeft} kill${killsLeft === 1 ? '' : 's'} to ${
-        nextIsGate ? 'the Boss Gate' : `Zone ${zoneInRegion(s.zone) + 1}`
+        lastZone ? 'the portal' : `Zone ${zoneNumber(s.zone) + 1}`
       }`;
     }
 
@@ -370,27 +388,31 @@ export class Game {
       purchaseCost = skill.cost;
       purchaseName = `${skill.name} ${skill.level + 1}`;
     }
-    const purchaseReady = s.gold >= purchaseCost;
-    const purchaseGoal = purchaseReady
-      ? `${purchaseName} ready — tap it!`
-      : `${purchaseName} in ~${formatDuration((purchaseCost - s.gold) / goldPerSec)}`;
+    const purchaseReady = !inBoss && s.gold >= purchaseCost;
+    let purchaseGoal: string;
+    if (inBoss) purchaseGoal = 'Purchases locked during the fight';
+    else if (purchaseReady) purchaseGoal = `${purchaseName} ready — tap it!`;
+    else purchaseGoal = `${purchaseName} in ~${formatDuration((purchaseCost - s.gold) / goldPerSec)}`;
 
     return {
-      regionName: regionName(region),
-      zoneInRegion: zoneInRegion(s.zone),
-      zonesPerRegion,
+      realmName: realmName(s.realm),
+      zone: zoneNumber(s.zone),
+      zonesPerRealm,
       leagues: s.leagues,
       dps: heroDps(s),
       heroLevel: s.hero.level,
-      atGate: s.gate.atGate,
-      bossName: bossName(region),
-      readiness: r,
-      readyToChallenge: s.gate.atGate && r >= 1 && !onCooldown,
-      onCooldown,
-      cooldownRemainingSec: Math.max(0, s.gate.cooldownUntilSec - s.timeSec),
+      phase: s.phase,
+      portalReady: s.portalReady,
+      bossName: bossName(s.realm),
+      bossRemainingFrac: inBoss && s.boss.hpMax > 0 ? s.boss.hpRemaining / s.boss.hpMax : 1,
+      bossEtaSec: inBoss ? bossEtaSec(s, this.momentum()) : null,
+      canEnterPortal: !inBoss && s.portalReady,
+      momentum: this.momentum(),
+      pendingAscendancy: s.ascendancy.pending,
+      bankedAscendancy: s.ascendancy.banked,
       bossResult: this.currentBossResult(),
       levelCost: heroLevelCost,
-      canAffordLevel: s.gold >= heroLevelCost,
+      canAffordLevel: !inBoss && s.gold >= heroLevelCost,
       goldPerSec,
       marchGoal,
       purchaseGoal,

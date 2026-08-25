@@ -15,7 +15,9 @@ let game: Game;
 const handlers: ViewHandlers = {
   onBuyLevel: () => game.buyLevel(),
   onBuySkill: (id) => game.buySkill(id),
-  onChallenge: () => game.challenge(),
+  onEnterPortal: () => game.enterPortal(),
+  onAbandon: () => game.abandonBoss(),
+  onStrike: () => game.strike(),
   onCollectRecap: () => game.collectRecap(),
   onReset: () => game.reset(),
   onTimeWarp: (seconds) => game.timeWarp(seconds),

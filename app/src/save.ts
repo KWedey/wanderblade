@@ -61,8 +61,9 @@ function isValidState(v: unknown): v is GameState {
     !isFiniteNumber(s.seed) ||
     !isFiniteNumber(s.rngState) ||
     !isFiniteNumber(s.timeSec) ||
-    !isFiniteNumber(s.nextKillAtSec) ||
+    !isFiniteNumber(s.nextActionAtSec) ||
     !isFiniteNumber(s.killIndex) ||
+    !isFiniteNumber(s.realm) ||
     !isFiniteNumber(s.zone) ||
     !isFiniteNumber(s.killsInZone) ||
     !isFiniteNumber(s.leagues) ||
@@ -70,7 +71,9 @@ function isValidState(v: unknown): v is GameState {
   ) {
     return false;
   }
-  if (typeof s.worldsEdgeReached !== 'boolean') return false;
+  if (s.phase !== 'road' && s.phase !== 'boss') return false;
+  if (typeof s.portalReady !== 'boolean') return false;
+  if (!Array.isArray(s.arcs)) return false;
 
   // hero.level + the skills map (skillMult iterates its values).
   const hero = s.hero as Record<string, unknown> | null;
@@ -88,17 +91,47 @@ function isValidState(v: unknown): v is GameState {
     if (!(slot in gear) || !isValidGearItem(gear[slot])) return false;
   }
 
-  // gate + lifetime: objects the engine mutates in place during advance.
-  const gate = s.gate as Record<string, unknown> | null;
-  if (typeof gate !== 'object' || gate === null) return false;
-  if (typeof gate.atGate !== 'boolean' || !isFiniteNumber(gate.cooldownUntilSec)) return false;
+  // Objects the engine mutates in place during advance.
+  const boss = s.boss as Record<string, unknown> | null;
+  if (typeof boss !== 'object' || boss === null) return false;
+  if (!isFiniteNumber(boss.hpRemaining) || !isFiniteNumber(boss.hpMax)) return false;
+  if (boss.enteredAtSec !== null && !isFiniteNumber(boss.enteredAtSec)) return false;
+
+  const momentum = s.momentum as Record<string, unknown> | null;
+  if (typeof momentum !== 'object' || momentum === null) return false;
+  if (!isFiniteNumber(momentum.value) || !isFiniteNumber(momentum.atSec)) return false;
+
+  const asc = s.ascendancy as Record<string, unknown> | null;
+  if (typeof asc !== 'object' || asc === null) return false;
+  if (
+    !isFiniteNumber(asc.pending) ||
+    !isFiniteNumber(asc.banked) ||
+    !isFiniteNumber(asc.victories)
+  ) {
+    return false;
+  }
+  const nodes = asc.nodes as Record<string, unknown> | null;
+  if (typeof nodes !== 'object' || nodes === null) return false;
+  for (const rank of Object.values(nodes)) {
+    if (!isFiniteNumber(rank)) return false;
+  }
+
+  const collection = s.collection as Record<string, unknown> | null;
+  if (typeof collection !== 'object' || collection === null) return false;
+  if (
+    !isFiniteNumber(collection.bossTrophies) ||
+    !isFiniteNumber(collection.gearFound) ||
+    !isFiniteNumber(collection.zonesCleared)
+  ) {
+    return false;
+  }
 
   const lifetime = s.lifetime as Record<string, unknown> | null;
   if (typeof lifetime !== 'object' || lifetime === null) return false;
   if (
     !isFiniteNumber(lifetime.kills) ||
     !isFiniteNumber(lifetime.goldEarned) ||
-    !isFiniteNumber(lifetime.bossKills)
+    !isFiniteNumber(lifetime.ascensions)
   ) {
     return false;
   }

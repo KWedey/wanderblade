@@ -35,19 +35,23 @@ export interface SkillVM {
 
 /** Everything the view needs to paint one frame of the panels (not the gold count-up). */
 export interface ViewModel {
-  regionName: string;
-  zoneInRegion: number;
-  zonesPerRegion: number;
+  realmName: string;
+  zone: number;
+  zonesPerRealm: number;
   leagues: number;
   dps: number;
   heroLevel: number;
-  atGate: boolean;
+  phase: 'road' | 'boss';
+  portalReady: boolean;
   bossName: string;
-  readiness: number;
-  readyToChallenge: boolean;
-  onCooldown: boolean;
-  cooldownRemainingSec: number;
-  bossResult: 'win' | 'fail' | null;
+  /** Fraction of guardian HP still standing, 1 → 0. */
+  bossRemainingFrac: number;
+  bossEtaSec: number | null;
+  canEnterPortal: boolean;
+  momentum: number;
+  pendingAscendancy: number;
+  bankedAscendancy: number;
+  bossResult: 'win' | null;
   levelCost: number;
   canAffordLevel: boolean;
   goldPerSec: number;
@@ -62,7 +66,9 @@ export interface ViewModel {
 export interface ViewHandlers {
   onBuyLevel: () => void;
   onBuySkill: (id: string) => void;
-  onChallenge: () => void;
+  onEnterPortal: () => void;
+  onAbandon: () => void;
+  onStrike: () => void;
   onCollectRecap: () => void;
   onReset: () => void;
   onTimeWarp: (seconds: number) => void;
@@ -141,14 +147,19 @@ function template(): string {
       <span class="goal-chip" data-role="goal-purchase"></span>
     </section>
 
+    <section class="strike-strip">
+      <button class="strike-btn" type="button" data-role="strike">Strike</button>
+    </section>
+
     <section class="boss-panel" data-role="boss-panel" hidden>
-      <div class="boss-title">Boss Gate</div>
+      <div class="boss-title" data-role="boss-title">Portal</div>
       <div class="boss-name" data-role="boss-name">the Greenwood Warden</div>
       <div class="readiness-track">
         <div class="readiness-fill" data-role="readiness-fill"></div>
         <span class="readiness-label" data-role="readiness-label">0%</span>
       </div>
-      <button class="challenge-btn" type="button" data-role="challenge">Challenge</button>
+      <button class="challenge-btn" type="button" data-role="challenge">Enter the portal</button>
+      <button class="challenge-btn" type="button" data-role="abandon" hidden>Withdraw</button>
       <div class="boss-cooldown" data-role="cooldown" hidden></div>
       <div class="boss-banner" data-role="boss-banner" hidden></div>
     </section>
@@ -234,6 +245,8 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const readinessFillEl = q(root, '[data-role="readiness-fill"]');
   const readinessLabelEl = q(root, '[data-role="readiness-label"]');
   const challengeBtn = q<HTMLButtonElement>(root, '[data-role="challenge"]');
+  const abandonBtn = q<HTMLButtonElement>(root, '[data-role="abandon"]');
+  const bossTitleEl = q(root, '[data-role="boss-title"]');
   const cooldownEl = q(root, '[data-role="cooldown"]');
   const bossBannerEl = q(root, '[data-role="boss-banner"]');
   const toastEl = q(root, '[data-role="toast"]');
@@ -270,7 +283,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
   // Static handlers.
   heroBtn.addEventListener('click', handlers.onBuyLevel);
-  challengeBtn.addEventListener('click', handlers.onChallenge);
+  challengeBtn.addEventListener('click', handlers.onEnterPortal);
+  abandonBtn.addEventListener('click', handlers.onAbandon);
+  q<HTMLButtonElement>(root, '[data-role="strike"]').addEventListener('click', handlers.onStrike);
 
   const debugToggle = q<HTMLButtonElement>(root, '[data-role="debug-toggle"]');
   const debugDrawer = q(root, '[data-role="debug-drawer"]');
@@ -298,10 +313,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   let lastDps = -1;
 
   function renderPanels(vm: ViewModel): void {
-    regionEl.textContent = vm.regionName;
-    zoneEl.textContent = vm.atGate
-      ? 'At the Gate'
-      : `Zone ${vm.zoneInRegion}/${vm.zonesPerRegion}`;
+    regionEl.textContent = vm.realmName;
+    zoneEl.textContent =
+      vm.phase === 'boss' ? 'In the portal' : `Zone ${vm.zone}/${vm.zonesPerRealm}`;
     leaguesEl.textContent = `${formatLeagues(vm.leagues)} leagues`;
     dpsEl.textContent = formatNumber(vm.dps);
     if (vm.dps > lastDps && lastDps >= 0) {
@@ -317,26 +331,28 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     goalPurchaseEl.textContent = vm.purchaseGoal;
     goalPurchaseEl.classList.toggle('ready', vm.purchaseReady);
 
-    // Boss gate.
-    bossPanelEl.hidden = !vm.atGate;
-    if (vm.atGate) {
+    // Portal / guardian.
+    const inBoss = vm.phase === 'boss';
+    bossPanelEl.hidden = !(inBoss || vm.portalReady);
+    if (!bossPanelEl.hidden) {
+      bossTitleEl.textContent = inBoss ? 'Portal Guardian' : 'Portal';
       bossNameEl.textContent = vm.bossName;
-      const fill = Math.min(1, Math.max(0, vm.readiness));
-      readinessFillEl.style.width = `${fill * 100}%`;
-      readinessLabelEl.textContent = vm.readiness >= 1 ? 'READY' : formatPercent(vm.readiness);
-      readinessFillEl.classList.toggle('ready', vm.readiness >= 1);
-      challengeBtn.disabled = vm.onCooldown;
-      challengeBtn.classList.toggle('ready', vm.readyToChallenge);
-      cooldownEl.hidden = !vm.onCooldown;
-      if (vm.onCooldown) {
-        cooldownEl.textContent = `Retry in ${formatDuration(vm.cooldownRemainingSec)}`;
+      const felled = Math.min(1, Math.max(0, 1 - vm.bossRemainingFrac));
+      readinessFillEl.style.width = `${(inBoss ? felled : 1) * 100}%`;
+      readinessLabelEl.textContent = inBoss ? formatPercent(felled) : 'OPEN';
+      readinessFillEl.classList.toggle('ready', !inBoss);
+      challengeBtn.hidden = inBoss;
+      challengeBtn.disabled = !vm.canEnterPortal;
+      challengeBtn.classList.toggle('ready', vm.canEnterPortal);
+      abandonBtn.hidden = !inBoss;
+      cooldownEl.hidden = !inBoss || vm.bossEtaSec === null;
+      if (!cooldownEl.hidden) {
+        cooldownEl.textContent = `~${formatDuration(vm.bossEtaSec as number)} remaining`;
       }
-      const showFail = vm.bossResult === 'fail';
-      bossBannerEl.hidden = !showFail;
-      if (showFail) bossBannerEl.textContent = 'Too strong… for now';
+      bossBannerEl.hidden = true;
     }
 
-    // Victory toast (the gate panel is gone by the time a win lands).
+    // Victory toast (the portal panel is gone by the time a win lands).
     const showWin = vm.bossResult === 'win';
     toastEl.hidden = !showWin;
     if (showWin) toastEl.textContent = 'Victory! The gate opens.';
@@ -437,7 +453,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     recapKills.textContent = formatNumber(recap.kills);
     recapGold.textContent = formatNumber(recap.goldEarned);
     recapDrops.textContent = formatNumber(recap.drops);
-    recapBosses.textContent = formatNumber(recap.bossWins);
+    recapBosses.textContent = formatNumber(recap.victories);
     recapOverlay.hidden = false;
   }
 
