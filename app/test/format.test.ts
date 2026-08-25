@@ -3,7 +3,13 @@
 // corrupting the most-visible element on screen.
 
 import { describe, expect, it } from 'vitest';
-import { formatGold, formatRate } from '../src/format';
+import {
+  formatDuration,
+  formatGold,
+  formatNumber,
+  formatRate,
+  suffixFor,
+} from '../src/format';
 
 describe('formatGold', () => {
   it('renders one decimal under 1K so the tail churns at low scale', () => {
@@ -36,9 +42,9 @@ describe('formatGold', () => {
     expect(formatGold(999_999_999_999)).toBe('1.00000T');
   });
 
-  it('covers the last suffix and falls back to exponential beyond the table', () => {
+  it('keeps a suffix past the old table instead of dropping to exponential', () => {
     expect(formatGold(1e39)).toBe('1.00000Dd');
-    expect(formatGold(1e42)).toBe('1.0000e+42');
+    expect(formatGold(1e42)).toBe('1.00000Td');
   });
 
   it('handles negatives and non-finite values', () => {
@@ -65,5 +71,36 @@ describe('formatRate', () => {
   it('handles non-finite rates', () => {
     expect(formatRate(Number.NaN)).toBe('∞');
     expect(formatRate(Number.POSITIVE_INFINITY)).toBe('∞');
+  });
+});
+
+describe('suffixFor', () => {
+  it('covers the named ladder', () => {
+    expect(suffixFor(0)).toBe('');
+    expect(suffixFor(1)).toBe('K');
+    expect(suffixFor(21)).toBe('Vg');
+  });
+
+  it('rolls into letter pairs past the named ladder', () => {
+    expect(suffixFor(22)).toBe('aa');
+    expect(suffixFor(23)).toBe('ab');
+    expect(suffixFor(48)).toBe('ba');
+  });
+
+  it('reaches the tiers a staged late run actually produces', () => {
+    expect(suffixFor(92)).not.toBeNull();
+    expect(formatNumber(1.0637e278)).not.toMatch(/e\+/);
+    expect(formatGold(9.46e307)).not.toMatch(/e\+/);
+  });
+
+  it('rejects a tier past two letters rather than inventing one', () => {
+    expect(suffixFor(22 + 26 * 26)).toBeNull();
+  });
+});
+
+describe('formatDuration overflow', () => {
+  it('does not render NaN or Infinity as a duration', () => {
+    expect(formatDuration(Number.NaN)).toBe('—');
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('—');
   });
 });

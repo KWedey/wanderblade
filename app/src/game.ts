@@ -24,6 +24,7 @@ import {
   type GameState,
   type GearSlot,
 } from '@wanderblade/core';
+import { stageFromQuery } from './devstage';
 import {
   decayMomentum,
   momentumMultiplier,
@@ -96,6 +97,15 @@ export class Game {
   private readonly pendingStrikes: Strike[] = [];
 
   constructor(private readonly view: View) {
+    // Dev-only: `?stage=late` boots a staged run so captures show the game deep
+    // in, not thirty seconds in. It never touches the save.
+    const staged = import.meta.env.DEV ? stageFromQuery(window.location.search) : null;
+    if (staged) {
+      this.state = staged;
+      this.displayGold = this.state.gold;
+      this.view.setSeed(this.state.seed);
+      return;
+    }
     const loaded = readSave();
     if (loaded) {
       this.state = loaded.state;
