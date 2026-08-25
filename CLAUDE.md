@@ -16,8 +16,10 @@ npm install
 npm run dev                  # Vite dev server at http://localhost:5173
 npm run dev -- --host        # expose on LAN for phone testing
 npm run build                # production build of app/
+npm run verify               # THE GATE: lint + typecheck + test
 npm test                     # vitest across all workspaces (14 files / 116 tests)
-npm run typecheck            # tsc --noEmit over core, sim, and app (the gate)
+npm run typecheck            # tsc --noEmit over core, sim, and app
+npm run lint                 # eslint (type-aware); --fix for the autofixable ones
 npm run sim                  # economy simulator, default 3 seeds × 10 days
 npm run sim -- --days 30 --seeds 5 --csv   # writes sim/out/run-<seed>.csv
 npm run sim -- --help        # full flag list
@@ -31,7 +33,13 @@ npx vitest run -t "split-advance determinism"
 npx vitest packages/core/test           # watch mode
 ```
 
-**The gate is `npm run typecheck && npm test`.** Both must pass before any task is complete. There is no lint step and no vitest config file — vitest uses defaults from the repo root and resolves `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
+**The gate is `npm run verify`.** All three stages must pass before any task is complete. There is no vitest config file — vitest uses defaults from the repo root and resolves `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
+
+**Lint is not a style checker.** `eslint.config.js` polices the two invariants `tsc` cannot express, and nothing else:
+
+- **Determinism** — `Math.random`, `Date.now`, and `performance.now` are banned in `packages/core/src` and `sim/src`. Randomness comes from `createRng`; the clock comes from `GameState.timeSec`. Wall time is an app-layer concern only.
+- **Boundaries** — core may not import `node:*` or any workspace package; app and sim may not deep-import `@wanderblade/core/*` past the public index.
+- Plus `switch-exhaustiveness-check` over the `GameEvent` union (an explicit `default` opts a switch out) and type-aware `typescript-eslint` recommended rules.
 
 `npm run sim` always exits 0: the harness succeeding is not the same as the pacing targets passing. Read the printed PASS/FAIL summary.
 

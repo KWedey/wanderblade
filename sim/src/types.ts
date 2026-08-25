@@ -69,13 +69,8 @@ export interface SeedResult {
   finalZone: number;
   finalRegion: number;
   finalLeagues: number;
-  finalGold: number;
   worldsEdgeReached: boolean;
   totalKills: number;
-  totalGold: number;
-  totalDrops: number;
-  totalEquips: number;
-  activeSessionPurchases: number;
   /** Median purchases across all 8h-return probes. */
   eightHourMedian: number;
   eightHourSamples: number[];

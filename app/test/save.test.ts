@@ -15,9 +15,6 @@ class MemoryStorage {
   removeItem(key: string): void {
     this.map.delete(key);
   }
-  clear(): void {
-    this.map.clear();
-  }
 }
 
 // Must mirror the private key/version inside save.ts to plant raw payloads.

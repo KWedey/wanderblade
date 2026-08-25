@@ -42,7 +42,9 @@ describe('serialize / deserialize', () => {
     const s = initialState(3);
     advance(s, 1000);
     const json = serialize(s);
-    expect(() => JSON.parse(json)).not.toThrow();
+    expect(() => {
+      JSON.parse(json);
+    }).not.toThrow();
     // idempotent: serialize(deserialize(x)) === x
     expect(serialize(deserialize(json))).toBe(json);
   });

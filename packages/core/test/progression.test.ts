@@ -29,7 +29,7 @@ describe('progression sanity', () => {
     );
     expect(equippedSlots.length).toBeGreaterThan(0);
     for (const g of equippedSlots) {
-      expect(g!.power).toBeGreaterThan(0);
+      expect(g.power).toBeGreaterThan(0);
     }
   });
 

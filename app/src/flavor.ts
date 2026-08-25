@@ -72,7 +72,7 @@ const ENEMY_NAMES: string[][] = [
 const ENEMY_FALLBACK = ['Echo of the Void', 'Nameless Horror', 'Wandering Shade', 'Rift Beast'];
 
 /** Deterministic-looking enemy name; presentational only, keyed off kill index. */
-export function enemyName(zone: number, killIndex: number): string {
+function enemyName(zone: number, killIndex: number): string {
   const pool = ENEMY_NAMES[regionOfZone(zone)] ?? ENEMY_FALLBACK;
   const idx = ((killIndex % pool.length) + pool.length) % pool.length;
   return pool[idx] ?? ENEMY_FALLBACK[0]!;

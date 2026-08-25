@@ -127,12 +127,3 @@ function v6(r: SeedResult): ValidatorResult {
 export function runValidators(r: SeedResult): ValidatorResult[] {
   return [v1(r), v2(r), v3(r), v4(r), v5(r), v6(r)];
 }
-
-export const VALIDATOR_NAMES: readonly string[] = [
-  'First upgrade < 30s',
-  'First boss 5-10 min',
-  'Check-in value ≥90%',
-  '8h return ≥3 buys',
-  'Soft-wall cadence',
-  'No hard stall ≤60s',
-];

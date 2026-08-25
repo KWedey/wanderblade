@@ -2,8 +2,8 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { SeedResult, ValidatorResult } from './types';
-import { VALIDATOR_NAMES, fmtTime } from './validators';
+import type { SeedResult } from './types';
+import { fmtTime } from './validators';
 
 const SEC_PER_HOUR = 3_600;
 
@@ -146,12 +146,12 @@ export function formatSummary(results: SeedResult[]): string {
 
   const rows: string[][] = [];
   const aggregatePass: boolean[] = [];
-  for (let i = 0; i < VALIDATOR_NAMES.length; i++) {
-    const name = VALIDATOR_NAMES[i] ?? '';
+  for (let i = 0; i < (results[0]?.validators.length ?? 0); i++) {
+    const name = results[0]?.validators[i]?.name ?? '';
     const cells: string[] = [String(i + 1), name];
     let allPass = true;
     for (const r of results) {
-      const v = r.validators[i] as ValidatorResult | undefined;
+      const v = r.validators[i];
       if (!v) {
         cells.push('?');
         allPass = false;

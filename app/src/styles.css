@@ -37,7 +37,6 @@
   --torch: #df7126;
   --danger: #d95763;
   --danger-deep: #ac3232;
-  --forest: #6abe30;
 
   --rarity-common: #9badb7;
   --rarity-uncommon: #99e550;
@@ -255,10 +254,6 @@ body {
   text-align: center;
 }
 
-.boss-panel[hidden] {
-  display: none;
-}
-
 .boss-title {
   font-size: 13px;
   letter-spacing: 0.14em;
@@ -340,7 +335,9 @@ body {
   animation: readyBlink 0.9s steps(1) infinite;
 }
 
-.challenge-btn:active {
+.challenge-btn:active,
+.upgrade-btn.affordable:active,
+.recap-btn:active {
   transform: translateY(3px);
   box-shadow: var(--drop-pressed);
 }
@@ -357,18 +354,10 @@ body {
   color: var(--ink-dim);
 }
 
-.boss-cooldown[hidden] {
-  display: none;
-}
-
 .boss-banner {
   margin-top: 10px;
   font-size: 16px;
   color: var(--danger);
-}
-
-.boss-banner[hidden] {
-  display: none;
 }
 
 /* --- Generic panels --------------------------------------------------- */
@@ -425,7 +414,6 @@ body {
 .upgrade-detail {
   grid-area: detail;
   font-size: 14px;
-  color: var(--parchment);
 }
 
 .upgrade-cost {
@@ -437,11 +425,6 @@ body {
 
 .upgrade-btn.affordable {
   border-color: var(--gold);
-}
-
-.upgrade-btn.affordable:active {
-  transform: translateY(3px);
-  box-shadow: var(--drop-pressed);
 }
 
 .upgrade-btn:disabled {
@@ -458,7 +441,6 @@ body {
 }
 
 .upgrade-btn.locked .upgrade-detail {
-  color: var(--parchment);
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
 }
 
@@ -608,10 +590,6 @@ body {
   animation: toastIn 0.3s ease;
 }
 
-.toast[hidden] {
-  display: none;
-}
-
 /* --- Debug ------------------------------------------------------------ */
 
 .debug-toggle {
@@ -638,10 +616,6 @@ body {
   border: 3px solid var(--wood);
   background: var(--wood-shadow);
   box-shadow: var(--drop);
-}
-
-.debug-drawer[hidden] {
-  display: none;
 }
 
 .debug-title {
@@ -764,11 +738,6 @@ body {
   font-size: 19px;
   cursor: pointer;
   box-shadow: var(--drop);
-}
-
-.recap-btn:active {
-  transform: translateY(3px);
-  box-shadow: var(--drop-pressed);
 }
 
 /* --- Animations ------------------------------------------------------- */

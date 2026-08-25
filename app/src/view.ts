@@ -41,7 +41,6 @@ export interface ViewModel {
   leagues: number;
   dps: number;
   heroLevel: number;
-  zoneProgress: number;
   atGate: boolean;
   bossName: string;
   readiness: number;
@@ -58,16 +57,15 @@ export interface ViewModel {
   purchaseReady: boolean;
   skills: SkillVM[];
   gear: Record<GearSlot, GearVM | null>;
-  worldsEdgeReached: boolean;
 }
 
 export interface ViewHandlers {
-  onBuyLevel(): void;
-  onBuySkill(id: string): void;
-  onChallenge(): void;
-  onCollectRecap(): void;
-  onReset(): void;
-  onTimeWarp(seconds: number): void;
+  onBuyLevel: () => void;
+  onBuySkill: (id: string) => void;
+  onChallenge: () => void;
+  onCollectRecap: () => void;
+  onReset: () => void;
+  onTimeWarp: (seconds: number) => void;
 }
 
 export interface View {

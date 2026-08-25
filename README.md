@@ -1,44 +1,52 @@
 # Wanderblade
 
-*One blade, one long road, and a whole realm of monsters between you and legend.*
+*One blade, one long road, and a world of monsters between you and the portal.*
 
-A mobile idle RPG proof of concept: a lone wandering swordfighter auto-battles across a transforming fantasy realm (Greenwood → World's Edge, 7 regions), earning loot and levels and pushing through region **boss gates**. Built for 30–90 second check-ins with **offline progress** as the core hook. TypeScript monorepo; the game rules are a pure, deterministic, seeded engine shared by the playable app and the economy simulator — offline progress and live play run the same code path.
+Wanderblade is a mobile active-forward idle RPG about a lone swordfighter saving sequential fantasy realms from monster-producing portals. The hero builds temporary power on an endless Road, then manually commits that build to a persistent portal guardian whose HP advances online and offline. Victory triggers ascension into the next realm: run power resets, while Ascendancy, economy bonuses, and collection records persist.
+
+The target rhythm is one or two enjoyable 15–30-minute active sessions per day with slower, meaningful offline progress between visits. The game uses a pure deterministic TypeScript engine shared by the client and simulator.
 
 ## Status
 
-- **M0 (economy simulator): complete** — all six pacing targets PASS across 3 seeds × 10 simulated days (`npm run sim`).
-- **M1a (playable minimal-UI loop): playable now** — auto-battle, gold/loot, hero levels, bounded skills, auto-equip gear, boss gates with a Readiness meter, offline "Back on the Road" recap.
-- Next: M1b road renderer + Road Play. See `docs/ROADMAP.md`.
+- **M0/M1a foundation:** implemented — deterministic auto-combat, gold, loot, levels, gear, skills, save/load, offline recap, and the economy simulator.
+- **M1b HUD:** implemented — living counters, goal feedback, and Pixel & Parchment styling.
+- **M1R active-forward rebaseline:** documented — Road → Portal Boss → Ascension, pending/banked Ascendancy, reset/persistence rules, SRD 5.2.1 boundary, and a gated implementation plan.
+- **Current playable build:** still uses the legacy readiness-gate and auto-challenge prototype. Those mechanics are retained temporarily as implementation history and are superseded by Decisions #14–#18.
+- **Next:** active-play design and numeric pacing bands, followed by core/simulator rebaselining. See `docs/ROADMAP.md`.
 
 ## Quickstart
 
 ```bash
 npm install
-npm run dev            # play the app at http://localhost:5173
-npm run dev -- --host  # expose on your LAN to open it on a real phone
-npm run sim            # run the economy simulator (prints M0 PASS/FAIL table)
-npm test               # test suite across core + sim
-npm run typecheck      # strict TS, all three packages
+npm run dev            # run the current prototype at http://localhost:5173
+npm run dev -- --host  # expose it on the LAN for phone testing
+npm run sim            # run the historical M0 gate-economy simulator
+npm run verify         # the gate: lint + typecheck + test
+npm test               # test suite across core, simulator, and app
+npm run typecheck      # strict TypeScript across all workspaces
+npm run lint           # eslint: core purity + determinism guards
 npm run build          # production build of the app
 ```
 
-Requires Node ≥ 20 (Vite 6 / Vitest 3).
+Requires Node ≥ 20.
 
-## Demo script (30 seconds)
+## Current prototype walkthrough
 
-1. `npm run dev`, open the app — the hero auto-battles on its own; gold and DPS climb while loot and zone/region events stream into the **On the Road** log.
-2. Tap the glowing **Hero Level** / skill buttons to spend gold; watch the numbers jump.
-3. Open the **gear icon (bottom-right corner)** → **Time-warp +8h** to trigger the **"Back on the Road"** offline recap — this is the core pitch: the hero kept walking while you were away.
-4. When the hero parks at a boss **Gate**, the Readiness meter fills as gear is farmed; hit **Challenge** when it glows Ready.
-5. **Reset save** in the debug drawer starts a fresh run.
+The playable app has not yet implemented the approved redesign. To inspect the existing foundation:
+
+1. Run `npm run dev` and watch deterministic auto-combat, gold, DPS, gear, and zone events.
+2. Buy hero levels and bounded skill ranks.
+3. Use the debug time warp to exercise offline reconciliation and the return recap.
+4. Inspect the legacy Readiness/Challenge gate knowing it will be replaced by the persistent portal-boss state.
 
 ## Layout
 
-- `packages/core` — pure, deterministic game rules (seeded PRNG, event-stepped engine). No UI or platform imports.
-- `sim` — fast-forward economy harness + pacing validators (`npm run sim -- --help` for flags).
-- `app` — Vite + TypeScript playable client (single-screen minimal UI; the M1b renderer comes later).
-- `docs` — the authoritative spec: VISION, DESIGN, ECONOMY, ROADMAP, DECISIONS.
+- `packages/core` — pure deterministic rules: seeded PRNG, event-stepped advancement, serialization, and purchases.
+- `sim` — fast-forward economy harness and validators.
+- `app` — Vite + TypeScript client.
+- `docs` — authoritative vision, design, economy, roadmap, decision history, and SRD provenance policy.
+- `docs/superpowers/plans` — implementation plans gated by approved design/economy specifications.
 
-## Docs
+## Documentation
 
-Start with `docs/VISION.md` (the fantasy and pillars), then `docs/DESIGN.md` (systems) and `docs/ECONOMY.md` (the math and the simulator contract). `docs/DECISIONS.md` records every design decision and why.
+Start with `docs/VISION.md`, then read `docs/DESIGN.md`, `docs/ECONOMY.md`, and `docs/ROADMAP.md`. `docs/DECISIONS.md` preserves superseded choices rather than rewriting history. `docs/SRD-CONTENT.md` defines the SRD 5.2.1 licensing boundary and provenance requirements.

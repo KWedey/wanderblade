@@ -73,8 +73,6 @@ export class Game {
   private goldPerKill = 0;
   /** Live media query — read per frame so an OS toggle applies immediately. */
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  private tickTimer: ReturnType<typeof setInterval> | null = null;
-  private rafId: number | null = null;
   private bossResult: 'win' | 'fail' | null = null;
   private bossResultUntilMs = 0;
 
@@ -98,8 +96,8 @@ export class Game {
     const now = performance.now();
     this.lastTickMs = now;
     this.lastSaveMs = now;
-    this.tickTimer = setInterval(this.tick, TICK_MS);
-    this.rafId = requestAnimationFrame(this.animate);
+    setInterval(this.tick, TICK_MS);
+    requestAnimationFrame(this.animate);
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('pagehide', this.onPageHide);
     this.renderAll();
@@ -180,7 +178,7 @@ export class Game {
       this.displayGold,
       zoneSweep(this.state.gate.atGate, this.state.killsInZone, p, killsPerZone),
     );
-    this.rafId = requestAnimationFrame(this.animate);
+    requestAnimationFrame(this.animate);
   };
 
   private maybeSave(nowMs: number): void {
@@ -384,7 +382,6 @@ export class Game {
       leagues: s.leagues,
       dps: heroDps(s),
       heroLevel: s.hero.level,
-      zoneProgress: s.killsInZone / killsPerZone,
       atGate: s.gate.atGate,
       bossName: bossName(region),
       readiness: r,
@@ -404,7 +401,6 @@ export class Game {
         armor: this.gearVM('armor'),
         trinket: this.gearVM('trinket'),
       },
-      worldsEdgeReached: s.worldsEdgeReached,
     };
   }
 }

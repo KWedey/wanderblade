@@ -78,12 +78,11 @@ export function simulateSeed(seed: number, config: SimConfig): SeedResult {
   const checkins: CheckinRecord[] = [];
 
   // --- First active session (minutes 0-10): bot touches every 5s ----------
-  let activeSessionPurchases = 0;
   let t = 0;
   while (t < ACTIVE_SESSION_SEC) {
     runInterval(state, ACTIVE_STEP_SEC, collector);
     t += ACTIVE_STEP_SEC;
-    activeSessionPurchases += botTouch(state, collector);
+    botTouch(state, collector);
   }
   let clock = ACTIVE_SESSION_SEC;
 
@@ -138,7 +137,6 @@ export function simulateSeed(seed: number, config: SimConfig): SeedResult {
   // Ensure the clock reaches the full horizon even if cadence left a remainder.
   if (clock < totalSec) {
     runInterval(state, totalSec - clock, collector);
-    clock = totalSec;
   }
 
   const gates = collector.gateRecords(totalSec);
@@ -161,13 +159,8 @@ export function simulateSeed(seed: number, config: SimConfig): SeedResult {
     finalZone: state.zone,
     finalRegion: regionOf(state.zone),
     finalLeagues: state.leagues,
-    finalGold: state.gold,
     worldsEdgeReached: state.worldsEdgeReached,
     totalKills: collector.kills,
-    totalGold: collector.goldEarned,
-    totalDrops: collector.drops,
-    totalEquips: collector.equips,
-    activeSessionPurchases,
     eightHourMedian: median(probeSamples),
     eightHourSamples: probeSamples,
   };
