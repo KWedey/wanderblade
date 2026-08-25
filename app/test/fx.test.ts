@@ -212,3 +212,23 @@ describe('arcSpaceFromScene', () => {
     expect(b.y).toBeCloseTo(a.y);
   });
 });
+
+describe('level-flight arcs', () => {
+  it('launches and lands on one line, so arc-space y = 0 at both ends', () => {
+    const base = 120;
+    const flight = 1.5;
+    const arc = launchArc(0, base, -50, base, liftForFlight(base, base, flight), 5, 'gold', 0);
+    const apex = arcApexHeight(flight);
+    expect(arcSpaceFromScene(arc.x0, base, 0, base, apex).y).toBeCloseTo(0);
+    const landing = arcPosition(arc, flight);
+    expect(arcSpaceFromScene(landing.x, landing.y, 0, base, apex).y).toBeCloseTo(0, 4);
+  });
+
+  it('peaks at arc-space y = 1 halfway through the flight', () => {
+    const base = 120;
+    const flight = 1.5;
+    const arc = launchArc(0, base, -50, base, liftForFlight(base, base, flight), 5, 'gold', 0);
+    const mid = arcPosition(arc, flight / 2);
+    expect(arcSpaceFromScene(mid.x, mid.y, 0, base, arcApexHeight(flight)).y).toBeCloseTo(1, 4);
+  });
+});

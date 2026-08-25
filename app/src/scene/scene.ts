@@ -383,6 +383,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let sunX = 0;
   let sunY = 0;
   let sunR = 6;
+  /**
+   * The height arc-space calls y = 0. Core's arc is y = 4p(1-p): launch and
+   * landing sit at the same height, so the scene must launch and land on one
+   * line too. Any visual drop from a creature's chest to the ground has to be
+   * absorbed by the scene, never passed through as arc-space y.
+   */
+  let arcBaseY = 0;
   const impacts: { x: number; y: number; age: number; life: number }[] = [];
   let scrollBirds = 0;
 
@@ -446,6 +453,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // high; landscape gives the world the whole frame.
     const landscape = cssW / cssH >= 1;
     groundY = Math.floor(vh * (landscape ? 0.72 : 0.33));
+    arcBaseY = groundY - 2;
     sceneBottomY = landscape ? vh : Math.floor(vh * 0.48);
     heroX = Math.floor(vw * (landscape ? HERO_X_FRAC : 0.3));
     engageGap = Math.max(MIN_ENGAGE_GAP, Math.floor(vw * ENGAGE_GAP_FRAC));
@@ -531,10 +539,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       arcs.push(
         launchArc(
           x,
-          y - 10,
+          arcBaseY,
           -(14 + hash01(seed) * 40),
-          groundY - 2,
-          liftForFlight(y - 10, groundY - 2, ARC_FLIGHT_SEC),
+          arcBaseY,
+          liftForFlight(arcBaseY, arcBaseY, ARC_FLIGHT_SEC),
           gold,
           'gold',
           hash01(seed * 5.5) * Math.PI * 2,
@@ -628,7 +636,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function toArcSpace(px: number, py: number): AimPoint {
-    return arcSpaceFromScene(px, py, heroX, groundY, arcApexHeight(ARC_FLIGHT_SEC));
+    return arcSpaceFromScene(px, py, heroX, arcBaseY, arcApexHeight(ARC_FLIGHT_SEC));
   }
 
   function strikeAt(clientX: number | null, clientY: number | null): StrikeOutcome {
