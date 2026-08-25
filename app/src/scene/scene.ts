@@ -126,7 +126,7 @@ const FLOATER_LIFE = 1.05;
  * world ranks below it and every in-world number is assigned a tier here, so
  * size and color are never picked per call site.
  */
-const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 2, damage: 1 };
+const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 1, damage: 1 };
 const TEXT_PAYOUT = '#fbf236';
 const TEXT_CATCH = '#fbf236';
 const TEXT_DAMAGE = '#ffffff';
