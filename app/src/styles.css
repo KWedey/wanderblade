@@ -190,9 +190,8 @@ body {
 
 .strike-hint {
   position: absolute;
-  left: 50%;
-  bottom: 74px;
-  transform: translateX(-50%);
+  left: 22px;
+  bottom: 22px;
   z-index: 2;
   pointer-events: none;
   padding: 5px 12px;
@@ -290,9 +289,7 @@ body {
     right: min(430px, 34vw);
   }
 
-  .strike-hint {
-    left: calc(50% - min(215px, 17vw));
-  }
+
 }
 
 /* --- HUD text (over the sky, so everything carries an ink ring) --------- */
