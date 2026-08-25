@@ -533,9 +533,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const p = arcPosition(arc, Math.min(arc.age, arc.flightSec));
     const skin = realmSkin(model.region);
     if (caught) {
+      // Anchored to the hero, not to the point in the air where the tap
+      // landed. A word floating in open sky belongs to nothing on screen.
       addFloater({
-        x: p.x,
-        y: p.y - 10,
+        x: heroX + 6,
+        y: groundY - 26,
         age: 0,
         life: FLOATER_LIFE,
         text: 'CATCH',
@@ -962,8 +964,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const x = Math.floor(wrap(hash01(i * 1.93) * span - clockSec * speed, span));
       if (x > vw + 4) continue;
       const fall = 9 + depth * 26;
+      // Falls only through the wooded band; a leaf crossing open sky reads as
+      // a dead pixel rather than as weather.
+      const top = groundY * 0.42;
       const y = Math.floor(
-        wrap(hash01(i * 8.11) * groundY + clockSec * fall, groundY - 4) +
+        top +
+          wrap(hash01(i * 8.11) * groundY + clockSec * fall, groundY - top - 4) +
           Math.sin(clockSec * 1.9 + i) * 3,
       );
       const size = depth > 0.66 ? 2 : 1;
@@ -978,10 +984,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const x = Math.floor(wrap(m.at - scrollTrees * 1.2, PROP_SPAN));
       if (x > vw) continue;
       const bobY = Math.sin(clockSec * 1.4 + m.phase) * 5;
-      // Clamped under the horizon. A mote drifting in open sky reads as dirt
-      // on the screen, not as pollen.
+      // Kept below the hill line. Anywhere a sky gap shows through the grove,
+      // a loose coloured pixel reads as dirt on the screen, not as pollen.
       const y = Math.floor(
-        Math.min(groundY - 2, groundY * 0.62 + m.yFrac * groundY * 0.4 + bobY),
+        Math.min(groundY - 2, groundY * 0.8 + m.yFrac * groundY * 0.22 + bobY),
       );
       ctx.fillStyle = m.size > 1 ? skin.petal : skin.turfLip;
       ctx.fillRect(x, y, m.size, m.size);
