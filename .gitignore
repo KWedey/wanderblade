@@ -9,3 +9,15 @@ sim/out/
 .ar-findings*
 .ar-verdict
 .playwright-mcp/
+.omx/
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**
+
+# gauntlet-loop scratch (bar screenshots, progress page)
+.gauntlet/
