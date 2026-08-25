@@ -400,4 +400,21 @@ export function monsterInk(skin: RealmSkin, shape = 0): InkSet {
   };
 }
 
+/** Linear blend of two hex colours. Aerial perspective: distant layers get
+ *  mixed toward the haze so depth reads without any gradient. */
+export function mixHex(a: string, b: string, t: number): string {
+  const k = Math.max(0, Math.min(1, t));
+  const na = parseInt(a.slice(1), 16);
+  const nb = parseInt(b.slice(1), 16);
+  const r = Math.round(((na >> 16) & 255) * (1 - k) + ((nb >> 16) & 255) * k);
+  const g = Math.round(((na >> 8) & 255) * (1 - k) + ((nb >> 8) & 255) * k);
+  const bl = Math.round((na & 255) * (1 - k) + (nb & 255) * k);
+  return `#${((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0')}`;
+}
+
+/** Pushes a colour toward white without leaving the palette's hard-edge look. */
+export function lighten(hex: string, t: number): string {
+  return mixHex(hex, '#ffffff', t);
+}
+
 export const OUTLINE_INK = INK.black;

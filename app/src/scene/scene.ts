@@ -27,10 +27,11 @@ import {
 import {
   HERO_INK,
   LOOT_INK,
-  monsterInk,
   OUTLINE_INK,
-  realmSkin,
   REALM_SKIN_COUNT,
+  mixHex,
+  monsterInk,
+  realmSkin,
   sceneryInk,
   type RealmSkin,
 } from './palette';
@@ -759,7 +760,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // Sun: stacked rects, never a radial gradient. Kept left of the docked
     // panel so it is never a half-disc cut off by chrome.
     const sx = Math.floor(vw * 0.6);
-    const sy = Math.floor(skyH * 0.17);
+    const sy = Math.floor(skyH * 0.13);
     ctx.fillStyle = skin.sun;
     const r = Math.max(5, Math.floor(vw / 26));
     for (let dy = -r; dy <= r; dy++) {
@@ -776,9 +777,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     for (let x = 0; x < vw; x += 3) {
       const wx = x + scrollRange;
       const h = Math.floor(
-        groundY * 0.36 +
-          Math.sin(wx * 0.05) * groundY * 0.12 +
-          Math.sin(wx * 0.019 + 2.1) * groundY * 0.09,
+        groundY * 0.5 +
+          Math.sin(wx * 0.05) * groundY * 0.16 +
+          Math.sin(wx * 0.019 + 2.1) * groundY * 0.13,
       );
       ctx.fillRect(x, baseY - h, 3, h);
     }
@@ -870,6 +871,48 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /** A thin treeline on the ground plane, behind the fence — depth, not clutter. */
+  /**
+   * Standing timber between the hills and the road. The frame used to be half
+   * empty sky, and no quantity of clouds fixes that -- it is a camera problem.
+   * Trunks run off the top edge and canopies close the upper band, so the
+   * camera reads as inside the world rather than pointed above it.
+   */
+  function drawGrove(skin: RealmSkin): void {
+    const span = vw * 2;
+    const haze = skin.skyHaze;
+    const footY = groundY - Math.floor(groundY * 0.02);
+    for (let i = 0; i < 30; i++) {
+      const depth = hash01(i * 2.9);
+      const x =
+        Math.floor(wrap(hash01(i * 6.13 + 3) * span - scrollRange * (1.7 + depth * 1.6), span)) - 30;
+      if (x < -60 || x > vw + 60) continue;
+      const trunkW = 3 + Math.floor(depth * 6);
+      const fade = 0.58 - depth * 0.4;
+      const bark = mixHex(skin.bark, haze, fade);
+      const leaf = mixHex(skin.leafDark, haze, fade * 0.9);
+      const leafLit = mixHex(skin.leaf, haze, fade * 0.9);
+      const crownY = Math.floor(groundY * (0.2 + depth * 0.3));
+
+      ctx.fillStyle = bark;
+      ctx.fillRect(x, crownY, trunkW, footY - crownY);
+      ctx.fillStyle = mixHex(bark, '#000000', 0.25);
+      ctx.fillRect(x + trunkW - 1, crownY, 1, footY - crownY);
+
+      // Canopy runs off the top of the frame with a ragged per-row width; a
+      // visible tree-top or a clean slab edge puts the empty band straight back.
+      const cx = x + Math.floor(trunkW / 2);
+      const cw = trunkW * 3 + 10;
+      for (let k = 0; k < 7; k++) {
+        const y = crownY - k * 7;
+        if (y + 8 < 0) break;
+        const jitter = Math.floor(hash01(i * 11.3 + k * 3.1) * 7) - 3;
+        const w = Math.max(4, Math.floor(cw * (1 - k * 0.08)) + jitter);
+        ctx.fillStyle = k % 2 === 0 ? leaf : leafLit;
+        ctx.fillRect(cx - Math.floor(w / 2), y - 8, w, 9);
+      }
+    }
+  }
+
   function drawTreeline(sprites: SkinnedSprites): void {
     const y = groundY + 1;
     for (const prop of props) {
@@ -1177,8 +1220,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawClouds(skin);
     drawBirds(sprites);
     drawRange(skin);
-    drawHills(skin.hillFar, null, scrollHillFar, groundY * 0.12, groundY * 0.22, 1, 4);
-    drawHills(skin.hillNear, skin.hillLip, scrollHillNear, groundY * 0.09, groundY * 0.11, 1.7, 3);
+    drawHills(skin.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4);
+    drawHills(skin.hillNear, skin.hillLip, scrollHillNear, groundY * 0.11, groundY * 0.18, 1.7, 3);
+    drawGrove(skin);
     drawTreeline(sprites);
 
     const jolt = model.reduceMotion ? { x: 0, y: 0 } : shakeOffset(shake, clockSec);
