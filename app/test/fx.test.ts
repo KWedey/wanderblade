@@ -9,6 +9,7 @@ import {
   floaterOffsetY,
   launchArc,
   lifeRemaining,
+  liftForFlight,
   shakeOffset,
   stepParticle,
   wrap,
@@ -39,6 +40,23 @@ describe('arc ballistics', () => {
 
   it('returns zero flight time when the launch is already below the ground', () => {
     expect(arcFlightSec(120, 0, 100)).toBe(0);
+  });
+
+  // The coin's time in the air has to equal the engine's catch window, or the
+  // player can tap a coin that is no longer catchable.
+  it('liftForFlight hits the requested flight time exactly', () => {
+    for (const [y0, landY, t] of [
+      [40, 100, 1.5],
+      [100, 100, 0.8],
+      [90, 40, 1.2],
+    ] as const) {
+      const lift = liftForFlight(y0, landY, t);
+      expect(arcFlightSec(y0, -lift, landY)).toBeCloseTo(t, 9);
+    }
+  });
+
+  it('liftForFlight is zero for a zero-length flight', () => {
+    expect(liftForFlight(0, 10, 0)).toBe(0);
   });
 
   it('is catchable only while in flight', () => {

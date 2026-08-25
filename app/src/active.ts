@@ -49,6 +49,6 @@ export function momentumMultiplier(momentum: number, maxBonus = MOMENTUM_MAX_BON
 export interface Strike {
   /** Engine time (seconds) the strike was made at. */
   atSec: number;
-  /** A strike that caught a loot arc in flight — pays ARC_CATCH_MULT. */
+  /** A strike that caught a loot arc in flight. */
   caughtArc: boolean;
 }

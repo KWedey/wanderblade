@@ -8,7 +8,6 @@
 // pixels square and identical everywhere instead of resolution-dependent mush.
 
 import {
-  ARC_CATCH_MULT,
   arcCaughtBy,
   arcInFlight,
   arcPosition,
@@ -16,6 +15,7 @@ import {
   floaterOffsetY,
   launchArc,
   lifeRemaining,
+  liftForFlight,
   shakeOffset,
   stepParticle,
   wrap,
@@ -76,7 +76,7 @@ export interface SceneModel {
 export interface StrikeOutcome {
   /** The strike caught a loot arc in flight. */
   caughtArc: boolean;
-  /** Base value of the caught arc (the catch pays ARC_CATCH_MULT of it). */
+  /** Base gold of the caught arc; the bonus it pays is the engine's to decide. */
   caughtValue: number;
 }
 
@@ -111,6 +111,8 @@ const SWING_ANIM_SEC = 0.26;
 const SHAKE_DECAY = 9;
 const MAX_SHAKE = 3.2;
 
+/** Seconds a thrown coin stays in the air, and so stays catchable. */
+export const ARC_FLIGHT_SEC = 1.5;
 const FLOATER_LIFE = 1.05;
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
@@ -400,24 +402,19 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // the whole active-play verb (docs/ACTIVE-PLAY.md).
     const gold = model.goldPerKill;
     if (gold > 0) {
-      // The payout is thrown as three coins whose values sum to it exactly —
-      // more weight on screen, not more money.
-      const pieces = 3;
-      for (let i = 0; i < pieces; i++) {
-        const seed = model.kills * 3 + i;
-        arcs.push(
-          launchArc(
-            x,
-            y - 10,
-            -(10 + hash01(seed) * 46),
-            groundY - 2,
-            120 + hash01(seed * 2.1) * 70,
-            gold / pieces,
-            'gold',
-            hash01(seed * 5.5) * Math.PI * 2,
-          ),
-        );
-      }
+      const seed = model.kills;
+      arcs.push(
+        launchArc(
+          x,
+          y - 10,
+          -(14 + hash01(seed) * 40),
+          groundY - 2,
+          liftForFlight(y - 10, groundY - 2, ARC_FLIGHT_SEC),
+          gold,
+          'gold',
+          hash01(seed * 5.5) * Math.PI * 2,
+        ),
+      );
     }
     monster = null;
   }
@@ -431,7 +428,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         y: p.y - 10,
         age: 0,
         life: FLOATER_LIFE,
-        text: `×${ARC_CATCH_MULT}`,
+        text: 'CATCH',
         color: '#ffffff',
         big: true,
       });

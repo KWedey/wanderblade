@@ -11,9 +11,6 @@
  */
 export const ARC_GRAVITY = 340;
 
-/** Payout multiplier for an arc struck in flight (docs/ACTIVE-PLAY.md). */
-export const ARC_CATCH_MULT = 2;
-
 export type LootKind = 'gold' | 'gear';
 
 export interface LootArc {
@@ -50,6 +47,22 @@ export function arcFlightSec(y0: number, vy: number, landY: number, gravity = AR
   const disc = vy * vy + 2 * gravity * drop;
   if (disc <= 0) return 0;
   return (-vy + Math.sqrt(disc)) / gravity;
+}
+
+/**
+ * Upward launch speed that puts a projectile on `landY` after exactly
+ * `flightSec`. Solving for it — rather than picking a lift and accepting
+ * whatever flight falls out — is what lets the coin's time in the air match the
+ * engine's catch window instead of merely resembling it.
+ */
+export function liftForFlight(
+  y0: number,
+  landY: number,
+  flightSec: number,
+  gravity = ARC_GRAVITY,
+): number {
+  if (flightSec <= 0) return 0;
+  return (gravity * flightSec) / 2 - (landY - y0) / flightSec;
 }
 
 /** Position of `arc` at `t` seconds after launch (unclamped — see arcAlive). */
