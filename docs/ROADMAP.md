@@ -50,14 +50,14 @@ The former Phase 3–5 sequence is superseded. The scene renderer remains useful
 
 **Exit:** active play is approved as a complete interaction and economy specification; no mechanics are invented during implementation.
 
-### M1R.3 — Core contract + simulator rebaseline
+### M1R.3 — Core contract + simulator rebaseline *(complete)*
 
-- [ ] Replace gate/readiness/auto-challenge with the minimal Road/Boss/Ascension core state required by the simulator
-- [ ] Lock manual entry, zero boss income, offline boss damage, abandonment, victory, and reset/persistence with deterministic core tests
-- [ ] Add Road/Boss/Ascension states and multi-realm runs to the sim model
-- [ ] Add idle and active policies for both Road and Boss
-- [ ] Add pending/banked Ascendancy, tree purchases, automatic earnings bonuses, and abandon strategy
-- [ ] Tune constants until all approved pacing and numerical-safety validators pass across multiple seeds
+- [x] Replace gate/readiness/auto-challenge with the minimal Road/Boss/Ascension core state required by the simulator
+- [x] Lock manual entry, zero boss income, offline boss damage, abandonment, victory, and reset/persistence with deterministic core tests
+- [x] Add Road/Boss/Ascension states and multi-realm runs to the sim model
+- [x] Add idle and active policies for both Road and Boss
+- [x] Add pending/banked Ascendancy, tree purchases, automatic earnings bonuses, and abandon strategy
+- [x] Tune constants until all approved pacing and numerical-safety validators pass across multiple seeds
 
 **Exit:** the minimal authoritative core and the new economy—not the legacy M0 economy—have passing evidence.
 
