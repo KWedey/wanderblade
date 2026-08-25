@@ -220,7 +220,6 @@ export class Game {
       dps: this.dps,
       momentum: this.momentum,
       momentumMult: momentumMultiplier(this.momentum),
-      atGate: this.state.gate.atGate,
       paused: this.view.isRecapOpen(),
       reduceMotion: this.reduceMotion.matches,
     };

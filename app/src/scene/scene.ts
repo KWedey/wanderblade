@@ -67,7 +67,6 @@ export interface SceneModel {
   /** Momentum [0,1] and its multiplier, from the active-play model. */
   momentum: number;
   momentumMult: number;
-  atGate: boolean;
   /** World frozen behind the recap modal. */
   paused: boolean;
   reduceMotion: boolean;
@@ -99,8 +98,10 @@ const MAX_PIXEL_SCALE = 8;
 /** Ground scroll in scene units/sec at momentum zero. */
 const WALK_SPEED = 34;
 const HERO_X_FRAC = 0.24;
-/** Gap between hero and monster once the monster has closed. */
-const ENGAGE_GAP = 26;
+/** Gap between hero and monster once the monster has closed, as a share of the
+ * scene width — a fixed pixel gap crowds a phone and wastes a desktop frame. */
+const ENGAGE_GAP_FRAC = 0.15;
+const MIN_ENGAGE_GAP = 26;
 /** Fraction of the kill spent closing the distance; the rest is the fight. */
 const APPROACH_FRAC = 0.45;
 
@@ -115,7 +116,7 @@ const STREAK_SEC = 0.5;
 const CATCH_RADIUS = 26;
 
 const PARTICLE_CAP = 220;
-const FLOATER_CAP = 26;
+const FLOATER_CAP = 12;
 
 interface Streak {
   x0: number;
@@ -222,6 +223,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    */
   let sceneBottomY = 100;
   let heroX = 24;
+  let engageGap = MIN_ENGAGE_GAP;
 
   let clockSec = 0;
   let scrollGround = 0;
@@ -255,7 +257,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     dps: 0,
     momentum: 0,
     momentumMult: 1,
-    atGate: false,
     paused: false,
     reduceMotion: false,
   };
@@ -285,6 +286,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     groundY = Math.floor(vh * (landscape ? 0.72 : 0.33));
     sceneBottomY = landscape ? vh : Math.floor(vh * 0.48);
     heroX = Math.floor(vw * (landscape ? HERO_X_FRAC : 0.3));
+    engageGap = Math.max(MIN_ENGAGE_GAP, Math.floor(vw * ENGAGE_GAP_FRAC));
     if (collectAnchorCss) setCollectAnchor(collectAnchorCss.x, collectAnchorCss.y);
   }
 
@@ -342,7 +344,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function killMonster(skin: RealmSkin): void {
-    const x = monster ? monster.x : heroX + ENGAGE_GAP;
+    const x = monster ? monster.x : heroX + engageGap;
     const y = groundY;
     burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, '#ffffff', skin.accent], 130);
     shake = Math.min(MAX_SHAKE, shake + 2.1);
@@ -405,7 +407,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function swing(fromStrike: boolean): void {
     swingAnim = SWING_ANIM_SEC;
     const skin = realmSkin(model.region);
-    if (!monster || monster.x > heroX + ENGAGE_GAP + 14) return;
+    if (!monster || monster.x > heroX + engageGap + 14) return;
 
     const contactX = monster.x - 6;
     const contactY = groundY - 12;
@@ -414,19 +416,22 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     burst(contactX, contactY, fromStrike ? 9 : 5, ['#ffffff', skin.accent, skin.monBody], 105);
     shake = Math.min(MAX_SHAKE, shake + (fromStrike ? 1.5 : 0.7));
 
+    // Only the player's own strikes get a number. Auto-swings land several a
+    // second; numbering them all stacks into an unreadable pile and buries the
+    // one hit the player actually caused.
+    if (!fromStrike) return;
     // Honest: real DPS across the interval this swing represents.
     const damage = model.dps * (1 / (SWINGS_PER_SEC * model.momentumMult));
-    if (damage >= 0.05) {
-      addFloater({
-        x: contactX,
-        y: contactY - 6,
-        age: 0,
-        life: 0.75,
-        text: formatShort(damage),
-        color: fromStrike ? '#ffffff' : '#eec39a',
-        big: fromStrike,
-      });
-    }
+    if (damage < 0.05) return;
+    addFloater({
+      x: contactX + Math.round((hash01(clockSec * 31) - 0.5) * 40),
+      y: contactY - 6 - Math.round(hash01(clockSec * 17) * 10),
+      age: 0,
+      life: 0.5,
+      text: formatShort(damage),
+      color: '#ffffff',
+      big: false,
+    });
   }
 
   function strikeAt(clientX: number | null, clientY: number | null): StrikeOutcome {
@@ -478,13 +483,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       killMonster(skin);
     }
 
-    if (!monster && !model.atGate) spawnMonster();
+    if (!monster) spawnMonster();
     if (monster) {
       // Position is driven by the engine's kill progress, so the monster always
       // reaches the hero exactly when the kill resolves.
       const t = Math.min(1, model.killProgress / APPROACH_FRAC);
       const eased = 1 - (1 - t) * (1 - t);
-      const target = vw + 20 + (heroX + ENGAGE_GAP - (vw + 20)) * eased;
+      const target = vw + 20 + (heroX + engageGap - (vw + 20)) * eased;
       monster.x = target + monster.recoil;
       monster.recoil = decayTo(monster.recoil, 0, 12, dtSec);
       monster.flash = Math.max(0, monster.flash - dtSec);
