@@ -31,7 +31,8 @@
   --bg: #5fcde4;
   --panel: #4a2f27;
   --panel-edge: #d9a066;
-  --panel-inner: #2f2231;
+  --panel-inner: #6b4636;
+  --panel-sunk: #593a2c;
   --wood: #663931;
   --wood-light: #8f563b;
   --wood-shadow: #45283c;
@@ -40,7 +41,7 @@
   --ink-dark: #45283c;
   --ink-light: #eec39a;
   --ink-dim: #d9a066;
-  --ink-faint: #9badb7;
+  --ink-faint: #cfa985;
   --gold: #fbf236;
   --torch: #df7126;
   --danger: #d95763;
@@ -154,6 +155,7 @@ body {
   flex-direction: column;
   align-items: flex-end;
   line-height: 0.9;
+  padding-right: 10px;
 }
 
 .gold {
@@ -179,7 +181,7 @@ body {
 
 .dps {
   font-family: var(--font-num);
-  font-size: 34px;
+  font-size: 46px;
   color: #fff;
   text-shadow:
     2px 0 0 #1a1c2c, -2px 0 0 #1a1c2c, 0 2px 0 #1a1c2c, 0 -2px 0 #1a1c2c,
@@ -197,7 +199,7 @@ body {
   z-index: 2;
   pointer-events: none;
   padding: 5px 12px;
-  background: #1a1c2c;
+  background: var(--panel-sunk);
   border: 2px solid var(--gold);
   color: var(--gold);
   font-size: 15px;
@@ -354,7 +356,7 @@ body {
   margin-top: 8px;
   width: min(240px, 42vw);
   height: 12px;
-  background: #1a1c2c;
+  background: var(--panel-sunk);
   border: 3px solid #1a1c2c;
   overflow: hidden;
 }
@@ -409,7 +411,7 @@ body {
 /* --- Portal / guardian ------------------------------------------------- */
 
 .portal-panel {
-  background: #2a1c33;
+  background: var(--panel-sunk);
   border: 3px solid var(--rarity-epic);
   box-shadow: var(--drop);
   padding: 14px;
@@ -438,7 +440,7 @@ body {
   position: relative;
   margin: 12px 0 4px;
   height: 26px;
-  background: #1a1c2c;
+  background: var(--panel-sunk);
   border: 3px solid #000;
   overflow: hidden;
 }
@@ -520,7 +522,7 @@ body {
   width: 100%;
   min-height: 44px;
   border: 2px solid var(--danger-deep);
-  background: #1a1c2c;
+  background: var(--panel-sunk);
   color: var(--danger);
   font-family: var(--font-ui);
   font-size: 16px;
@@ -581,7 +583,7 @@ body {
   min-height: var(--touch);
   padding: 8px 14px;
   border: 3px solid #000;
-  background: #3d3846;
+  background: var(--panel-sunk);
   color: var(--parchment);
   font-family: var(--font-ui);
   text-align: left;

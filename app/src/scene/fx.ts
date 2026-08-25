@@ -9,7 +9,7 @@
  * coin stays airborne about a second — long enough for a deliberate tap to
  * catch it, which is the whole point of the mechanic.
  */
-export const ARC_GRAVITY = 340;
+export const ARC_GRAVITY = 150;
 
 export type LootKind = 'gold' | 'gear';
 

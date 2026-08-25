@@ -117,7 +117,7 @@ const MIN_ENGAGE_GAP = 26;
 const APPROACH_FRAC = 0.45;
 
 const SWINGS_PER_SEC = 1.7;
-const SWING_ANIM_SEC = 0.26;
+const SWING_ANIM_SEC = 0.32;
 const SHAKE_DECAY = 9;
 const MAX_SHAKE = 3.2;
 
@@ -187,7 +187,7 @@ interface Monster {
 /** How far behind the engaged monster the next one in line waits. */
 const QUEUE_GAP = 34;
 /** Monsters visible at once: the one being fought, plus the queue behind it. */
-const QUEUE_DEPTH = 3;
+const QUEUE_DEPTH = 5;
 
 interface Prop {
   kind: 'tree' | 'rock' | 'tuft' | 'flower';
@@ -360,6 +360,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let scrollClouds = 0;
   let scrollRange = 0;
   let scrollFore = 0;
+  let sunX = 0;
+  let sunY = 0;
+  let sunR = 6;
   const impacts: { x: number; y: number; age: number; life: number }[] = [];
   let scrollBirds = 0;
 
@@ -775,10 +778,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     // Sun: stacked rects, never a radial gradient. Kept left of the docked
     // panel so it is never a half-disc cut off by chrome.
-    const sx = Math.floor(vw * 0.6);
-    const sy = Math.floor(skyH * 0.13);
+    sunX = Math.floor(vw * 0.6);
+    sunY = Math.floor(skyH * 0.13);
+    sunR = Math.max(5, Math.floor(vw / 26));
+    const sx = sunX;
+    const sy = sunY;
     ctx.fillStyle = skin.sun;
-    const r = Math.max(5, Math.floor(vw / 26));
+    const r = sunR;
     for (let dy = -r; dy <= r; dy++) {
       const half = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
       ctx.fillRect(sx - half, sy + dy, half * 2 + 1, 1);
@@ -942,13 +948,41 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /**
+   * Leaf-fall at three depths. Kills are the only motion the scene had, so
+   * between them it went still; this keeps the air busy without inventing any
+   * economy value (DECISIONS.md #12).
+   */
+  function drawDrift(skin: RealmSkin): void {
+    if (model.reduceMotion) return;
+    const span = vw * 2;
+    for (let i = 0; i < 34; i++) {
+      const depth = hash01(i * 3.77);
+      const speed = 12 + depth * 46;
+      const x = Math.floor(wrap(hash01(i * 1.93) * span - clockSec * speed, span));
+      if (x > vw + 4) continue;
+      const fall = 9 + depth * 26;
+      const y = Math.floor(
+        wrap(hash01(i * 8.11) * groundY + clockSec * fall, groundY - 4) +
+          Math.sin(clockSec * 1.9 + i) * 3,
+      );
+      const size = depth > 0.66 ? 2 : 1;
+      ctx.fillStyle = depth > 0.5 ? skin.leaf : mixHex(skin.leafDark, skin.skyHaze, 0.35);
+      ctx.fillRect(x, y, size, size);
+    }
+  }
+
   function drawMotes(skin: RealmSkin): void {
     if (model.reduceMotion) return;
     for (const m of motes) {
       const x = Math.floor(wrap(m.at - scrollTrees * 1.2, PROP_SPAN));
       if (x > vw) continue;
       const bobY = Math.sin(clockSec * 1.4 + m.phase) * 5;
-      const y = Math.floor(groundY * 0.35 + m.yFrac * groundY * 0.75 + bobY);
+      // Clamped under the horizon. A mote drifting in open sky reads as dirt
+      // on the screen, not as pollen.
+      const y = Math.floor(
+        Math.min(groundY - 2, groundY * 0.62 + m.yFrac * groundY * 0.4 + bobY),
+      );
       ctx.fillStyle = m.size > 1 ? skin.petal : skin.turfLip;
       ctx.fillRect(x, y, m.size, m.size);
     }
@@ -961,6 +995,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const x = Math.floor(wrap(hash01(i * 4.7) * span - scrollBirds, span)) - vw;
       if (x < -12 || x > vw + 12) continue;
       const y = Math.floor(hash01(i * 8.3) * groundY * 0.5) + 6;
+      if (Math.hypot(x - sunX, y - sunY) < sunR + 8) continue;
       const frame = Math.floor(clockSec * 5 + i) % 2;
       drawSprite(ctx, sprites.birds[frame] ?? sprites.birds[0]!, x, y);
     }
@@ -1118,7 +1153,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // pixelated rather than feathering into an anti-aliased smear.
     // Rests raised and forward; the swing sweeps down through the monster.
     const t = swingAnim / SWING_ANIM_SEC;
-    const angle = swingAnim > 0 ? -1.8 + (1 - t) * 2.4 : -0.85;
+    const angle = swingAnim > 0 ? -1.8 + (1 - t) * 2.4 : -0.3;
     const handX = heroX + 5;
     const handY = groundY + bob - 9;
     drawSpriteRotated(ctx, sword, handX, handY, angle, 2, 2);
@@ -1302,8 +1337,19 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     ctx.fillStyle = OUTLINE_INK;
     ctx.fillRect(x - 3, y - 3, totalW + 6, segH + 6);
     const filled = Math.round(model.momentum * segs);
+    // At rest a row of dark cells reads as broken, not idle. A slow chase
+    // light across the empty cells reads as armed and waiting.
+    const chase = model.reduceMotion ? -1 : Math.floor(clockSec * 6) % segs;
     for (let i = 0; i < segs; i++) {
-      ctx.fillStyle = i < filled ? (i >= segs - 3 ? '#ffffff' : skin.accent) : '#3d3846';
+      const lit = i < filled;
+      const idle = filled === 0 && i === chase;
+      ctx.fillStyle = lit
+        ? i >= segs - 3
+          ? '#ffffff'
+          : skin.accent
+        : idle
+          ? mixHex('#3d3846', skin.accent, 0.55)
+          : '#3d3846';
       ctx.fillRect(x + i * (segW + gap), y, segW, segH);
     }
     drawText(
@@ -1332,6 +1378,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawHills(skin.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4);
     drawHills(skin.hillNear, skin.hillLip, scrollHillNear, groundY * 0.11, groundY * 0.18, 1.7, 3);
     drawGrove(skin);
+    drawDrift(skin);
     drawTreeline(sprites);
 
     const jolt = model.reduceMotion ? { x: 0, y: 0 } : shakeOffset(shake, clockSec);
