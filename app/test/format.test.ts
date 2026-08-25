@@ -1,3 +1,5 @@
+import { REGION_NAME_COUNT, regionName } from '../src/flavor';
+import { REALM_SKIN_COUNT } from '../src/scene/palette';
 // Boundary tests for the odometer/rate formatters. These pin every display
 // band so a future toFixed/threshold tweak fails loudly instead of silently
 // corrupting the most-visible element on screen.
@@ -109,6 +111,32 @@ describe('in-world floater ladder', () => {
   it('never prints a raw exponential at any scale the game reaches', () => {
     for (const n of [0.4, 9.9, 42, 999, 1e4, 1e12, 1e42, 2.5866e295, 9.4e307]) {
       expect(formatNumber(n)).not.toMatch(/[eE]\+/);
+    }
+  });
+});
+
+describe('region naming', () => {
+  it('stays index-aligned with the scene skins', () => {
+    expect(REGION_NAME_COUNT).toBe(REALM_SKIN_COUNT);
+  });
+
+  it('names the biome the skin is actually showing, on every lap', () => {
+    for (let region = 0; region < 400; region++) {
+      const name = regionName(region);
+      const biome = regionName(region % REALM_SKIN_COUNT);
+      expect(name.startsWith(biome), `realm ${region}: "${name}" vs "${biome}"`).toBe(true);
+    }
+  });
+
+  it('does not label a later lap as if it were the first', () => {
+    expect(regionName(0)).toBe('Greenwood');
+    expect(regionName(REALM_SKIN_COUNT)).toBe('Greenwood II');
+    expect(regionName(REALM_SKIN_COUNT * 2)).toBe('Greenwood III');
+  });
+
+  it('never emits the old generic name over a specific skin', () => {
+    for (let region = 0; region < 400; region++) {
+      expect(regionName(region)).not.toContain('Beyond the Edge');
     }
   });
 });

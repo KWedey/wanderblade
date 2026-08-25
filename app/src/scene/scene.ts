@@ -154,6 +154,12 @@ const TEXT_PAYOUT = '#fbf236';
 const TEXT_CATCH = '#fbf236';
 const TEXT_DAMAGE = '#ffffff';
 const LOOT_GLOW = '#fbf236';
+const RIM_OFFSETS: readonly (readonly [number, number])[] = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+];
 const IMPACT_GLOW = '#ffffff';
 
 /** Floor on the gap between damage numbers, whatever the tap rate. */
@@ -509,7 +515,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // r^0.6 biases the roll up the roster, so a big silhouette is usually on
     // screen — the thing the scene was judged hardest on.
     const roll = Math.pow(hash01(seed * 1.37 + model.region), 0.6);
-    const shape = Math.min(MONSTER_SHAPES.length - 1, Math.floor(roll * MONSTER_SHAPES.length));
+    let shape = Math.min(MONSTER_SHAPES.length - 1, Math.floor(roll * MONSTER_SHAPES.length));
+    // Three of one species queued reads as a spawner, not a road. Step off a
+    // shape already standing in line rather than re-rolling, which would only
+    // collide again at the same rate.
+    let guard = 0;
+    while (queue.some((q) => q.shape === shape) && guard < MONSTER_SHAPES.length) {
+      shape = (shape + 1) % MONSTER_SHAPES.length;
+      guard++;
+    }
     const count = shape === SWARM_SHAPE ? 3 : 1;
     for (let i = 0; i < count; i++) {
       queue.push({
@@ -568,7 +582,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         y: groundY - 26,
         age: 0,
         life: FLOATER_LIFE,
-        text: 'CATCH',
+        text: 'CAUGHT BONUS',
         color: TEXT_CATCH,
         tier: 'catch',
         owned: false,
@@ -820,6 +834,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     sunR = Math.max(5, Math.floor(vw / 26));
     const sx = sunX;
     const sy = sunY;
+    // Halo first. A bare disc clipped by a canopy read as a crescent moon in a
+    // bright blue sky; light spilling past the leaves reads as sun.
+    glowDisc(sx, sy, sunR * 2.1, skin.sun, 0.5);
     ctx.fillStyle = skin.sun;
     const r = sunR;
     for (let dy = -r; dy <= r; dy++) {
@@ -955,6 +972,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         Math.floor(wrap(hash01(i * 6.13 + 3) * span - scrollRange * (1.7 + depth * 1.6), span)) - 30;
       if (x < -60 || x > vw + 60) continue;
       const trunkW = 3 + Math.floor(depth * 6);
+      // The hero's column stays clear. A trunk sharing his width and vertical
+      // made him half-read as part of the tree.
+      if (x + trunkW > heroX - 12 && x < heroX + 12) continue;
       const fade = 0.58 - depth * 0.4;
       const bark = mixHex(skin.bark, haze, fade);
       const barkDark = mixHex(mixHex(skin.bark, '#000000', 0.4), haze, fade);
@@ -1039,6 +1059,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           wrap(hash01(i * 8.11) * groundY + clockSec * fall, groundY - top - 4) +
           Math.sin(clockSec * 1.9 + i) * 3,
       );
+      if (Math.abs(x - heroX) < 16) continue;
       const size = depth > 0.66 ? 2 : 1;
       ctx.fillStyle = depth > 0.5 ? skin.leaf : mixHex(skin.leafDark, skin.skyHaze, 0.35);
       ctx.fillRect(x, y, size, size);
@@ -1216,6 +1237,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const sprite = stride === 0 ? heroA : heroB;
     const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(clockSec * 14) * 0.6);
     drawShadow(heroX, 12);
+    // Rim first, sprite over it: a one-pixel halo of the sky's own light so the
+    // figure never sinks into whatever value the ground happens to be.
+    ctx.globalAlpha = 0.85;
+    for (const [dx, dy] of RIM_OFFSETS) {
+      drawSprite(ctx, sprite, heroX + dx, groundY + bob + dy, false, true);
+    }
+    ctx.globalAlpha = 1;
     drawSprite(ctx, sprite, heroX, groundY + bob, false);
     if (heroFlash > 0.06) {
       ctx.globalAlpha = 0.5;
@@ -1412,9 +1440,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const segH = 5;
     const gap = 1;
     const totalW = segs * (segW + gap) - gap;
-    const cx = Math.floor(vw * 0.5);
+    const cx = Math.floor(heroX + 3);
     const x = Math.floor(cx - totalW / 2);
-    const y = sceneBottomY - 16;
+    const y = groundY - 34;
     const hot = model.momentum > 0.7;
 
     ctx.fillStyle = OUTLINE_INK;
@@ -1437,7 +1465,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
     drawText(
       ctx,
-      `×${model.momentumMult.toFixed(1)}`,
+      `COMBO ×${model.momentumMult.toFixed(1)}`,
       cx,
       y - 13,
       1,

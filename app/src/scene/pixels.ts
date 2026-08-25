@@ -24,6 +24,8 @@ const HERO_LEGEND: Record<string, string> = {
   ...OUTLINE,
   h: 'hair',
   s: 'skin',
+  H: 'hatBand',
+  K: 'cloak',
   S: 'skinLit',
   e: 'eye',
   T: 'tunicLit',
@@ -35,21 +37,21 @@ const HERO_LEGEND: Record<string, string> = {
 };
 
 const HERO_UPPER = [
-  '.....oooo.....',
-  '...oohhhhoo...',
-  '..ohhhhhhhho..',
-  '..ohhhhhhhho..',
+  '....oooooo....',
+  '...ohhhhhho...',
+  '.oooooooooooo.',
+  'oHHHHHHHHHHHHo',
+  '.oHHHooooHHHo.',
   '..ohSssssSho..',
   '..ohseessseo..',
-  '..ohssssssho..',
   '...osssssso...',
   '..occcccccco..',
-  '.otttttttttto.',
-  '.otttTTttttto.',
-  '.otttttttttto.',
-  '.ottttBBtttto.',
-  '.oBBBBBBBBBBo.',
-  '..oppppppppo..',
+  'oKottttttttoKo',
+  'oKotttTTtttoKo',
+  'oKottttttttoKo',
+  '.KotttBBtttoK.',
+  '.KoBBBBBBBBoK.',
+  '.KoppppppppoK.',
   '..oppppppppo..',
 ];
 
@@ -78,12 +80,11 @@ export const HERO_WALK_B: SpriteMap = {
 /** 16x5, hilt at the left, blade to the right. Drawn rotated for the swing. */
 export const SWORD: SpriteMap = {
   rows: [
-    '....o.............',
-    '....ooMMMMMMMMMMMo',
-    'ogggoommmmmmmmmmmo',
-    '....ooFFFFFFFFFFFo',
-    '....ooMMMMMMMMMMMo',
-    '....o.............',
+    '...oo.............',
+    '...oMoMMMMMMMMMo..',
+    'ogggoommmmmmmmmmMo',
+    '...oMoFFFFFFFFFo..',
+    '...oo.............',
   ],
   legend: { ...OUTLINE, F: 'steelFuller', M: 'steelDark', g: 'grip', m: 'steel' },
 };

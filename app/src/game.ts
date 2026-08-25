@@ -96,11 +96,19 @@ export class Game {
    */
   private readonly pendingStrikes: Strike[] = [];
 
+  /**
+   * A staged run must never reach localStorage. Without this the autosave
+   * writes realm 199 over a real save the moment a capture is taken, and the
+   * next plain load comes back staged.
+   */
+  private staged = false;
+
   constructor(private readonly view: View) {
     // Dev-only: `?stage=late` boots a staged run so captures show the game deep
     // in, not thirty seconds in. It never touches the save.
     const staged = import.meta.env.DEV ? stageFromQuery(window.location.search) : null;
     if (staged) {
+      this.staged = true;
       this.state = staged;
       this.displayGold = this.state.gold;
       this.view.setSeed(this.state.seed);
@@ -135,11 +143,11 @@ export class Game {
   private readonly onVisibility = (): void => {
     // Save when leaving. On return we intentionally keep the accumulated dt so a
     // fully-suspended tab is reconciled as an offline stretch by the next tick.
-    if (document.hidden) writeSave(this.state);
+    if (document.hidden && !this.staged) writeSave(this.state);
   };
 
   private readonly onPageHide = (): void => {
-    writeSave(this.state);
+    if (!this.staged) writeSave(this.state);
   };
 
   // --- The engine tick ---------------------------------------------------
@@ -236,7 +244,7 @@ export class Game {
 
   private maybeSave(nowMs: number): void {
     if (nowMs - this.lastSaveMs >= SAVE_INTERVAL_MS) {
-      writeSave(this.state);
+      if (!this.staged) writeSave(this.state);
       this.lastSaveMs = nowMs;
     }
   }
@@ -301,7 +309,7 @@ export class Game {
     this.bossResult = null;
     this.view.setSeed(this.state.seed);
     this.view.pushLog([{ kind: 'info', text: 'A new blade sets out. The road begins again.' }]);
-    writeSave(this.state);
+    if (!this.staged) writeSave(this.state);
     this.lastTickMs = performance.now();
     this.renderAll();
   }

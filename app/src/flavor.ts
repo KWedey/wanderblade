@@ -40,14 +40,22 @@ function toRoman(n: number): string {
   return ROMAN[n] ?? String(n);
 }
 
-/** Named biome for a 0-based region index; endless regions become "Beyond the Edge II…". */
+/**
+ * Named biome for a 0-based region index. The endless tail relaps the same
+ * biomes with a lap numeral rather than becoming "Beyond the Edge N", because
+ * the scene's skins cycle on this same list: a generic name over a specific
+ * picture put the words in a fight with the art ("Beyond the Edge" over a
+ * sunny meadow). Name and skin now always agree by construction.
+ */
 export function regionName(region: number): string {
-  const named = REGION_NAMES[region];
-  if (named) return named;
-  // World's Edge is the last named region; the endless tail counts up from II.
-  const beyondIndex = region - REGION_NAMES.length + 2;
-  return `Beyond the Edge ${toRoman(beyondIndex)}`;
+  const r = region < 0 ? 0 : region;
+  const biome = REGION_NAMES[r % REGION_NAMES.length]!;
+  const lap = Math.floor(r / REGION_NAMES.length);
+  return lap === 0 ? biome : `${biome} ${toRoman(lap + 1)}`;
 }
+
+/** The scene skins and these names must stay index-aligned. */
+export const REGION_NAME_COUNT = REGION_NAMES.length;
 
 /** Region index that a global zone belongs to. */
 export function regionOfZone(zone: number): number {

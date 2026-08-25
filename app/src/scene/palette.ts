@@ -292,10 +292,123 @@ const REALM_SKINS: RealmSkin[] = [
 /** Number of named realm skins the endless tail cycles through. */
 export const REALM_SKIN_COUNT = REALM_SKINS.length;
 
+/** Lightness of a hex, 0..1. */
+export function lightnessOf(hex: string): number {
+  return toHsl(hex)[2];
+}
+
+/**
+ * The bands whose separation decides whether a realm reads as a place or as
+ * mud. Sky and turf are the two poles the eye uses to size everything else.
+ */
+function valueBands(skin: RealmSkin): { sky: number; canopy: number; turf: number; soil: number } {
+  return {
+    sky: lightnessOf(skin.skyTop),
+    canopy: lightnessOf(skin.leaf),
+    turf: lightnessOf(skin.turf),
+    soil: lightnessOf(skin.soilDark),
+  };
+}
+
+/** Minimum spread between a realm's lightest and darkest structural band. */
+export const MIN_VALUE_SPREAD = 0.42;
+/** A sky is the light pole of the frame; below this the realm reads as night. */
+export const MIN_SKY_LIGHTNESS = 0.58;
+/** The bright accent is what keeps a realm vibrant rather than grimdark. */
+export const MIN_ACCENT_LIGHTNESS = 0.55;
+
+export function skinValueSpread(skin: RealmSkin): number {
+  const v = Object.values(valueBands(skin));
+  return Math.max(...v) - Math.min(...v);
+}
+
+/**
+ * Why this exists: VISION.md pillar 2 is "vibrant and dangerous, never
+ * grimdark", and DECISIONS.md #13 chose 16-bit over 8-bit precisely because
+ * colour starvation drifts grimdark. A hand-authored skin can still land
+ * below that bar, and realm 199 did - a near-black violet wood with every
+ * band compressed into mid-darks. Rather than trusting eight hand edits to
+ * stay in range, every skin is lifted through this on the way out, so no
+ * realm index can render as mud by construction.
+ */
+export function enforceValueFloor(skin: RealmSkin): RealmSkin {
+  let out = skin;
+
+  const skyL = lightnessOf(out.skyTop);
+  if (skyL < MIN_SKY_LIGHTNESS) {
+    const lift = (MIN_SKY_LIGHTNESS + 0.02 - skyL) / Math.max(0.001, 1 - skyL);
+    out = {
+      ...out,
+      skyTop: lighten(out.skyTop, lift),
+      skyMid: lighten(out.skyMid, lift * 0.9),
+      skyHaze: lighten(out.skyHaze, lift * 0.8),
+      // The canopy reads against the sky, so it has to travel with it or the
+      // gain is spent closing the gap that separates them.
+      leaf: lighten(out.leaf, lift * 0.55),
+      leafDark: lighten(out.leafDark, lift * 0.4),
+      hillFar: lighten(out.hillFar, lift * 0.5),
+      hillNear: lighten(out.hillNear, lift * 0.4),
+      range: lighten(out.range, lift * 0.6),
+    };
+  }
+
+  const accentL = lightnessOf(out.accent);
+  if (accentL < MIN_ACCENT_LIGHTNESS) {
+    out = {
+      ...out,
+      accent: lighten(out.accent, (MIN_ACCENT_LIGHTNESS + 0.02 - accentL) / 0.9),
+    };
+  }
+
+  // Spread is opened from the dark end: darkening soil costs nothing, while
+  // lifting the light end further would wash the realm out.
+  let guard = 0;
+  while (skinValueSpread(out) < MIN_VALUE_SPREAD && guard < 24) {
+    out = {
+      ...out,
+      soil: mixHex(out.soil, '#000000', 0.12),
+      soilDark: mixHex(out.soilDark, '#000000', 0.12),
+      turf: mixHex(out.turf, '#000000', 0.05),
+    };
+    guard++;
+  }
+  return out;
+}
+
+const FLOORED_SKINS: RealmSkin[] = REALM_SKINS.map(enforceValueFloor);
+
 /** Skin for a 0-based region index; the endless tail cycles the named realms. */
 export function realmSkin(region: number): RealmSkin {
-  const i = region < 0 ? 0 : region % REALM_SKINS.length;
-  return REALM_SKINS[i]!;
+  const i = region < 0 ? 0 : region % FLOORED_SKINS.length;
+  return FLOORED_SKINS[i]!;
+}
+
+/**
+ * CSS variables that dress the panel in the realm the player is standing in.
+ * Four critics in a row called the panel "a different game" - brown-and-gold
+ * parchment against a green-and-blue world. Geometry was not the cause;
+ * palette was. Derived from the skin's own earth and accent so the panel
+ * cannot drift away from the scene again.
+ */
+export function panelVars(skin: RealmSkin): Record<string, string> {
+  const earth = skin.soil;
+  const deep = mixHex(skin.soilDark, '#000000', 0.2);
+  return {
+    '--panel': deep,
+    '--panel-inner': earth,
+    '--panel-sunk': mixHex(earth, '#000000', 0.22),
+    '--panel-edge': skin.accent,
+    '--bevel-lit': lighten(earth, 0.24),
+    '--bevel-dark': mixHex(deep, '#000000', 0.4),
+    '--ink-light': lighten(skin.skyHaze, 0.32),
+    '--ink-dim': skin.accent,
+    '--ink-faint': mixHex(lighten(skin.skyHaze, 0.2), earth, 0.35),
+    '--wood': earth,
+    '--wood-light': lighten(earth, 0.18),
+    '--wood-shadow': deep,
+    '--drop': `0 4px 0 ${mixHex(deep, '#000000', 0.5)}`,
+    '--drop-pressed': `0 2px 0 ${mixHex(deep, '#000000', 0.5)}`,
+  };
 }
 
 /** Fixed inks the hero and his sword always wear, in every realm. */
@@ -306,6 +419,8 @@ export const HERO_INK: InkSet = {
   // A face has to read at 14px: a lit cheek, a dark eye, one tunic highlight.
   skinLit: lighten(INK.parchment, 0.35),
   eye: '#241016',
+  hatBand: '#3c2a3f',
+  cloak: INK.rose,
   scarf: INK.rose,
   tunic: INK.blue,
   tunicLit: lighten(INK.blue, 0.28),

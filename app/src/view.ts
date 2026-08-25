@@ -13,6 +13,7 @@ import {
 import { HOLD_STRIKE_INTERVAL_SEC } from './active';
 import { formatDuration, formatGold, formatNumber, formatPercent, formatRate } from './format';
 import type { LogEntry } from './flavor';
+import { panelVars, realmSkin } from './scene/palette';
 import { createScene, type SceneModel, type StrikeOutcome } from './scene/scene';
 
 const LOG_LIMIT = 40;
@@ -607,7 +608,18 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     recapOverlay.hidden = false;
   }
 
+  let dressedRegion = -1;
+
   function renderScene(dtSec: number, model: SceneModel): void {
+    // The panel wears the realm the player is standing in. Set from the same
+    // skin the scene paints with, so the two halves cannot drift apart.
+    if (model.region !== dressedRegion) {
+      dressedRegion = model.region;
+      const vars = panelVars(realmSkin(model.region));
+      for (const [name, value] of Object.entries(vars)) {
+        root.style.setProperty(name, value);
+      }
+    }
     scene.frame(dtSec, model);
   }
 
