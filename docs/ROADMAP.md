@@ -1,63 +1,101 @@
 # Wanderblade — Roadmap
 
-**Current milestone: M1 (M1a complete, M1b next).** Every milestone ends in something you can feel — pacing in a sim, a build on a phone.
+**Current milestone: M1R — Active-Forward Realm Rebaseline.** The July grey-box work proved the deterministic engine and basic UI. The August design pivot replaces short optional-active check-ins, readiness gates, and voluntary New Roads with an active-forward Road → Portal Boss → Ascension structure.
 
-## M0 — Vision + Economy Simulator *(complete)*
+## Completed foundation
 
-- [x] Concept chosen (Wanderblade — see DECISIONS.md #3)
-- [x] Design docs scaffolded and reviewed (3-lens review applied)
-- [x] `packages/core` — pure TS game rules (deterministic, seeded PRNG — DECISIONS.md #6)
-- [x] `sim/` — fast-forward harness with the deterministic bot policy from ECONOMY.md
-- [x] Tune constants until all **M0-gating** pacing targets pass on a 10-day run
+### M0 — Vision + economy simulator *(complete for the legacy gate design)*
 
-**Exit: MET** — `npm run sim` prints `OVERALL M0 EXIT: PASS (all targets, all seeds)` on 3 seeds × 10 days. (M0 pacing is a pre-Bestiary baseline — re-tuned in M2 by design.)
+- [x] Original Wanderblade concept and source-of-truth docs
+- [x] Pure deterministic TypeScript rules in `packages/core`
+- [x] Fast-forward simulation harness sharing the core rules
+- [x] Legacy 10-day gate-economy targets passing across three seeds
 
-## M1 — Grey-box core loop *(now)*
+The M0 evidence remains valuable for determinism and simulator architecture. Its pacing results are historical and must not be used to validate the redesigned economy.
 
-Ordered deliberately: prove the fun with the cheapest possible UI *before* building the renderer — the loop's pull must survive without spectacle.
+### M1a — Grey-box loop *(complete; implementation now partially superseded)*
 
-- [x] **M1a — Loop with minimal UI:** counters, upgrade buttons, log feed — no animation. Auto-fight math, gold/loot, hero levels, gear + auto-equip, 1–2 skills, first two regions + first **boss gate** (Readiness meter, Challenge button, auto-challenge — DESIGN.md).
-- [x] Save/load (local persistence; prestige-persistent vs run-local state separated from day one — see DESIGN.md Prestige)
-- [x] Offline progress + "Back on the Road" recap
+- [x] Auto-combat, gold, loot, levels, gear, skills, save/load, and offline recap
+- [x] Minimal Road UI and deterministic live/offline advancement
+- [x] Legacy readiness gate, challenge, cooldown, and auto-challenge behavior
 
-**M1b — "The Living Road"** (re-scoped 2026-07-11 after the M1a playtest verdict: dead numbers, no character on screen, wrong art register — DECISIONS.md #12/#13). Everything below is display-layer work; economy constants unchanged, no sim re-run needed. Cheap number/tone wins land before renderer spend, with the playtest gate between them:
+### M1b — Living Road HUD *(Phases 0–2 complete)*
 
-- [x] **Phase 0 — Render driver:** frame-rate-independent smoothing (dt-based), single RAF path, compositor-only meter sweeps.
-- [x] **Phase 1 — Living counter + goal-gradient HUD:** full-digit gold odometer with intra-kill accrual (low digits always rolling), gold/sec readout, DPS punch on purchase, "next" strip (waypoint + cheapest-buy ETA).
-- [x] **Phase 2 — Pixel & Parchment re-skin:** DB32 palette, hard edges, carved-wood panels, pixel fonts (Pixelify Sans UI / VT323 numerals), log demoted to a ticker.
-- [ ] **GATE — phone playtest:** on a real phone → **is the pull real** with living numbers and a visible goal, before any renderer spend? Green-lights Phases 3–5.
-- [ ] **Phase 3 — Scene spine:** canvas pixel diorama — hero walks and auto-fights, monsters spawn and pop, draining HP bar, floating damage/gold numbers (display-synthesized). Greenwood only; CC0 placeholder sprites, hero hand-authored.
-- [ ] **Phase 4 — Set-pieces:** region-transition cards, rarity loot-slam, boss set-piece (hitstop, shake, shatter), purchase feedback.
-- [ ] **Phase 5 — Tap layer (Road Play v1):** hero-tap **Rally** (capped, decaying, additive bonus gold via a gold-only helper outside `advance()`), Trailside Glints (auto-collected at reduced value if missed), Roadside Discoveries. Idle baseline still passes every pacing target with zero taps.
+- [x] Frame-rate-independent render driver and a single RAF path
+- [x] Living gold counter, gold/sec, purchase feedback, and goal strip
+- [x] Vibrant 16-bit Pixel & Parchment reskin
 
-**Exit:** the "one more upgrade" pull is real when we playtest on a phone — proven at the gate with numbers + goals alone, then amplified by the scene.
+The former Phase 3–5 sequence is superseded. The scene renderer remains useful, but the old Rally/Glints/Discoveries bundle is no longer the assumed active layer.
 
-## M2 — Meta systems
+## M1R — Active-Forward Realm Rebaseline *(current)*
 
-- [ ] Bestiary with mastery tiers
-- [ ] **Re-run economy sim with Bestiary mastery accrual; re-tune constants** (expected drift — ECONOMY.md "Bestiary caveat")
-- [ ] Gear sets + zone stars (collection ledger)
-- [ ] Remaining v1 regions through World's Edge
-- [ ] Prestige v1 ("New Road" — design decided: many-roads rhythm, Legend tree, unearned-Legend preview — DECISIONS.md #7/#11; extend the sim with a prestige-greedy bot and tune Legend constants)
-- [ ] Achievements/titles
-- [ ] Collection-cadence targets validated in sim; collection *retention* validated by playtest
+### M1R.1 — Product and documentation contract
 
-**Exit:** a week-long retention loop exists (for us, at least).
+- [x] Approve 15–30-minute active sessions once or twice daily with slower, meaningful idle progress
+- [x] Approve mutually exclusive Road and persistent Portal Boss phases
+- [x] Approve boss-victory ascension, reset/persistence rules, and pending/banked Ascendancy
+- [x] Approve SRD 5.2.1 monster inspiration under CC-BY-4.0
+- [x] Rewrite VISION, DESIGN, ECONOMY, ROADMAP, binding guardrails, and append superseding ADRs
+- [x] Produce an [implementation plan](superpowers/plans/2026-08-11-active-forward-realm-ascension.md) with explicit design/simulation gates and verification criteria
 
-## M3 — Art & juice
+**Exit:** the repository describes one coherent current game and clearly labels the old economy as historical.
 
-- [ ] Diorama biome art + transitions
-- [ ] Hero/monster animation, hit effects, number-pops
-- [ ] Sound (sfx + ambient)
-- [ ] Recap/boss moments polished into events — boss set-pieces get the full treatment (camera lock, telegraphed attacks, cinematic kill)
+### M1R.2 — Active-play design and pacing bands *(next)*
 
-**Exit:** passes the "show a friend and they say *ooh*" bar.
+- [ ] Design the 15–30-minute Road session arc and compare 2–3 mechanic sets
+- [ ] Design portal-boss tapping, cap/decay, feedback, and an accessibility-equivalent input
+- [ ] Select numeric Road-active, Road-idle, Boss-active, and Boss-idle pacing bands
+- [ ] Define realm length, portal-availability conditions, boss-duration bands, and abandonment UX
+- [ ] Define Ascendancy accrual, boss payout, tree shape, and realm-completion earnings bonus
 
-## M4 — Ship prep *(optional — prototype-first ambition, decide after M2/M3)*
+**Exit:** active play is approved as a complete interaction and economy specification; no mechanics are invented during implementation.
 
-- [ ] Capacitor packaging (iOS/Android)
-- [ ] Notifications (respectful, off by default)
-- [ ] Cloud save
-- [ ] Store listing
+### M1R.3 — Core contract + simulator rebaseline
 
-**Exit:** on the stores.
+- [ ] Replace gate/readiness/auto-challenge with the minimal Road/Boss/Ascension core state required by the simulator
+- [ ] Lock manual entry, zero boss income, offline boss damage, abandonment, victory, and reset/persistence with deterministic core tests
+- [ ] Add Road/Boss/Ascension states and multi-realm runs to the sim model
+- [ ] Add idle and active policies for both Road and Boss
+- [ ] Add pending/banked Ascendancy, tree purchases, automatic earnings bonuses, and abandon strategy
+- [ ] Tune constants until all approved pacing and numerical-safety validators pass across multiple seeds
+
+**Exit:** the minimal authoritative core and the new economy—not the legacy M0 economy—have passing evidence.
+
+## M2 — Persistence and client integration
+
+- [ ] Harden the core state model and public actions for client consumption
+- [ ] Version and migrate the save schema; preserve partial boss progress across close/reload
+- [ ] Integrate manual portal entry, active boss inputs, abandonment, and atomic/idempotent victory into the controller
+- [ ] Integrate realm reset, pending-to-banked Ascendancy, tree state, and earnings bonuses
+- [ ] Complete serialization, recap, controller, and migration coverage around the state machine
+
+**Exit:** core, simulator, save, and controller tests prove the full Road → Boss → Ascension lifecycle before UI polish.
+
+## M3 — Active Road and portal-boss client
+
+- [ ] Build the Road diorama scene spine with SRD-verified placeholder monster roster
+- [ ] Implement the approved active Road mechanics and session feedback
+- [ ] Build portal preview, committed boss screen, attack-speed interaction, and protected Abandon flow
+- [ ] Build road-return and boss-damage offline recaps
+- [ ] Surface pending/banked Ascendancy, ascension summary, earnings bonus, and tree purchases
+- [ ] Conduct real-phone playtests for 15-, 20-, and 30-minute sessions plus overnight returns
+
+**Exit:** active play is fun and materially valuable; idle returns and multi-hour bosses still feel worthwhile.
+
+## M4 — Collections, realms, and content
+
+- [ ] Bestiary, gear-set records, realm stars, and boss trophies
+- [ ] SRD provenance roster, required CC-BY-4.0 attribution/NOTICE, and content review
+- [ ] Original realm, portal, monster, gear, and boss presentation through the v1 finale
+- [ ] Collection cadence added to the simulator and retention evaluated in playtests
+- [ ] Revisit future companions only after the solo-hero loop is proven; no v1 party commitment
+
+**Exit:** the long-horizon collection and world-saving journey support multi-realm retention.
+
+## M5 — Art, audio, and ship decision
+
+- [ ] Production biome art, hero/monster animation, boss set-pieces, sound, and recap polish
+- [ ] Decide whether the prototype has earned store investment
+- [ ] If approved: Capacitor packaging, notifications, cloud save, accessibility pass, and store listing
+
+**Exit:** either a validated prototype concludes cleanly or a production candidate is ready for store preparation.

@@ -1,140 +1,139 @@
 # Wanderblade — Economy & Pacing
 
-Idle games are math games with a UI on top. **Nothing in this file ships until the simulator proves the pacing.** Every constant below is a starting guess, to be tuned in `sim/`.
+> **Rebaseline status (2026-08-11):** The M0 simulator and its passing results describe the implemented legacy gate economy. The approved active-forward Road → Portal Boss → Ascension design changes the progression topology, boss duration, reset cadence, persistent currency, and player schedule. Those results remain useful regression history but do **not** validate the new design. No new economy constant ships until the redesigned simulator passes newly approved targets.
 
-## Currencies & resources
+## Economy principles
 
-| Resource | Role | Sink |
+1. **The Road builds power.** Gold, gear, temporary upgrades, monster/gear collection progress, and pending Ascendancy are earned only on the road. Boss trophies and realm-completion records are awarded by victory, not boss-combat elapsed time.
+2. **The boss proves power.** Portal-boss combat produces damage and nothing else: no gold, loot, Ascendancy, road movement, collection credit, or temporary buffs.
+3. **Victory banks the run.** Pending Ascendancy becomes permanent only when the realm's portal guardian dies.
+4. **Ascension creates a faster rebuild.** Each victory grants a permanent bonus to gold and passive/offline earnings, while persistent combat power comes only from purchased Ascendancy skills and passives.
+5. **Active is faster; idle is real.** Active sessions materially accelerate road and boss progress. Zero-input play must still advance both phases over time.
+6. **Simulation precedes tuning.** Economy changes require representative Road-idle, Road-active, Boss-idle, and Boss-active simulations.
+
+## Resources
+
+| Resource | Earned | Spent | On ascension |
+|---|---|---|---|
+| Gold | Road kills and road rewards | Realm-local levels and upgrades | Resets to 0 |
+| Gear | Road drops and road rewards | Equipped automatically or by simple upgrade choice | Equipped power resets; collection record persists |
+| Pending Ascendancy | Road progression; portal-boss victory adds a payout | Cannot be spent | Transfers exactly once to banked Ascendancy, then resets to 0 |
+| Banked Ascendancy | Successful ascension | Permanent Ascendancy-tree skills and passives, spendable on the Road | Persists |
+| Realm-completion earnings bonus | Portal-boss victory | Automatic; not spendable | Persists and stacks by a simulator-tuned rule |
+| Collection records | Road discoveries and boss victory | Completion/mastery display | Persist; no hidden combat multiplier |
+
+## Phase contract
+
+| Behavior | Road | Portal Boss |
 |---|---|---|
-| Gold | Primary earn/spend | Hero levels, skill upgrades |
-| Gear drops | The load-bearing power scaler (see below), rarity-tiered | Equipped (auto), collected into sets |
-| Legend | Prestige currency (M2+) | Permanent bonuses on a New Road |
+| Gold / gear / pending Ascendancy | Earned | Frozen |
+| Road movement and collection credit | Advances | Frozen |
+| Temporary and Ascendancy purchases | Allowed | Locked |
+| Base combat | Auto, online and offline | Sustained DPS, online and offline |
+| Active input | Reserved for active-road design | Bounded attack-speed boost |
+| Exit | Manual portal entry when available | Victory or explicit abandonment |
 
-## World structure constants (v0)
+Closing the app never changes phase. Offline reconciliation continues the active phase from the authoritative saved state.
 
-| Constant | Value | Notes |
-|---|---|---|
-| Zones per region | 10 | 7 regions → 70 zones in the v1 realm |
-| Kills per zone | 10 | Advancing past the last kill enters the next zone |
-| Zone length | 1 league | → 0.1 league per kill; leagues are derived, never independent |
+## Portal and boss rules
 
-## Core formulas (v0)
+- One realm consists of a Road followed by one portal guardian.
+- When the portal becomes available, the hero may continue farming the realm's Road indefinitely until the player manually enters.
+- Entering snapshots or otherwise freezes the committed build inputs needed for deterministic boss DPS; purchases remain locked during the attempt.
+- Boss HP persists across app closes and has no regeneration, enrage timer, death state, or automatic failure.
+- Abandonment restores boss HP to full and returns to the portal-ready Road with all road resources intact.
+- If a boss dies during offline reconciliation, victory resolves at that simulated timestamp. The ascension transaction runs once, and any remaining elapsed time advances the newly unlocked Road. This preserves the single shared live/offline time model.
 
-Let `z` = global zone index (0-based, monotonically increasing along the road).
+## Ascension transaction
 
-**Enemies**
-- HP: `hp(z) = 10 · 1.55^z`
-- Gold drop: `gold(z) = 1 · 1.48^z` (income grows slower than difficulty → upgrades always needed)
-- Region boss HP: `60 · hp(z_boss)` (tuned up from the v0 guess of 25 — see "Tuned constants" below). **Every region ends at a gate — including regions beyond World's Edge (the endless tail).** Gate fights resolve deterministically: **win iff `Readiness = (dps · 30) / bossHP ≥ 1`** (30 s enrage window). **Auto-challenge** (default on) fires at Readiness ≥ 1.1, online or offline. Parked at a gate, the hero farms the approach zone at full trash income — a gate pauses leagues, never income. The multiplier is capped below `gearPowerBase · 32 ≈ 64` so a fully-farmed all-epic set still crosses on its own (all-epic Readiness = 72/60 = 1.2 ≥ 1.1): the pure-idle player always breaks through via farmed gear (DECISIONS.md #9), the sim's `autochallenge` property test enforces this. Gates are the tail's anti-runaway wall as much as the early game's anti-stall one.
+Boss victory must be atomic and idempotent:
 
-**Hero**
-```
-dps = (base(level) + gearPower) · skillMult · (1 + mastery)
-```
-- `base(level) = 25 · 1.12^level` — levels are the *smoothing* scaler, not the primary one (base `d0` tuned up from 5 to 25 so the opening session can fell the first boss in 5-10 min; `rD = 1.12 < rH` still lets base fade against HP over zones, so gear stays primary). (Proof of necessity: holding kill-time constant on levels alone needs ~3.9 levels/zone, costing ×1.72/zone against income growing ×1.48/zone — a widening gap that stalls the game permanently around zone 20.)
-- `gearPower = Σ over 3 slots` — **gear is the primary scaler.** A drop found in zone `z` has power `2 · 1.55^z · rarityMult`, so expected gear power tracks enemy HP growth by construction.
-- `skillMult = Π over unlocked skills of (1 + skillMultPerLevel · skillLevel)`, each skill **hard-capped at `maxLevel` ranks** — skills are modeled as steady multipliers (auto-cast flavor is presentation, not math). **`skillMultPerLevel = 0.05`, `maxLevel = 10`**, so each skill tops out at ×1.5 and both together at ×2.25 — a bounded second upgrade track (see "Skills in the M0 baseline" below).
-- `mastery = Σ Bestiary mastery bonuses` — **0 in the M0 baseline sim.** See "Bestiary caveat" below.
+1. Add the boss payout to pending Ascendancy.
+2. Add pending Ascendancy to the previously banked balance.
+3. Clear pending Ascendancy.
+4. Record realm completion, boss trophy, and collection history.
+5. Increment the persistent gold/passive-earnings bonus exactly once.
+6. Unlock the next realm.
+7. Reset gold, hero level, equipped gear, temporary skill ranks, road position, and temporary buffs.
+8. Preserve banked Ascendancy, purchased Ascendancy nodes, collection records, lifetime statistics, and the global deterministic RNG/kill sequence. App preferences remain outside the run reset.
+9. Enter the next realm in Road mode at level 0.
 
-**Drops**
-- Drop chance: 5% per kill, uniform random slot.
-- Rarity weights: common 70 / uncommon 23 / rare 6 / epic 1; multipliers ×1 / ×1.5 / ×2.5 / ×4.
-- Open tuning question: a pity/slot-targeting rule if a slot lags too far in sim.
+The realm-completion earnings bonus must not enter the hero-DPS formula. Ascendancy-tree combat nodes are the only persistent combat-power inputs.
 
-**Costs**
-- Hero level: `10 · 1.15^level`
-- Skill upgrade: `50 · 1.15^skillLevel`
+## Active and idle pacing contract
 
-**Time & distance**
-- Kill time: `max(minKillTimeSec, hp(z) / dps)` seconds — clamped to a `minKillTimeSec = 2 s` walking floor (tuned up from 0.3; walk time between spawns is folded into kill cadence in v0). With gates in every region the readiness walls now carry the anti-runaway role, but the floor stays at 2: V1 (first upgrade < 30 s = 10 zone-0 kills) pins it below 3, and lowering it only reaches the float-precision tail faster (see "Tuned constants").
-- Leagues: `0.1 per kill` → leagues/hour = `360 / killTime`. This is the recap's headline number and is fully derived from the combat model.
+The new intended play pattern is **one or two active sessions per day, each lasting 15–30 minutes**. The exact active interactions and boost magnitudes are a dedicated design and simulation milestone, so the former ≈1.5–2× gold-only overlay is not carried forward as an assumption.
 
-## Tuned constants (M0)
+Before tuning begins, the active-play design must select measurable targets for:
 
-The values above are the sim-tuned M0 economy, tuned in `sim/` against the 10-day pacing targets below — **all six pass on `--days 10 --seeds 3`.** Preserved: `rG < rH`, gear-primary (`gearPowerRate = rH`), and the farmed-gear gate-crossing guarantee (`bossHpMult` below the all-epic ceiling `gearPowerBase·32 ≈ 64`). Unchanged from v0: rH, rG, gearPowerBase, gearPowerRate, rarity weights/multipliers, cost curves, world structure, enrage window.
+- Road-active progression versus the same elapsed Road-idle period.
+- Boss-active completion time versus the same build with zero taps.
+- Minimum useful progress from 8 h and 24 h Road-idle returns.
+- Expected time from realm start to portal availability.
+- Expected portal-boss durations for underprepared, prepared, and highly upgraded builds.
+- Ascendancy earned from road time versus the boss payout.
+- The advantage of ascending promptly over farming an already portal-ready realm.
+- The number and value of decisions within a 15–30 minute active session.
 
-| Constant | v0 → M0 | Why |
-|---|---|---|
-| `bossHpMult` | 25 → **60** | The readiness bar is high enough that typical farmed gear does *not* clear a gate on arrival, so the hero parks and farms — turning each region end into a real soft wall. Kept below the all-epic ceiling (≈64) so a maxed all-epic set still auto-crosses (Readiness 72/60 = 1.2 ≥ 1.1), preserving the pure-idle guarantee. |
-| `d0` (base damage) | 5 → **25** | With the low `dropChance` the walls require, early gear is scarce, so the opening leans on purchased levels to fell the first boss in the 5–10 min window; `rD = 1.12 < rH` still fades base against HP so gear stays primary. |
-| `dropChance` | 0.05 → **0.006** | Gear power grows at `rH` (gearPowerRate = rH), so Readiness is scale-invariant: with frequent drops every gate either always clears (runaway) or never. Scarce drops make the equipped set *lag* the frontier by a variable amount, so a gate clears only on a lucky recent high-rarity mix — that drop variance *is* the soft-wall mechanism and it paces the endless tail. |
-| `skillMultPerLevel` (+ `maxLevel`) | 0.05 unbounded → **0.05, capped at 10** | Skills return as a **bounded** second upgrade track: each hard-caps at `maxLevel = 10` ranks (×1.5), both at ×2.25 — a finite ceiling that cannot run away (see below). The prior published M0 had disabled this axis (0). |
-| `minKillTimeSec` | 0.3 → **2** | Walking floor, held at 2. Gates-forever now do the anti-runaway work, but V1 (first upgrade < 30 s = 10 zone-0 kills → 10·floor < 30) pins the floor below 3, and lowering it only reaches the float tail faster. |
+Until those bands are approved and encoded as validators, terms such as “meaningful idle,” “good boost,” and “hours or days” are product direction, not claims of balanced implementation.
 
-## Skills in the M0 baseline (binding)
+## Redesigned simulator contract
 
-**Skills are live in M0, as a bounded second upgrade track.** `skillMult = Π (1 + 0.05 · skillLevel)` with each skill hard-capped at `maxLevel = 10` ranks: Cleave and Warcry each top out at ×1.5, both together at ×2.25. The cap is the whole point — the multiplicative skill term is otherwise an *unbounded* power axis (the greedy bot pours banked gold in, the product runs away, kill time floors, and every gate wall dissolves; that was the dominant failure of the earlier constants). The hard cap makes it a *form* fix, not a fragile cost-curve balance: `buySkill` refuses to sell past `maxLevel`, `heroDps` applies the multiplier, and the sim bot skips a capped skill cleanly (its ΔDPS-per-gold is 0). Unlock gates stay at hero L5 (Cleave) / L15 (Warcry). This bounded track gives the greedy bot a real, finite gold sink between gates — part of why the check-in and 8h-return targets now pass.
+The simulator must continue to consume `packages/core` and preserve deterministic equivalence with the game client.
 
-## Bestiary caveat (binding)
+Required policies:
 
-Bestiary mastery is a real power axis (permanent global damage), but it ships in M2. **M0 pacing is therefore a pre-Bestiary baseline.** When the Bestiary lands, its accrual model must be added to the sim and constants re-tuned — this is expected drift, tracked as an explicit M2 roadmap item, not a regression.
+1. **Road idle:** no live actions; scheduled return/upgrade policy only.
+2. **Road active:** the approved timestamped active-road actions during 15-, 20-, and 30-minute sessions.
+3. **Boss idle:** zero taps; base DPS persists online/offline.
+4. **Boss active:** the approved timestamped attack-speed actions, including cap and accessibility-equivalent input.
+5. **Ascension policy:** manually enters portals according to explicit strategy, verifies victory banking/reset, and continues through multiple realms.
+6. **Abandon policy:** exercises an underprepared attempt and verifies the cost of lost boss damage against additional road farming.
 
-## Pacing targets
+Required output includes realm start/portal-entry/boss-victory times, Road and Boss time, active time, gold and gear curves, pending and banked Ascendancy, tree purchases, realm-completion earnings bonuses, abandonments, boss time remaining at entry, and active-versus-idle uplift. Collection cadence is added in M4 when authoritative collection content exists.
 
-**M0-gating** (the sim must hit these on a 10-day run). Status is the tuned-economy result on `--days 10 --seeds 3`:
+Required correctness validators:
 
-| Moment | Target | Status |
-|---|---|---|
-| First upgrade | < 30 seconds of play | **PASS** (all seeds, ~20 s) |
-| First boss down | 5–10 minutes (first active session) | **PASS** (all seeds, ~6–7 min) |
-| Check-in value | ≥ 1 meaningful purchase per check-in (validator: ≥ 90% of post-day-1 check-ins) | **PASS** (all seeds, 100%) |
-| Return after 8 h | a few one-tap purchases + a recap worth reading (validator: **median ≥ 3**, lower bound only — see note) | **PASS** (all seeds, median ~85) |
-| Soft wall cadence | Every 2–3 days in the first week (validator: a > 2 h wall exists, none > 3 days) | **PASS** (all seeds; walls run ~1–10 h) |
-| No hard stall | Kill time never exceeds 60 s for trash across the 10-day run | **PASS** (all seeds, max ~40 s) |
+- No automatic portal entry online or offline.
+- No resource classified as Road income changes during boss elapsed time.
+- Equal zero-input state and elapsed time produce equal boss HP online and offline.
+- Identical timestamped active inputs produce identical results.
+- Abandonment resets only boss progress and never banks Ascendancy.
+- Victory banks, rewards, resets, and unlocks exactly once, including across save/reload boundaries.
+- Remaining offline time after victory advances the next realm Road.
+- Persistent earnings bonuses affect the documented income paths and never DPS.
+- The four player policies meet the approved pacing bands across multiple seeds and multi-realm runs.
 
-**All six M0-gating targets now pass on `--days 10 --seeds 3`.** Three structural changes closed the gap that the earlier gateless-tail constants could not:
+## Determinism and numerical safety
 
-1. **Gates in every region, including the endless tail (region 7+).** Previously the road past World's Edge scaled forever with no gates, so the hero (a) out-ran its own gear on drop droughts and trash kill time spiked past 60 s (V6), and (b) was never gold-starved, so the greedy bot's purchase counts exploded or, once gold overflowed `double`, collapsed to zero (V3/V4). Gates-forever make the tail behave like the defined regions: a readiness wall stops sprints and parked farming lets gear catch up. `worldsEdgeReached` and the one-time `edge` event are unchanged — only the gate structure continues past them.
-2. **Bounded skills.** `skillMultPerLevel = 0.05` with a hard `maxLevel = 10` cap (×2.25 total) restores skills as a real, buyable second upgrade track that *cannot* run away — giving the greedy bot a finite gold sink between gates, which helps the check-in and 8h-return purchases land in a healthy band.
-3. **A drop-scarce economy (`dropChance = 0.006`) with a higher gate bar (`bossHpMult = 60`) and base damage (`d0 = 25`).** Because gear power grows at `rH`, Readiness is scale-invariant; only drop-variance creates walls, so the drop rate had to come down for the soft walls to exist at all, and `d0` rose to keep the first boss in-window despite the scarcer early gear.
+- `packages/core` remains pure TypeScript with no UI or platform dependencies.
+- Randomness remains seeded and injectable, keyed to the global kill sequence.
+- Road and boss progression use event-stepped time so split advances equal one combined advance.
+- Active actions are explicit timestamped inputs; frame rate and render timing are not game rules.
+- Ascension does not reset the global RNG/kill sequence.
+- Multi-realm simulations must detect non-finite HP, DPS, currency, duration, and multiplier values before they reach client state.
 
-**On the V4 redefinition (honest note):** the old "8 h return → 3–5 purchases" target described a *human* making a few one-tap buys. The sim bot buys *every* affordable upgrade, so its purchase count measures gold-richness, not human tapping — an upper bound on a greedy count wrongly fails a healthy gold-rich return. V4 is therefore a **lower bound only**: the median 8h-return must afford **≥ 3** purchases, and at least one such return must exist. V3 (≥ 90% of post-day-1 check-ins afford ≥ 1) and V6 (no trash kill > 60 s) are unchanged. This is the one target that was redefined; the rest pass on their original terms.
+## Implemented legacy baseline (historical reference)
 
-**Honest remaining artifact (not a failure):** the greedy bot buys *every* affordable upgrade, so it still progresses far faster than a human and, in a 10-day run, approaches the float-precision tail — `1.55^z` overflows `double` near zone ~1600, where HP/gear/readiness become `Infinity`/`NaN`. The tuned economy keeps all seeds below that ceiling for the full run (final zones ~890–980). This is inherent to an uncapped-scaling *prototype* with finite floats; M2 prestige (New Road) resets the hero at World's Edge long before the tail, so a real multi-run game never approaches it. Like the Bestiary, this is a pre-prestige baseline characteristic, not a regression.
+The current code still implements the M0/M1a economy until the redesign is built:
 
-**Deferred** (not evaluable in M0; validated later):
+- `hp(z) = 10 · 1.55^z`
+- `gold(z) = 1 · 1.48^z`
+- Hero base damage `= 25 · 1.12^level`
+- Gear power tracks `1.55^z`
+- Hero level cost `= 10 · 1.15^level`
+- Skill cost `= 50 · 1.15^skillLevel`
+- Drop chance `= 0.006` per kill (the earlier 5% value was the untuned v0 guess)
+- Boss HP multiplier `= 60`, 30-second readiness window, and auto-challenge at 110%
+- Minimum kill time `= 2 s`
 
-| Moment | Target | When |
-|---|---|---|
-| First New Road attractive | Day 2–3, at the first hard wall | M2 sim |
-| Second run re-reaches prior frontier | ~20–30% of original wall-clock | M2 sim |
-| First Bestiary tier | Within ~15 min of active play | M2 sim |
-| Region gear set | ≥ 2/3 complete by region-boss kill | M2 sim |
-| Active watching income | ≈1.5–2× idle gold rate, diminishing | M1b playtest |
-| Collection *retention* (is the rhythm fun?) | — | M2 playtest, not sim |
+The legacy simulator passed its six 10-day M0 validators across three seeds. That evidence proves the old deterministic engine and gate economy met their old targets; it does not justify carrying readiness bosses, auto-challenge, gate farming, the old Legend curve, or short-check-in validators into the redesigned game.
 
-## Active-play overlay (live-only)
+## Required follow-up decisions
 
-Road Play (Trailside Glints, Roadside Discoveries — DESIGN.md) is a **live-only additive layer**: taps grant bonus gold/buffs *on top of* the seeded kill/drop stream and never alter it.
-
-- The sim models the **idle baseline only**, and every pacing target must pass with zero taps. Idle Slayer's cautionary tale is binding: active play must never become the rate you fall behind by ignoring.
-- Target: attentive watching earns ≈1.5–2× the idle gold rate, with diminishing returns — an accelerant, never a gate.
-- Glint bonus sizing and Discovery cadence (~1 per check-in) are M1b playtest tuning, not M0 sim inputs.
-
-## Legend & New Roads (M2 draft)
-
-- **Earn on reset:** `Legend = floor(L0 · (1.30^z_max − 1))` where `z_max` = deepest zone reached this run. The 1.30 earn base grows slower than the 1.55 HP wall, so pushing deeper is always worth more, while banked Legend makes re-reaching the frontier far faster — the flywheel. Presented as per-boss nuggets in the reset recap.
-- **Rhythm targets:** first New Road attractive day 2–3; second run re-reaches the prior frontier in ~20–30% wall-clock; World's Edge is a multi-run goal.
-- **Spend:** the permanent Legend tree (node list in DESIGN.md) — global multipliers plus a zone head-start; single-tap ranks, no re-buys.
-- All constants (`L0`, earn base, node costs/effects) are an **M2 sim task**: extend the bot to prestige greedily and validate both rhythm targets.
-
-## Simulator & determinism contract (M0 deliverable)
-
-- `packages/core` — pure TypeScript game rules (combat, drops, costs, offline progression). **No UI or platform dependencies.**
-- **Determinism:** all randomness flows through a seeded, injectable PRNG with rolls keyed to kill index. The clock advances event-stepped (by kill time), not by wall-clock ticks. Offline progress and live play run the *same code path*, so identical inputs → identical results, by construction. (See DECISIONS.md #6.)
-- **Offline cap:** provisionally **generous/no cap** for the prototype (see DECISIONS.md #8) — the sim runs uncapped.
-- `sim/` — fast-forward harness: a bot plays days of game time in milliseconds against a configurable check-in schedule (default 4×/day).
-- **Bot policy (deterministic):** at each synthetic check-in, repeatedly buy the affordable upgrade with the highest expected ΔDPS-per-gold among {hero level, each skill upgrade}; break ties by lowest cost; stop when nothing is affordable. Gear is passive (drops + auto-equip).
-- Output: milestone timeline — zone reached, leagues, boss kill times, purchases per check-in, gold curve — as console table + CSV.
-- **M0 exit criterion:** all **M0-gating** targets pass across a simulated 10-day run.
-
-## Open questions
-
-**Provisionally decided for M0 (revisit after M1 playtest):**
-- Offline cap → generous/no cap (Wanderblade's identity is "the hero kept walking").
-
-**Genuinely deferred:**
-- Drop pity/slot-targeting rule (add only if sim shows slot starvation).
-- Bestiary mastery bonus sizing (guess +1–2% per tier; M2 sim).
-- Prestige/Legend earn curve (M2).
-- Materials/forging — v1 stays gold-only.
+- Active road mechanics and numeric active-versus-idle bands.
+- Boss tap cap, decay/cadence, multitouch policy, and non-tapping accessibility input.
+- Realm length, portal-availability conditions, boss HP curves, and expected duration bands.
+- Pending-Ascendancy accrual, portal-ready overfarming controls, boss payout, and tree economy.
+- Per-victory gold/passive-earnings bonus and stacking rule.
+- Offline cap policy under the new multi-realm economy.
