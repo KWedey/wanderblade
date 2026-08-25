@@ -112,6 +112,8 @@ const SHAKE_DECAY = 9;
 const MAX_SHAKE = 3.2;
 
 const FLOATER_LIFE = 1.05;
+/** Floor on the gap between damage numbers, whatever the tap rate. */
+const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
 const FLOATER_RISE = 22;
 const STREAK_SEC = 0.5;
 const CATCH_RADIUS = 26;
@@ -280,6 +282,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let swingAnim = 0;
   let heroFlash = 0;
   let dustCooldown = 0;
+  let damageTextCooldown = 0;
 
   let monster: Monster | null = null;
   let lastKills = -1;
@@ -464,6 +467,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // second; numbering them all stacks into an unreadable pile and buries the
     // one hit the player actually caused.
     if (!fromStrike) return;
+    // A fast tapper out-runs the floater's lifetime and the numbers pile into
+    // an illegible column; the flash and sparks already confirm every hit.
+    if (damageTextCooldown > 0) return;
+    damageTextCooldown = DAMAGE_TEXT_INTERVAL_SEC;
     // Honest: real DPS across the interval this swing represents.
     const damage = model.dps * (1 / (SWINGS_PER_SEC * model.momentumMult));
     if (damage < 0.05) return;
@@ -513,6 +520,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     scrollClouds = wrap(scrollClouds + speed * 0.05 * dtSec, vw * 3);
 
     shake = decayTo(shake, 0, SHAKE_DECAY, dtSec);
+    damageTextCooldown = Math.max(0, damageTextCooldown - dtSec);
     heroFlash = Math.max(0, heroFlash - dtSec);
     swingAnim = Math.max(0, swingAnim - dtSec);
 
