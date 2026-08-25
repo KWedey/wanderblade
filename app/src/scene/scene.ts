@@ -7,6 +7,7 @@
 // then upscaled with smoothing off. That single indirection is what makes the
 // pixels square and identical everywhere instead of resolution-dependent mush.
 
+import { formatNumber } from '../format';
 import { ditherAt, falloff, momentumLift, ringFalloff } from './light';
 import {
   arcApexHeight,
@@ -1495,12 +1496,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   return { frame, strikeAt, setCollectAnchor, dispose };
 }
 
-/** Compact number for in-world floaters; the HUD keeps the precise formatter. */
+/**
+ * Compact number for in-world floaters. Delegates past 1000 to the HUD's
+ * formatter: its own ladder stopped at T, so a staged late run printed
+ * "2.5866247188821906E+295T" across the middle of the frame.
+ */
 function formatShort(n: number): string {
   if (n < 10) return n.toFixed(1);
   if (n < 1000) return String(Math.round(n));
-  if (n < 1e6) return `${(n / 1e3).toFixed(1)}K`;
-  if (n < 1e9) return `${(n / 1e6).toFixed(1)}M`;
-  if (n < 1e12) return `${(n / 1e9).toFixed(1)}B`;
-  return `${(n / 1e12).toFixed(1)}T`;
+  return formatNumber(n);
 }

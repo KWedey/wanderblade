@@ -104,3 +104,11 @@ describe('formatDuration overflow', () => {
     expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('—');
   });
 });
+
+describe('in-world floater ladder', () => {
+  it('never prints a raw exponential at any scale the game reaches', () => {
+    for (const n of [0.4, 9.9, 42, 999, 1e4, 1e12, 1e42, 2.5866e295, 9.4e307]) {
+      expect(formatNumber(n)).not.toMatch(/[eE]\+/);
+    }
+  });
+});
