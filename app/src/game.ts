@@ -24,6 +24,12 @@ import {
   type GameState,
   type GearSlot,
 } from '@wanderblade/core';
+import {
+  decayMomentum,
+  momentumMultiplier,
+  strikeMomentum,
+  type Strike,
+} from './active';
 import { killProgress, smoothStep, zoneSweep } from './anim';
 import {
   bossName,
@@ -36,6 +42,7 @@ import {
 } from './flavor';
 import { formatDuration, formatPercent } from './format';
 import { clearSave, readSave, writeSave } from './save';
+import type { SceneModel, StrikeOutcome } from './scene/scene';
 import type { GearVM, SkillVM, View, ViewModel } from './view';
 
 const TICK_MS = 250;
@@ -71,10 +78,22 @@ export class Game {
   /** Schedule the cached killDurSec was grounded against (see groundKillSchedule). */
   private killSchedAtSec = -1;
   private goldPerKill = 0;
+  /** Cached with goldPerKill so the 60Hz scene never calls into engine math. */
+  private dps = 0;
   /** Live media query — read per frame so an OS toggle applies immediately. */
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private bossResult: 'win' | 'fail' | null = null;
   private bossResultUntilMs = 0;
+  /** Momentum [0,1] from Strike input (docs/ACTIVE-PLAY.md), decayed per frame. */
+  private momentum = 0;
+  /**
+   * Strikes made since the last engine advance, stamped on the engine clock.
+   * `drainStrikes` is the seam: once `advance(state, dt, strikes)` exists it
+   * consumes this array and momentum becomes engine state. Until then a Strike
+   * moves the meter and the scene and nothing else — no economy value is
+   * invented here, and gold stays exactly what the engine says (DECISIONS.md #12).
+   */
+  private readonly pendingStrikes: Strike[] = [];
 
   constructor(private readonly view: View) {
     const loaded = readSave();
@@ -128,6 +147,10 @@ export class Game {
     this.lastTickMs = now;
 
     if (dtSec > 0) {
+      // The strike buffer is drained on the same boundary the engine advances
+      // on, so plugging it into `advance` is a one-argument change.
+      const strikes = this.drainStrikes();
+      void strikes;
       if (dtSec > SUSPEND_TICK_SEC) {
         this.applyOfflineReturn(dtSec);
       } else {
@@ -163,7 +186,8 @@ export class Game {
     // prefers-reduced-motion the decorative glide is suppressed: the counter
     // and zone bar step once per kill instead of animating continuously.
     const reduce = this.reduceMotion.matches;
-    const p = reduce ? 0 : this.currentKillProgress();
+    const progress = this.currentKillProgress();
+    const p = reduce ? 0 : progress;
     const target = this.state.gold + this.goldPerKill * p;
     this.displayGold = reduce
       ? target
@@ -174,12 +198,33 @@ export class Game {
           frameDtSec,
         );
 
+    // Momentum bleeds away continuously; only Strike puts it back.
+    this.momentum = decayMomentum(this.momentum, frameDtSec);
+
     this.view.renderFrame(
       this.displayGold,
       zoneSweep(this.state.gate.atGate, this.state.killsInZone, p, killsPerZone),
     );
+    // The scene reads the same kill progress the counter does, so the monster
+    // dies on the frame the engine's kill lands.
+    this.view.renderScene(frameDtSec, this.buildSceneModel(progress));
     requestAnimationFrame(this.animate);
   };
+
+  private buildSceneModel(progress: number): SceneModel {
+    return {
+      region: regionOfZone(this.state.zone),
+      kills: this.state.lifetime.kills,
+      killProgress: progress,
+      goldPerKill: this.goldPerKill,
+      dps: this.dps,
+      momentum: this.momentum,
+      momentumMult: momentumMultiplier(this.momentum),
+      atGate: this.state.gate.atGate,
+      paused: this.view.isRecapOpen(),
+      reduceMotion: this.reduceMotion.matches,
+    };
+  }
 
   private maybeSave(nowMs: number): void {
     if (nowMs - this.lastSaveMs >= SAVE_INTERVAL_MS) {
@@ -196,6 +241,24 @@ export class Game {
 
   buySkill(id: string): void {
     if (coreBuySkill(this.state, id)) this.renderAll();
+  }
+
+  /** One Strike: builds momentum now, and is queued for the engine that will pay it. */
+  strike(outcome: StrikeOutcome): void {
+    this.momentum = strikeMomentum(this.momentum);
+    this.pendingStrikes.push({
+      atSec: this.state.timeSec,
+      caughtArc: outcome.caughtArc,
+    });
+  }
+
+  /**
+   * Hand the buffered Strikes to whoever consumes them and clear the buffer.
+   * The engine call site is `tick`; today nothing consumes them, so they are
+   * dropped rather than being allowed to grow without bound.
+   */
+  private drainStrikes(): Strike[] {
+    return this.pendingStrikes.splice(0, this.pendingStrikes.length);
   }
 
   challenge(): void {
@@ -302,6 +365,7 @@ export class Game {
     // Every state change funnels through here, so the frame-loop caches stay
     // fresh without recomputing engine math 60× a second.
     this.groundKillSchedule();
+    this.dps = heroDps(this.state);
     const g = enemyGold(this.state.zone);
     // Finite guard: enemyGold overflows to Infinity in the deep endless tail;
     // Infinity * 0 would poison displayGold with NaN.
@@ -380,7 +444,7 @@ export class Game {
       zoneInRegion: zoneInRegion(s.zone),
       zonesPerRegion,
       leagues: s.leagues,
-      dps: heroDps(s),
+      dps: this.dps,
       heroLevel: s.hero.level,
       atGate: s.gate.atGate,
       bossName: bossName(region),

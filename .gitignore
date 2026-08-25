@@ -19,5 +19,8 @@ sim/out/
 !.codex/prompts/
 !.codex/prompts/**
 
+# git worktrees live inside the repo (CLAUDE.md), but are never part of it
+.worktrees/
+
 # gauntlet-loop scratch (bar screenshots, progress page)
 .gauntlet/

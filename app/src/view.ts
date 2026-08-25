@@ -10,8 +10,10 @@ import {
   type Rarity,
   type Recap,
 } from '@wanderblade/core';
+import { HOLD_STRIKE_INTERVAL_SEC } from './active';
 import { formatDuration, formatGold, formatNumber, formatPercent, formatRate } from './format';
 import type { LogEntry } from './flavor';
+import { createScene, type SceneModel, type StrikeOutcome } from './scene/scene';
 
 const LOG_LIMIT = 40;
 
@@ -60,6 +62,8 @@ export interface ViewModel {
 }
 
 export interface ViewHandlers {
+  /** One Strike (docs/ACTIVE-PLAY.md), already resolved against the loot arcs. */
+  onStrike: (outcome: StrikeOutcome) => void;
   onBuyLevel: () => void;
   onBuySkill: (id: string) => void;
   onChallenge: () => void;
@@ -72,6 +76,8 @@ export interface View {
   renderPanels(vm: ViewModel): void;
   /** Per-animation-frame updates: the gold odometer and the zone-bar sweep [0,1]. */
   renderFrame(gold: number, zoneSweep: number): void;
+  /** Advance and paint the road scene for one frame. */
+  renderScene(dtSec: number, model: SceneModel): void;
   pushLog(entries: LogEntry[]): void;
   showRecap(recap: Recap, elapsedSec: number): void;
   isRecapOpen(): boolean;
@@ -114,8 +120,10 @@ function gearMarkup(): string {
 
 function template(): string {
   return `
-  <div class="screen">
-    <header class="header">
+  <canvas class="scene" data-role="scene" aria-hidden="true"></canvas>
+
+  <div class="hud">
+    <div class="hud-realm">
       <div class="wordmark">WANDERBLADE</div>
       <div class="region" data-role="region">Greenwood</div>
       <div class="header-sub">
@@ -123,19 +131,22 @@ function template(): string {
         <span class="leagues" data-role="leagues">0.0 leagues</span>
       </div>
       <div class="zone-track"><div class="zone-fill" data-role="zone-fill"></div></div>
-    </header>
+    </div>
 
-    <section class="stats">
-      <div class="stat gold-stat">
-        <span class="stat-value gold" data-role="gold">0</span>
-        <span class="stat-label">gold <span class="gold-rate" data-role="gold-rate"></span></span>
-      </div>
-      <div class="stat dps-stat">
-        <span class="stat-value dps" data-role="dps">0</span>
-        <span class="stat-label">DPS</span>
-      </div>
-    </section>
+    <div class="hud-gold" data-role="hud-gold">
+      <span class="gold" data-role="gold">0</span>
+      <span class="gold-sub">gold <span class="gold-rate" data-role="gold-rate"></span></span>
+    </div>
 
+    <div class="hud-dps">
+      <span class="dps" data-role="dps">0</span>
+      <span class="hud-label">DPS</span>
+    </div>
+  </div>
+
+  <div class="strike-hint" data-role="strike-hint">Tap the road to strike</div>
+
+  <div class="screen">
     <section class="goal-strip">
       <span class="goal-chip" data-role="goal-march"></span>
       <span class="goal-chip" data-role="goal-purchase"></span>
@@ -176,7 +187,7 @@ function template(): string {
 
   <div class="toast" data-role="toast" hidden></div>
 
-  <button class="debug-toggle" type="button" data-role="debug-toggle" aria-label="Debug" title="Debug: time-warp & reset">⚙</button>
+  <button class="debug-toggle" type="button" data-role="debug-toggle" aria-label="Debug" title="Debug: time-warp &amp; reset">⚙</button>
   <div class="debug-drawer" data-role="debug-drawer" hidden>
     <div class="debug-title">Debug</div>
     <div class="debug-seed">seed <span data-role="seed">—</span></div>
@@ -217,6 +228,9 @@ function formatLeagues(l: number): string {
 /** Build the view into `root` and wire user intents to `handlers`. */
 export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   root.innerHTML = template();
+
+  const sceneCanvas = q<HTMLCanvasElement>(root, '[data-role="scene"]');
+  const scene = createScene(sceneCanvas);
 
   // Static refs.
   const regionEl = q(root, '[data-role="region"]');
@@ -280,6 +294,74 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   q(root, '[data-role="warp-1h"]').addEventListener('click', () => handlers.onTimeWarp(3600));
   q(root, '[data-role="warp-8h"]').addEventListener('click', () => handlers.onTimeWarp(8 * 3600));
   q(root, '[data-role="reset"]').addEventListener('click', handlers.onReset);
+
+  // Loot streaks home on the gold readout, so the scene needs its live position.
+  const hudGoldEl = q(root, '[data-role="hud-gold"]');
+  function syncCollectAnchor(): void {
+    const r = hudGoldEl.getBoundingClientRect();
+    scene.setCollectAnchor(r.left + r.width / 2, r.top + r.height / 2);
+  }
+  syncCollectAnchor();
+  window.addEventListener('resize', syncCollectAnchor);
+
+  // --- Strike input ------------------------------------------------------
+  // One verb for the whole game: tap, click, or hold Space/Enter. Holding
+  // auto-strikes at the cap-sustaining rate so momentum never demands mashing.
+  const strikeHintEl = q(root, '[data-role="strike-hint"]');
+  let hintDismissed = false;
+  let holdTimer: number | null = null;
+
+  /** Chrome (panels, buttons, modals) is not the road — never a strike. */
+  function isChrome(target: EventTarget | null): boolean {
+    return (
+      target instanceof Element &&
+      target.closest('.screen, .debug-toggle, .debug-drawer, .recap-overlay, .hud') !== null
+    );
+  }
+
+  function fireStrike(clientX: number | null, clientY: number | null): void {
+    if (!hintDismissed) {
+      hintDismissed = true;
+      strikeHintEl.classList.add('gone');
+    }
+    handlers.onStrike(scene.strikeAt(clientX, clientY));
+  }
+
+  function startHold(clientX: number | null, clientY: number | null): void {
+    stopHold();
+    holdTimer = window.setInterval(
+      () => fireStrike(clientX, clientY),
+      HOLD_STRIKE_INTERVAL_SEC * 1000,
+    );
+  }
+
+  function stopHold(): void {
+    if (holdTimer !== null) {
+      clearInterval(holdTimer);
+      holdTimer = null;
+    }
+  }
+
+  root.addEventListener('pointerdown', (event) => {
+    if (isChrome(event.target) || isRecapOpen()) return;
+    event.preventDefault();
+    fireStrike(event.clientX, event.clientY);
+    startHold(event.clientX, event.clientY);
+  });
+  window.addEventListener('pointerup', stopHold);
+  window.addEventListener('pointercancel', stopHold);
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== ' ' && event.key !== 'Enter') return;
+    if (isChrome(event.target) || isRecapOpen()) return;
+    event.preventDefault();
+    if (event.repeat) return;
+    fireStrike(null, null);
+    startHold(null, null);
+  });
+  window.addEventListener('keyup', (event) => {
+    if (event.key === ' ' || event.key === 'Enter') stopHold();
+  });
 
   const recapOverlay = q(root, '[data-role="recap"]');
   const recapSub = q(root, '[data-role="recap-sub"]');
@@ -441,6 +523,10 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     recapOverlay.hidden = false;
   }
 
+  function renderScene(dtSec: number, model: SceneModel): void {
+    scene.frame(dtSec, model);
+  }
+
   function isRecapOpen(): boolean {
     return !recapOverlay.hidden;
   }
@@ -449,5 +535,5 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     seedEl.textContent = String(seed);
   }
 
-  return { renderPanels, renderFrame, pushLog, showRecap, isRecapOpen, setSeed };
+  return { renderPanels, renderFrame, renderScene, pushLog, showRecap, isRecapOpen, setSeed };
 }
