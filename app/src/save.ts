@@ -6,6 +6,13 @@ import { deserialize, serialize, GEAR_SLOTS, type GameState } from '@wanderblade
 
 const SAVE_KEY = 'wanderblade-save-v1';
 const SAVE_VERSION = 1;
+/**
+ * Earliest wall clock a real save can carry. The offline gap is
+ * `Date.now() - savedAt`, so a corrupt or epoch-0 timestamp asks `advance` for
+ * decades of kills and freezes the first load. This rejects garbage; it is not
+ * a cap on a genuine absence (docs/DECISIONS.md #8).
+ */
+const EARLIEST_SAVED_AT_MS = 1_577_836_800_000;
 
 interface SaveEnvelope {
   version: number;
@@ -155,7 +162,8 @@ export function readSave(): LoadedSave | null {
       !envelope ||
       envelope.version !== SAVE_VERSION ||
       typeof envelope.state !== 'string' ||
-      typeof envelope.savedAt !== 'number'
+      !isFiniteNumber(envelope.savedAt) ||
+      envelope.savedAt < EARLIEST_SAVED_AT_MS
     ) {
       return null;
     }

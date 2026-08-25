@@ -105,6 +105,18 @@ describe('readSave rejects unusable payloads (returns null, never throws)', () =
     localStorage.setItem(SAVE_KEY, envelope(JSON.stringify(state)));
     expect(readSave()).toBeNull();
   });
+
+  it('implausible savedAt — the offline gap advance() is asked for comes from it', () => {
+    // Accepting these hands the first tick decades of elapsed seconds, which
+    // `advance` faithfully replays as tens of millions of kills.
+    for (const savedAt of [0, -1, 946_684_800_000]) {
+      localStorage.setItem(SAVE_KEY, envelope(serialize(initialState(1)), { savedAt }));
+      expect(readSave()).toBeNull();
+    }
+    // A plausible one still loads.
+    localStorage.setItem(SAVE_KEY, envelope(serialize(initialState(1))));
+    expect(readSave()).not.toBeNull();
+  });
 });
 
 describe('offline reconciliation smoke', () => {

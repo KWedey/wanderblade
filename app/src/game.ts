@@ -23,9 +23,11 @@ import {
   SKILL_IDS,
   summarizeEvents,
   zonesPerRealm,
+  type ArcPoint,
   type GameEvent,
   type GameState,
   type GearSlot,
+  type Strike,
 } from '@wanderblade/core';
 import { killProgress, smoothStep, zoneSweep } from './anim';
 import { bossName, describeEvent, gearName, realmName, zoneNumber, type LogEntry } from './flavor';
@@ -50,6 +52,8 @@ const GOLD_SMOOTH_RATE = 8;
 const GOLD_SMOOTH_RATE_DOWN = 18;
 /** Cap on display-clock extrapolation past the last engine tick (throttled tabs). */
 const MAX_EXTRAPOLATE_SEC = 0.6;
+/** Smallest gap that keeps queued strikes strictly ordered and strictly future. */
+const STRIKE_EPSILON_SEC = 1e-6;
 
 function randomSeed(): number {
   return Math.floor(Math.random() * 0xffffffff) >>> 0;
@@ -70,8 +74,8 @@ export class Game {
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private bossResult: 'win' | null = null;
   private bossResultUntilMs = 0;
-  /** Strike timestamps banked since the last tick, in game seconds. */
-  private pendingStrikes: number[] = [];
+  /** Strikes banked since the last tick, timestamped in game seconds. */
+  private pendingStrikes: Strike[] = [];
 
   constructor(private readonly view: View) {
     const loaded = readSave();
@@ -213,14 +217,18 @@ export class Game {
   }
 
   /** One Strike, stamped on the engine clock and queued for the next advance. */
-  strike(): void {
+  strike(aim: ArcPoint | null = null): void {
     const sinceTickSec = Math.min(
       (performance.now() - this.lastTickMs) / 1000,
       MAX_EXTRAPOLATE_SEC,
     );
-    const at = this.state.timeSec + sinceTickSec;
+    // advance() ignores strikes at or before state.timeSec, so a tap landing in
+    // the same clock tick as the last advance has to be nudged past it or the
+    // input is silently dropped.
+    const at = this.state.timeSec + Math.max(sinceTickSec, STRIKE_EPSILON_SEC);
     const last = this.pendingStrikes[this.pendingStrikes.length - 1];
-    this.pendingStrikes.push(last !== undefined && at <= last ? last + 1e-6 : at);
+    const atSec = last !== undefined && at <= last.atSec ? last.atSec + STRIKE_EPSILON_SEC : at;
+    this.pendingStrikes.push({ atSec, aim });
   }
 
   collectRecap(): void {
@@ -254,6 +262,10 @@ export class Game {
       this.renderAll();
       return;
     }
+    // Reconciling jumps the clock past anything already queued, and advance()
+    // discards a strike stamped at or before state.timeSec. Drop them here so
+    // stale taps are never handed to it.
+    this.pendingStrikes = [];
     const events = advance(this.state, elapsedSec);
     const recap = summarizeEvents(events);
 
