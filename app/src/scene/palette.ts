@@ -397,6 +397,10 @@ export function monsterInk(skin: RealmSkin, shape = 0): InkSet {
     bodyLight: toHex(bh + turn, Math.max(vivid - 0.1, 0.4), Math.min(0.92, bl + 0.16)),
     sclera: '#ffffff',
     pupil: INK.black,
+    // A lit eye and bared teeth are what carry menace at 16-30px; two white
+    // dots read as friendly at any size.
+    eyeGlow: '#df7126',
+    tooth: '#f0f0dc',
   };
 }
 

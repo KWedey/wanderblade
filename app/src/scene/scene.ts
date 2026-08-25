@@ -1153,7 +1153,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const m = queue[i]!;
       const sprite = sprites.monsters[m.shape] ?? sprites.monsters[0]!;
       const bob = model.reduceMotion ? 0 : Math.round(Math.sin(m.bob) * 1.2);
-      const x = m.x + m.spread;
+      // The engaged creature lunges at the hero rather than standing and
+      // waiting to be hit; a struck one is kicked back. Both come off the
+      // transform, so no extra sprite frames are needed to stop it reading
+      // as a statue. Recoil already rides on m.x; only the lunge is added here.
+      const lunge =
+        i === 0 && !model.reduceMotion
+          ? Math.round(Math.max(0, Math.sin(clockSec * 3.4 + m.bob)) ** 2 * 6)
+          : 0;
+      const x = m.x + m.spread - lunge;
       if (x < -40 || x > vw + 60) continue;
       drawShadow(x, sprite.width - 2);
       drawSprite(ctx, sprite, x, groundY + bob, true);
