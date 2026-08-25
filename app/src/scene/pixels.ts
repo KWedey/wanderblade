@@ -84,7 +84,11 @@ export const SWORD: SpriteMap = {
 };
 
 // --- Monsters ------------------------------------------------------------
-// Four silhouettes, re-inked per realm. 'b' body, 'a' eye sclera, 'e' pupil.
+// Silhouette is the whole job here: a roster of same-sized blobs reads as one
+// recolored enemy. These differ in footprint before they differ in color — a
+// golem taller than the hero, a hound longer than it is tall, a stalker on
+// stilts, and swarmlings that only ever appear in threes.
+// 'b' body, 'B' body shadow, 'a' eye sclera, 'e' pupil.
 
 const MONSTER_LEGEND: Record<string, string> = {
   ...OUTLINE,
@@ -94,87 +98,148 @@ const MONSTER_LEGEND: Record<string, string> = {
   e: 'pupil',
 };
 
-export const MON_BLOB: SpriteMap = {
+/** 24x30 — the heavy. Half again the hero's height, horned and asymmetric. */
+export const MON_GOLEM: SpriteMap = {
   rows: [
-    '......oooo......',
-    '....oobbbboo....',
-    '...obbbbbbbbo...',
-    '..obbbbbbbbbbo..',
-    '..obbaabbaabbo..',
-    '.obbaeabbaeabbo.',
-    '.obbbaabbaabbbo.',
-    '.obbbbbbbbbbbbo.',
-    '.obbbbbbbbbbbbo.',
-    '.obbbbooooobbbo.',
-    '.obbbbbbbbbbbbo.',
-    '..obbbbbbbbbbo..',
-    '..oobbbbbbbboo..',
-    '....oooooooo....',
+    '........oo....oo........',
+    '.......obo....obo.......',
+    '......obbo....obbo......',
+    '......obbooooobbbo......',
+    '.....obbbbbbbbbbbbo.....',
+    '.....obbaabbbbaabbo.....',
+    '.....obbaeabbaeabbo.....',
+    '.....obbbaabbaabbbo.....',
+    '.....obbbbbbbbbbbbo.....',
+    '.....oobbBBBBBBbboo.....',
+    '......obbbbbbbbbbo......',
+    '...oooobbbbbbbbbboooo...',
+    '..obbbobbbbbbbbbbobbbo..',
+    '.obbbbobbbbbbbbbbobbbbo.',
+    'obbbbbobbbbbbbbbbobbbbbo',
+    'obbbbbobbbBBBBbbbobbbbbo',
+    'obbbbbobbbbbbbbbbobbbbbo',
+    'obbbboobbbbbbbbbboobbbbo',
+    'oobbbo.obbbbbbbbo.obbboo',
+    '.ooobo.obbbbbbbbo.obooo.',
+    '...obo.obbbbbbbbo.obo...',
+    '...ooo.obbbbbbbbo.ooo...',
+    '.......obbbbbbbbo.......',
+    '......oobbbbbbbboo......',
+    '......obbbo..obbbo......',
+    '......obbbo..obbbo......',
+    '......obbbo..obbbo......',
+    '.....obbbbo..obbbbo.....',
+    '.....obbbbo..obbbbo.....',
+    '.....oooooo..oooooo.....',
   ],
   legend: MONSTER_LEGEND,
 };
 
-export const MON_BEAST: SpriteMap = {
+/** 30x14 — low and long. Reads as a different animal at a glance. */
+export const MON_HOUND: SpriteMap = {
   rows: [
-    '..oo........oo..',
-    '.obbo......obbo.',
-    '.obbboooooobbbo.',
-    'obbabbbbbbbbbbbo',
-    'obaebbbbbbbbbbbo',
-    'obbabbbbbbbbbbbo',
-    'obBBbbbbbbbbbbbo',
-    'ooobbbbbbbbbbboo',
-    '..obbbbbbbbbbbo.',
-    '..obboooooobbbo.',
-    '..obo......obo..',
-    '..obo......obo..',
-    '..ooo......ooo..',
+    '........................oo....',
+    '.....................ooobbo...',
+    '....oooooooooooooooooobbbbbo..',
+    '..oobbbbbbbbbbbbbbbbbbbbbbbbo.',
+    '.obbbbbbbbbbbbbbbbbbbbbbaebo..',
+    'obbbbbbbbbbbbbbbbbbbbbbbbbbbbo',
+    'obbbbbbbbbbbbbbbbbbbbbbbBBBBbo',
+    'obbbbbbbbbbbbbbbbbbbbbbbbbbbbo',
+    'ooobbbbbbbbbbbbbbbbbbbbbbbbboo',
+    '..obbo..obbo....obbo..obbo....',
+    '..obbo..obbo....obbo..obbo....',
+    '..obbo..obbo....obbo..obbo....',
+    '..obbo..obbo....obbo..obbo....',
+    '..oooo..oooo....oooo..oooo....',
   ],
   legend: MONSTER_LEGEND,
 };
 
-export const MON_BRUTE: SpriteMap = {
+/** 14x28 — thin and tall, on long legs. */
+export const MON_STALKER: SpriteMap = {
   rows: [
-    '....oooooo......',
-    '...obbbbbbo.....',
-    '..obbbbbbbbo....',
-    '..obaabbaabo....',
-    '..obaebbaebo....',
-    '..obbbbbbbbo....',
-    '..oobBBBBboo....',
-    'obbobbbbbbobbo..',
-    'obbobbbbbbobbo..',
-    'obbobbbbbbobbo..',
-    'oooobbbbbboooo..',
-    '...obbbbbbbo....',
-    '...obbbbbbbo....',
-    '...obboobbo.....',
-    '...obo..obo.....',
-    '...obo..obo.....',
-    '..obbo..obbo....',
-    '..oooo..oooo....',
+    '...oo....oo...',
+    '...obo..obo...',
+    '...obboobbo...',
+    '....obbbbbo...',
+    '...obbbbbbbo..',
+    '..obaabbaabo..',
+    '..obaebbaebo..',
+    '..obbbbbbbbo..',
+    '..oobbbbbboo..',
+    '....obbbbo....',
+    '....obbbbo....',
+    '...obbbbbbo...',
+    '..obbbbbbbbo..',
+    '.obbbbbbbbbbo.',
+    'obbbbbbbbbbbbo',
+    'obbbbBBBBbbbbo',
+    'obbbbbbbbbbbbo',
+    '.obbbbbbbbbbo.',
+    '..obbbbbbbbo..',
+    '...obbbbbbo...',
+    '...obbbbbbo...',
+    '...obboobbo...',
+    '...obo..obo...',
+    '...obo..obo...',
+    '...obo..obo...',
+    '...obo..obo...',
+    '..obbo..obbo..',
+    '..oooo..oooo..',
   ],
   legend: MONSTER_LEGEND,
 };
 
-export const MON_FLYER: SpriteMap = {
+/** 10x10 — never alone; the scene spawns these in threes. */
+export const MON_SWARMLING: SpriteMap = {
   rows: [
-    '..o..........o..',
-    '.oBo........oBo.',
-    '.oBBo..oo..oBBo.',
-    '..oBBoobbooBBo..',
-    '...oBobbbbBBo...',
-    '....oobbbboo....',
-    '.....obeebo.....',
-    '.....obbbbo.....',
-    '......obbo......',
-    '......obbo......',
-    '.......oo.......',
+    '...oooo...',
+    '..obbbbo..',
+    '.obbbbbbo.',
+    'obaabbaabo',
+    'obaebbaebo',
+    'obbbbbbbbo',
+    'obbbBBbbbo',
+    '.obbbbbbo.',
+    '..obbbbo..',
+    '...oooo...',
   ],
   legend: MONSTER_LEGEND,
 };
 
-export const MONSTER_SHAPES = [MON_BLOB, MON_BEAST, MON_BRUTE, MON_FLYER];
+/** 20x14 — lopsided, so it never reads as a circle. */
+export const MON_OOZE: SpriteMap = {
+  rows: [
+    '.....oooo...........',
+    '...oobbbboo....oo...',
+    '..obbbbbbbbo..obbo..',
+    '.obbbbbbbbbboobbbbo.',
+    '.obbaabbaabbbbbbbbo.',
+    'obbaeabbaeabbbbbbbbo',
+    'obbbaabbaabbbbbbbbbo',
+    'obbbbbbbbbbbbbbbbbbo',
+    'obbbbBBBBBbbbbbbbbbo',
+    'obbbbbbbbbbbbbbbbbbo',
+    '.obbbbbbbbbbbbbbbbo.',
+    '.oobbbbbbbbbbbbbboo.',
+    '..oobbbbbbbbbbbboo..',
+    '....oooooooooooo....',
+  ],
+  legend: MONSTER_LEGEND,
+};
+
+/** Ordered small to large; the scene picks by kill index. */
+export const MONSTER_SHAPES = [
+  MON_SWARMLING,
+  MON_OOZE,
+  MON_HOUND,
+  MON_STALKER,
+  MON_GOLEM,
+];
+
+/** Index into MONSTER_SHAPES of the shape that spawns as a group of three. */
+export const SWARM_SHAPE = 0;
 
 // --- Loot ----------------------------------------------------------------
 
@@ -276,6 +341,101 @@ export const FLOWER: SpriteMap = {
   legend: { f: 'petal', F: 'petalCore', v: 'grassBlade' },
 };
 
+
+/** 14x28 conifer — height variety so the treeline is not one stamped shape. */
+export const TREE_TALL: SpriteMap = {
+  rows: [
+    '......oo......',
+    '.....oLLo.....',
+    '.....oLLo.....',
+    '....oLllLo....',
+    '....oLllLo....',
+    '...oLlllllo...',
+    '...oLlllllo...',
+    '..oLlllllllo..',
+    '..oLlllllllo..',
+    '...oLlllllo...',
+    '..oLlllllllo..',
+    '.oLlllllllllo.',
+    '.oLlllllllllo.',
+    '..oLlllllllo..',
+    '.oLlllllllllo.',
+    'oLllllllllllLo',
+    'oLllllllllllLo',
+    '.oLlllllllllo.',
+    '..oLlllllllo..',
+    '...oLlllllo...',
+    '....oLllLo....',
+    '.....owwo.....',
+    '.....owwo.....',
+    '.....owwo.....',
+    '.....owwo.....',
+    '....owwwwo....',
+    '...oowwwwoo...',
+    '..oooooooooo..',
+  ],
+  legend: { ...OUTLINE, l: 'leaf', L: 'leafDark', w: 'bark' },
+};
+
+/** 22x16 broad canopy — the short, wide member of the treeline. */
+export const TREE_WIDE: SpriteMap = {
+  rows: [
+    '........oooo..........',
+    '......ooLLLLoo........',
+    '....ooLLllllLLoo......',
+    '..ooLLllllllllLLoo....',
+    '.oLLllllllllllllLLo...',
+    'oLLlllllllllllllllLo..',
+    'oLllllllllllllllllLLo.',
+    'oLLlllllllllllllllLo..',
+    '.oLLllllllllllllLLo...',
+    '..ooLLllllllllLLoo....',
+    '....ooLLLLLLLLoo......',
+    '......ooowwooo........',
+    '.........owwo.........',
+    '.........owwo.........',
+    '........owwwwo........',
+    '.......oooooooo.......',
+  ],
+  legend: { ...OUTLINE, l: 'leaf', L: 'leafDark', w: 'bark' },
+};
+
+/** 7x5, two frames — distant birds working the upper third of the sky. */
+export const BIRD_UP: SpriteMap = {
+  rows: ['oo...oo', '.oo.oo.', '..ooo..', '.......', '.......'],
+  legend: { o: 'bird' },
+};
+
+export const BIRD_DOWN: SpriteMap = {
+  rows: ['.......', '..ooo..', '.oo.oo.', 'oo...oo', '.......'],
+  legend: { o: 'bird' },
+};
+
+/** 12x18 — foreground fronds that sweep past the camera ahead of the road. */
+export const FERN: SpriteMap = {
+  rows: [
+    'l..l....l...',
+    'll.ll..ll...',
+    '.l.l.l.l.l..',
+    '.ll.lll.ll.l',
+    '..l.lll.l.ll',
+    '..ll.l.ll.l.',
+    '...l.l.l.ll.',
+    '...ll.lll.l.',
+    '....l.l.l.l.',
+    '....ll.ll.l.',
+    '.....l.l.ll.',
+    '.....ll.l.l.',
+    '.....l.ll.l.',
+    '.....l.l.ll.',
+    '.....ll.l.l.',
+    '......l.ll..',
+    '......l.l...',
+    '......ll....',
+  ],
+  legend: { l: 'fern' },
+};
+
 // --- Validation ----------------------------------------------------------
 
 /**
@@ -307,17 +467,23 @@ export const ALL_SPRITE_MAPS: Record<string, SpriteMap> = {
   HERO_WALK_A,
   HERO_WALK_B,
   SWORD,
-  MON_BLOB,
-  MON_BEAST,
-  MON_BRUTE,
-  MON_FLYER,
+  MON_GOLEM,
+  MON_HOUND,
+  MON_STALKER,
+  MON_SWARMLING,
+  MON_OOZE,
   COIN,
   GEM,
   TREE,
+  TREE_TALL,
+  TREE_WIDE,
   ROCK,
   FENCE,
   TUFT,
   FLOWER,
+  BIRD_UP,
+  BIRD_DOWN,
+  FERN,
 };
 
 // --- Bitmap font ---------------------------------------------------------

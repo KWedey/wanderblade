@@ -35,6 +35,21 @@ export interface SkillVM {
   canAfford: boolean;
 }
 
+/** The guardian preview shown on the Road when the portal is reachable. */
+export interface PortalVM {
+  guardian: string;
+  /** Estimated seconds to fell the guardian at the build's current DPS. */
+  etaSec: number;
+}
+
+/** The committed fight. Boss HP is engine state and persists offline. */
+export interface BossVM {
+  guardian: string;
+  hpRemaining: number;
+  hpMax: number;
+  etaSec: number;
+}
+
 /** Everything the view needs to paint one frame of the panels (not the gold count-up). */
 export interface ViewModel {
   regionName: string;
@@ -43,12 +58,13 @@ export interface ViewModel {
   leagues: number;
   dps: number;
   heroLevel: number;
-  atGate: boolean;
-  bossName: string;
-  readiness: number;
-  readyToChallenge: boolean;
-  onCooldown: boolean;
-  cooldownRemainingSec: number;
+  /**
+   * The hero occupies exactly one phase (DECISIONS.md #15). `portal` is set on
+   * the Road once the guardian is reachable; `boss` is set once committed.
+   * They are never both non-null.
+   */
+  portal: PortalVM | null;
+  boss: BossVM | null;
   bossResult: 'win' | 'fail' | null;
   levelCost: number;
   canAffordLevel: boolean;
@@ -66,7 +82,8 @@ export interface ViewHandlers {
   onStrike: (outcome: StrikeOutcome) => void;
   onBuyLevel: () => void;
   onBuySkill: (id: string) => void;
-  onChallenge: () => void;
+  onEnterPortal: () => void;
+  onAbandonBoss: () => void;
   onCollectRecap: () => void;
   onReset: () => void;
   onTimeWarp: (seconds: number) => void;
@@ -152,15 +169,30 @@ function template(): string {
       <span class="goal-chip" data-role="goal-purchase"></span>
     </section>
 
-    <section class="boss-panel" data-role="boss-panel" hidden>
-      <div class="boss-title">Boss Gate</div>
-      <div class="boss-name" data-role="boss-name">the Greenwood Warden</div>
-      <div class="readiness-track">
-        <div class="readiness-fill" data-role="readiness-fill"></div>
-        <span class="readiness-label" data-role="readiness-label">0%</span>
+    <section class="portal-panel" data-role="portal-panel" hidden>
+      <div class="portal-eyebrow" data-role="portal-eyebrow">The Portal Stands Open</div>
+      <div class="portal-name" data-role="portal-name">the Greenwood Warden</div>
+
+      <div class="boss-hp" data-role="boss-hp" hidden>
+        <div class="boss-hp-fill" data-role="boss-hp-fill"></div>
+        <span class="boss-hp-label" data-role="boss-hp-label"></span>
       </div>
-      <button class="challenge-btn" type="button" data-role="challenge">Challenge</button>
-      <div class="boss-cooldown" data-role="cooldown" hidden></div>
+
+      <dl class="portal-stats">
+        <div><dt>Estimated</dt><dd data-role="portal-eta">—</dd></div>
+        <div><dt data-role="portal-note-label">On victory</dt><dd data-role="portal-note">Realm ascends</dd></div>
+      </dl>
+
+      <button class="portal-btn" type="button" data-role="enter-portal">Enter the Portal</button>
+
+      <div class="boss-live" data-role="boss-live" hidden>
+        <p class="boss-hint">Strike to drive the blade faster. The guardian never resets.</p>
+        <button class="abandon-btn" type="button" data-role="abandon">
+          <span class="abandon-fill" data-role="abandon-fill"></span>
+          <span class="abandon-label">Hold to abandon</span>
+        </button>
+      </div>
+
       <div class="boss-banner" data-role="boss-banner" hidden></div>
     </section>
 
@@ -243,12 +275,19 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const goalMarchEl = q(root, '[data-role="goal-march"]');
   const goalPurchaseEl = q(root, '[data-role="goal-purchase"]');
 
-  const bossPanelEl = q(root, '[data-role="boss-panel"]');
-  const bossNameEl = q(root, '[data-role="boss-name"]');
-  const readinessFillEl = q(root, '[data-role="readiness-fill"]');
-  const readinessLabelEl = q(root, '[data-role="readiness-label"]');
-  const challengeBtn = q<HTMLButtonElement>(root, '[data-role="challenge"]');
-  const cooldownEl = q(root, '[data-role="cooldown"]');
+  const portalPanelEl = q(root, '[data-role="portal-panel"]');
+  const portalEyebrowEl = q(root, '[data-role="portal-eyebrow"]');
+  const portalNameEl = q(root, '[data-role="portal-name"]');
+  const portalEtaEl = q(root, '[data-role="portal-eta"]');
+  const portalNoteLabelEl = q(root, '[data-role="portal-note-label"]');
+  const portalNoteEl = q(root, '[data-role="portal-note"]');
+  const enterPortalBtn = q<HTMLButtonElement>(root, '[data-role="enter-portal"]');
+  const bossHpEl = q(root, '[data-role="boss-hp"]');
+  const bossHpFillEl = q(root, '[data-role="boss-hp-fill"]');
+  const bossHpLabelEl = q(root, '[data-role="boss-hp-label"]');
+  const bossLiveEl = q(root, '[data-role="boss-live"]');
+  const abandonBtn = q<HTMLButtonElement>(root, '[data-role="abandon"]');
+  const abandonFillEl = q(root, '[data-role="abandon-fill"]');
   const bossBannerEl = q(root, '[data-role="boss-banner"]');
   const toastEl = q(root, '[data-role="toast"]');
 
@@ -284,7 +323,39 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
   // Static handlers.
   heroBtn.addEventListener('click', handlers.onBuyLevel);
-  challengeBtn.addEventListener('click', handlers.onChallenge);
+  enterPortalBtn.addEventListener('click', handlers.onEnterPortal);
+
+  // Abandon forfeits the whole attempt's damage, so it is a deliberate hold —
+  // never a mis-tap next to the strike surface.
+  const ABANDON_HOLD_MS = 900;
+  let abandonStartMs = 0;
+  let abandonRaf = 0;
+
+  function abandonTick(now: number): void {
+    const progress = Math.min(1, (now - abandonStartMs) / ABANDON_HOLD_MS);
+    abandonFillEl.style.transform = `scaleX(${progress})`;
+    if (progress >= 1) {
+      endAbandonHold();
+      handlers.onAbandonBoss();
+      return;
+    }
+    abandonRaf = requestAnimationFrame(abandonTick);
+  }
+
+  function endAbandonHold(): void {
+    if (abandonRaf) cancelAnimationFrame(abandonRaf);
+    abandonRaf = 0;
+    abandonFillEl.style.transform = 'scaleX(0)';
+  }
+
+  abandonBtn.addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+    abandonStartMs = performance.now();
+    abandonRaf = requestAnimationFrame(abandonTick);
+  });
+  for (const evt of ['pointerup', 'pointerleave', 'pointercancel'] as const) {
+    abandonBtn.addEventListener(evt, endAbandonHold);
+  }
 
   const debugToggle = q<HTMLButtonElement>(root, '[data-role="debug-toggle"]');
   const debugDrawer = q(root, '[data-role="debug-drawer"]');
@@ -381,9 +452,11 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
   function renderPanels(vm: ViewModel): void {
     regionEl.textContent = vm.regionName;
-    zoneEl.textContent = vm.atGate
-      ? 'At the Gate'
-      : `Zone ${vm.zoneInRegion}/${vm.zonesPerRegion}`;
+    zoneEl.textContent = vm.boss
+      ? 'In the Portal'
+      : vm.portal
+        ? 'Portal reached'
+        : `Zone ${vm.zoneInRegion}/${vm.zonesPerRegion}`;
     leaguesEl.textContent = `${formatLeagues(vm.leagues)} leagues`;
     dpsEl.textContent = formatNumber(vm.dps);
     if (vm.dps > lastDps && lastDps >= 0) {
@@ -399,24 +472,35 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     goalPurchaseEl.textContent = vm.purchaseGoal;
     goalPurchaseEl.classList.toggle('ready', vm.purchaseReady);
 
-    // Boss gate.
-    bossPanelEl.hidden = !vm.atGate;
-    if (vm.atGate) {
-      bossNameEl.textContent = vm.bossName;
-      const fill = Math.min(1, Math.max(0, vm.readiness));
-      readinessFillEl.style.width = `${fill * 100}%`;
-      readinessLabelEl.textContent = vm.readiness >= 1 ? 'READY' : formatPercent(vm.readiness);
-      readinessFillEl.classList.toggle('ready', vm.readiness >= 1);
-      challengeBtn.disabled = vm.onCooldown;
-      challengeBtn.classList.toggle('ready', vm.readyToChallenge);
-      cooldownEl.hidden = !vm.onCooldown;
-      if (vm.onCooldown) {
-        cooldownEl.textContent = `Retry in ${formatDuration(vm.cooldownRemainingSec)}`;
-      }
-      const showFail = vm.bossResult === 'fail';
-      bossBannerEl.hidden = !showFail;
-      if (showFail) bossBannerEl.textContent = 'Too strong… for now';
+    // Portal / boss. One panel, two states — the hero is in exactly one phase.
+    const stage = vm.boss ?? vm.portal;
+    portalPanelEl.hidden = stage === null;
+    portalPanelEl.classList.toggle('committed', vm.boss !== null);
+    if (stage) {
+      portalNameEl.textContent = stage.guardian;
+      portalEtaEl.textContent = formatDuration(stage.etaSec);
     }
+
+    bossHpEl.hidden = vm.boss === null;
+    bossLiveEl.hidden = vm.boss === null;
+    enterPortalBtn.hidden = vm.boss !== null;
+
+    if (vm.boss) {
+      portalEyebrowEl.textContent = 'Guardian';
+      portalNoteLabelEl.textContent = 'Remaining';
+      portalNoteEl.textContent = formatNumber(vm.boss.hpRemaining);
+      const frac = vm.boss.hpMax > 0 ? vm.boss.hpRemaining / vm.boss.hpMax : 0;
+      bossHpFillEl.style.transform = `scaleX(${Math.min(1, Math.max(0, frac))})`;
+      bossHpLabelEl.textContent = formatPercent(frac);
+    } else if (vm.portal) {
+      portalEyebrowEl.textContent = 'The Portal Stands Open';
+      portalNoteLabelEl.textContent = 'On victory';
+      portalNoteEl.textContent = 'The realm ascends';
+    }
+
+    const showFail = vm.bossResult === 'fail';
+    bossBannerEl.hidden = !showFail;
+    if (showFail) bossBannerEl.textContent = 'The guardian holds. Return stronger.';
 
     // Victory toast (the gate panel is gone by the time a win lands).
     const showWin = vm.bossResult === 'win';

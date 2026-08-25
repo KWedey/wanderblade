@@ -29,8 +29,9 @@
 :root {
   /* DB32 anchors */
   --bg: #5fcde4;
-  --panel: #191622;
-  --panel-edge: #8f563b;
+  --panel: #4a2f27;
+  --panel-edge: #d9a066;
+  --panel-inner: #2f2231;
   --wood: #663931;
   --wood-light: #8f563b;
   --wood-shadow: #45283c;
@@ -94,7 +95,8 @@ body {
 .zone,
 .upgrade-cost,
 .gear-power,
-.readiness-label,
+.boss-hp-label,
+.portal-stats dd,
 .boss-cooldown,
 .debug-seed,
 .log-line,
@@ -389,7 +391,7 @@ body {
 .goal-chip {
   flex: 1;
   padding: 7px 10px;
-  background: #1a1c2c;
+  background: var(--panel-inner);
   border: 2px solid var(--panel-edge);
   box-shadow: var(--drop);
   font-size: 16px;
@@ -404,126 +406,148 @@ body {
   color: #fff;
 }
 
-/* --- Boss gate -------------------------------------------------------- */
+/* --- Portal / guardian ------------------------------------------------- */
 
-.boss-panel {
-  background: var(--wood-shadow);
+.portal-panel {
+  background: #2a1c33;
   border: 3px solid var(--rarity-epic);
   box-shadow: var(--drop);
   padding: 14px;
   text-align: center;
 }
 
-.boss-title {
+.portal-panel.committed {
+  border-color: var(--danger);
+}
+
+.portal-eyebrow {
   font-size: 13px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--rarity-epic);
 }
 
-.boss-name {
+.portal-name {
   letter-spacing: 0.05em;
   margin-top: 3px;
   font-size: 22px;
   color: var(--parchment);
 }
 
-.readiness-track {
+.boss-hp {
   position: relative;
-  margin: 12px 0;
-  height: 28px;
-  background: rgba(0, 0, 0, 0.45);
-  border: 2px solid var(--wood);
+  margin: 12px 0 4px;
+  height: 26px;
+  background: #1a1c2c;
+  border: 3px solid #000;
   overflow: hidden;
 }
 
-.readiness-fill {
+.boss-hp-fill {
   height: 100%;
-  width: 0%;
-  background: #76428a;
-  transition: width 0.28s ease;
+  width: 100%;
+  background: var(--danger);
+  transform: scaleX(1);
+  transform-origin: left;
 }
 
-.readiness-fill.ready {
-  background: var(--gold);
-  animation: readyBlink 0.9s steps(1) infinite;
-}
-
-/* Pixel tick marks over any meter — hard stops, not a smooth gradient. */
-.readiness-track::after {
-  content: '';
+.boss-hp-label {
   position: absolute;
   inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    90deg,
-    transparent 0,
-    transparent 12px,
-    rgba(0, 0, 0, 0.3) 12px,
-    rgba(0, 0, 0, 0.3) 14px
-  );
-}
-
-.readiness-label {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
   display: grid;
   place-items: center;
-  font-size: 16px;
+  font-family: var(--font-num);
+  font-size: 18px;
   color: #fff;
-  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+  text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000;
 }
 
-.challenge-btn {
-  letter-spacing: 0.05em;
+.portal-stats {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.portal-stats > div {
+  flex: 1;
+  background: var(--panel-inner);
+  border: 2px solid var(--panel-edge);
+  padding: 6px 4px;
+}
+
+.portal-stats dt {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.portal-stats dd {
+  margin: 3px 0 0;
+  font-family: var(--font-num);
+  font-size: 19px;
+  color: var(--parchment);
+}
+
+.portal-btn {
   width: 100%;
   min-height: var(--touch);
-  border: 3px solid var(--wood);
-  background: var(--wood-light);
-  color: var(--parchment);
+  border: 3px solid #e9b8ff;
+  background: var(--rarity-epic);
+  color: #fff;
   font-family: var(--font-ui);
-  font-size: 19px;
+  font-size: 21px;
+  letter-spacing: 0.06em;
   cursor: pointer;
   box-shadow: var(--drop);
 }
 
-.challenge-btn.ready {
-  border-color: var(--gold);
-  background: var(--torch);
-  color: #fff;
-  animation: readyBlink 0.9s steps(1) infinite;
-}
-
-.challenge-btn:active,
-.upgrade-btn.affordable:active,
-.recap-btn:active {
-  transform: translateY(3px);
+.portal-btn:active {
   box-shadow: var(--drop-pressed);
+  transform: translateY(3px);
 }
 
-.challenge-btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-  animation: none;
-}
-
-.boss-cooldown {
-  margin-top: 10px;
-  font-size: 16px;
+.boss-hint {
+  margin: 10px 0;
+  font-size: 15px;
+  line-height: 1.25;
   color: var(--ink-dim);
+}
+
+/* Abandon forfeits the attempt, so it fills on a hold rather than firing on a tap. */
+.abandon-btn {
+  position: relative;
+  width: 100%;
+  min-height: 44px;
+  border: 2px solid var(--danger-deep);
+  background: #1a1c2c;
+  color: var(--danger);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.abandon-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--danger-deep);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.abandon-label {
+  position: relative;
 }
 
 .boss-banner {
   margin-top: 10px;
-  font-size: 16px;
+  font-size: 17px;
   color: var(--danger);
 }
 
-/* --- Generic panels --------------------------------------------------- */
-
 .panel {
-  background: #1a1c2c;
+  background: var(--panel-inner);
   border: 3px solid var(--panel-edge);
   box-shadow: var(--drop);
   padding: 12px 12px 14px;
@@ -660,26 +684,14 @@ body {
   color: var(--parchment);
 }
 
-.gear-slot.rarity-common {
-  border-color: var(--rarity-common);
-}
 .gear-slot.rarity-common .gear-name {
   color: var(--rarity-common);
-}
-.gear-slot.rarity-uncommon {
-  border-color: var(--rarity-uncommon);
 }
 .gear-slot.rarity-uncommon .gear-name {
   color: var(--rarity-uncommon);
 }
-.gear-slot.rarity-rare {
-  border-color: var(--rarity-rare);
-}
 .gear-slot.rarity-rare .gear-name {
   color: var(--rarity-rare);
-}
-.gear-slot.rarity-epic {
-  border-color: var(--rarity-epic);
 }
 .gear-slot.rarity-epic .gear-name {
   color: var(--rarity-epic);

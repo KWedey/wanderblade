@@ -10,7 +10,7 @@ import { FONT, GLYPH_H, GLYPH_W, textWidth, type SpriteMap } from './pixels';
 
 export interface BakedSprite {
   image: HTMLCanvasElement;
-  /** Solid-white silhouette of the same grid, for hit flashes. */
+  /** White fill with the outline intact, for hit flashes. */
   flash: HTMLCanvasElement;
   width: number;
   height: number;
@@ -39,17 +39,20 @@ export function bakeSprite(map: SpriteMap, ink: InkSet): BakedSprite {
   const flash = makeCanvas(width, height);
   const ictx = context(image);
   const fctx = context(flash);
-  fctx.fillStyle = '#ffffff';
 
   for (let y = 0; y < height; y++) {
     const row = map.rows[y]!;
     for (let x = 0; x < width; x++) {
       const glyph = row[x]!;
       if (glyph === '.') continue;
-      const color = ink[map.legend[glyph] ?? ''];
+      const inkName = map.legend[glyph] ?? '';
+      const color = ink[inkName];
       if (!color) continue;
       ictx.fillStyle = color;
       ictx.fillRect(x, y, 1, 1);
+      // The flash keeps its outline. A fully-white silhouette loses the shape
+      // that identifies the creature and reads as a missing sprite.
+      fctx.fillStyle = inkName === 'outline' ? color : '#ffffff';
       fctx.fillRect(x, y, 1, 1);
     }
   }

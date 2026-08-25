@@ -151,6 +151,13 @@ export function lifeRemaining(age: number, life: number): number {
   return r < 0 ? 0 : r > 1 ? 1 : r;
 }
 
+/**
+ * Where a number sits in the reading order. One rule per tier, applied
+ * everywhere: four numbers at four sizes in two colors is what an unranked
+ * scene looks like.
+ */
+export type FloaterTier = 'payout' | 'catch' | 'damage';
+
 export interface Floater {
   x: number;
   y: number;
@@ -158,8 +165,9 @@ export interface Floater {
   life: number;
   text: string;
   color: string;
-  /** Larger text for crits, catches, and level-ups. */
-  big: boolean;
+  tier: FloaterTier;
+  /** Belongs to the engaged monster, and dies with it. */
+  owned: boolean;
 }
 
 /** Floaters drift up and ease out, so late frames barely move. */

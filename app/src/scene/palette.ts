@@ -29,6 +29,11 @@ export interface RealmSkin {
   soilDark: string;
   rock: string;
   rockLight: string;
+  /** Distant range behind the far hills — the horizon's third depth. */
+  range: string;
+  bird: string;
+  /** Foreground fronds, darker than any mid-ground green. */
+  fern: string;
   petal: string;
   petalCore: string;
   monBody: string;
@@ -81,6 +86,9 @@ const REALM_SKINS: RealmSkin[] = [
     cloudShade: INK.ice,
     sun: INK.yellow,
     hillFar: INK.teal,
+    range: INK.grey,
+    bird: INK.plum,
+    fern: INK.moss,
     hillNear: INK.green,
     hillLip: INK.lime,
     leaf: INK.lime,
@@ -108,6 +116,9 @@ const REALM_SKINS: RealmSkin[] = [
     cloudShade: INK.ice,
     sun: INK.yellow,
     hillFar: INK.greyDark,
+    range: INK.grey,
+    bird: INK.wood,
+    fern: INK.olive,
     hillNear: INK.khaki,
     hillLip: INK.lime,
     leaf: INK.khaki,
@@ -135,6 +146,9 @@ const REALM_SKINS: RealmSkin[] = [
     cloudShade: INK.grey,
     sun: INK.ice,
     hillFar: INK.slateGreen,
+    range: INK.grey,
+    bird: INK.plum,
+    fern: INK.slateGreen,
     hillNear: INK.teal,
     hillLip: INK.green,
     leaf: INK.teal,
@@ -162,6 +176,9 @@ const REALM_SKINS: RealmSkin[] = [
     cloudShade: INK.grey,
     sun: INK.ice,
     hillFar: INK.steelBlue,
+    range: INK.steelBlue,
+    bird: INK.night,
+    fern: INK.slateGreen,
     hillNear: INK.stone,
     hillLip: INK.grey,
     leaf: INK.moss,
@@ -189,6 +206,9 @@ const REALM_SKINS: RealmSkin[] = [
     cloudShade: INK.woodLight,
     sun: '#ffffff',
     hillFar: INK.crimson,
+    range: INK.plum,
+    bird: INK.night,
+    fern: INK.wood,
     hillNear: INK.rose,
     hillLip: INK.orange,
     leaf: INK.orange,
@@ -216,6 +236,9 @@ const REALM_SKINS: RealmSkin[] = [
     cloudShade: INK.purple,
     sun: INK.yellow,
     hillFar: INK.plum,
+    range: INK.night,
+    bird: INK.night,
+    fern: INK.plum,
     hillNear: INK.purple,
     hillLip: INK.pink,
     leaf: INK.pink,
@@ -243,6 +266,9 @@ const REALM_SKINS: RealmSkin[] = [
     cloudShade: INK.night,
     sun: INK.cyan,
     hillFar: INK.plum,
+    range: INK.night,
+    bird: INK.purple,
+    fern: INK.night,
     hillNear: INK.indigo,
     hillLip: INK.blue,
     leaf: INK.blue,
@@ -308,6 +334,8 @@ export function sceneryInk(skin: RealmSkin): InkSet {
     grassBlade: skin.grassBlade,
     petal: skin.petal,
     petalCore: skin.petalCore,
+    bird: skin.bird,
+    fern: skin.fern,
   };
 }
 

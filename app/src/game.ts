@@ -7,6 +7,7 @@ import {
   advance,
   buyHeroLevel as coreBuyHeroLevel,
   buySkill as coreBuySkill,
+  bossHp,
   challengeBoss,
   enemyGold,
   heroDps,
@@ -14,7 +15,6 @@ import {
   killsPerZone,
   killTime,
   levelCost,
-  readiness,
   skillCost,
   SKILLS,
   SKILL_IDS,
@@ -40,10 +40,10 @@ import {
   zoneInRegion,
   type LogEntry,
 } from './flavor';
-import { formatDuration, formatPercent } from './format';
+import { formatDuration } from './format';
 import { clearSave, readSave, writeSave } from './save';
 import type { SceneModel, StrikeOutcome } from './scene/scene';
-import type { GearVM, SkillVM, View, ViewModel } from './view';
+import type { BossVM, GearVM, PortalVM, SkillVM, View, ViewModel } from './view';
 
 const TICK_MS = 250;
 const SAVE_INTERVAL_MS = 5000;
@@ -259,8 +259,17 @@ export class Game {
     return this.pendingStrikes.splice(0, this.pendingStrikes.length);
   }
 
-  challenge(): void {
+  /**
+   * Commit to the guardian (DESIGN.md "Phase 2 — Portal Boss"). The engine owns
+   * the fight; this is the single call site that starts it.
+   */
+  enterPortal(): void {
     this.ingestEvents(challengeBoss(this.state).events);
+    this.renderAll();
+  }
+
+  /** Forfeit the attempt's damage and return to the same realm's road. */
+  abandonBoss(): void {
     this.renderAll();
   }
 
@@ -380,8 +389,13 @@ export class Game {
   private buildViewModel(): ViewModel {
     const s = this.state;
     const region = regionOfZone(s.zone);
-    const r = readiness(s);
-    const onCooldown = s.gate.atGate && s.timeSec < s.gate.cooldownUntilSec;
+
+    // The portal is reachable once the road has run out of realm. Boss state is
+    // engine state, so `boss` stays null until the engine carries a fight.
+    const portal: PortalVM | null = s.gate.atGate
+      ? { guardian: bossName(region), etaSec: bossHp(s.zone) / Math.max(1e-9, this.dps) }
+      : null;
+    const boss: BossVM | null = null;
 
     const skills: SkillVM[] = SKILL_IDS.map((id) => {
       const def = SKILLS[id]!;
@@ -408,14 +422,8 @@ export class Game {
 
     // Goal gradient: the nearest waypoint on the road…
     let marchGoal: string;
-    if (s.gate.atGate) {
-      if (onCooldown) {
-        marchGoal = `Rematch in ${formatDuration(s.gate.cooldownUntilSec - s.timeSec)}`;
-      } else if (r >= 1) {
-        marchGoal = 'Boss ready — challenge!';
-      } else {
-        marchGoal = `Farming gear — boss ${formatPercent(r)}`;
-      }
+    if (portal) {
+      marchGoal = `${portal.guardian} awaits`;
     } else {
       const killsLeft = killsPerZone - s.killsInZone;
       const nextIsGate = zoneInRegion(s.zone) === zonesPerRegion;
@@ -444,12 +452,8 @@ export class Game {
       leagues: s.leagues,
       dps: this.dps,
       heroLevel: s.hero.level,
-      atGate: s.gate.atGate,
-      bossName: bossName(region),
-      readiness: r,
-      readyToChallenge: s.gate.atGate && r >= 1 && !onCooldown,
-      onCooldown,
-      cooldownRemainingSec: Math.max(0, s.gate.cooldownUntilSec - s.timeSec),
+      portal,
+      boss,
       bossResult: this.currentBossResult(),
       levelCost: heroLevelCost,
       canAffordLevel: s.gold >= heroLevelCost,

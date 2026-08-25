@@ -20,6 +20,7 @@ import {
   stepParticle,
   wrap,
   type Floater,
+  type FloaterTier,
   type LootArc,
   type Particle,
 } from './fx';
@@ -34,16 +35,22 @@ import {
   type RealmSkin,
 } from './palette';
 import {
+  BIRD_DOWN,
+  BIRD_UP,
   COIN,
   FENCE,
+  FERN,
   FLOWER,
   GEM,
   HERO_WALK_A,
   HERO_WALK_B,
   MONSTER_SHAPES,
   ROCK,
+  SWARM_SHAPE,
   SWORD,
   TREE,
+  TREE_TALL,
+  TREE_WIDE,
   TUFT,
 } from './pixels';
 import {
@@ -114,14 +121,42 @@ const MAX_SHAKE = 3.2;
 /** Seconds a thrown coin stays in the air, and so stays catchable. */
 export const ARC_FLIGHT_SEC = 1.5;
 const FLOATER_LIFE = 1.05;
+/**
+ * The number hierarchy. Gold headline lives in the DOM HUD; everything in the
+ * world ranks below it and every in-world number is assigned a tier here, so
+ * size and color are never picked per call site.
+ */
+const TIER_SCALE: Record<FloaterTier, number> = { payout: 2, catch: 1, damage: 1 };
+const TEXT_PAYOUT = '#fbf236';
+const TEXT_CATCH = '#fbf236';
+const TEXT_DAMAGE = '#ffffff';
+
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
-const FLOATER_RISE = 22;
+/** How far each tier drifts up over its life. Damage stays close to its
+ *  monster; a payout is allowed to travel because nothing owns it. */
+const TIER_RISE: Record<FloaterTier, number> = { payout: 22, catch: 20, damage: 9 };
 const STREAK_SEC = 0.5;
 const CATCH_RADIUS = 26;
 
 const PARTICLE_CAP = 220;
 const FLOATER_CAP = 12;
+
+/**
+ * A coin that has landed and is sitting on the road before it flies to the
+ * counter. Without the pause a kill's loot is on screen for a heartbeat and
+ * the road reads as empty between fights.
+ */
+interface Rest {
+  x: number;
+  y: number;
+  age: number;
+  gold: boolean;
+  spin: number;
+}
+
+/** How long a landed coin sits before it streaks to the gold readout. */
+const REST_SEC = 0.55;
 
 interface Streak {
   x0: number;
@@ -140,13 +175,22 @@ interface Monster {
   /** Knockback offset, eased back to zero. */
   recoil: number;
   bob: number;
+  /** Sideways offset for swarm members so three do not stand in one column. */
+  spread: number;
 }
 
+/** How far behind the engaged monster the next one in line waits. */
+const QUEUE_GAP = 34;
+/** Monsters visible at once: the one being fought, plus the queue behind it. */
+const QUEUE_DEPTH = 3;
+
 interface Prop {
-  kind: 'tree' | 'rock' | 'fence' | 'tuft' | 'flower';
+  kind: 'tree' | 'rock' | 'tuft' | 'flower';
   /** Position along the prop track, in scene units. */
   at: number;
   layer: 'tree' | 'ground';
+  /** Which silhouette of that kind — trees pick one of three. */
+  variant: number;
 }
 
 /** Deterministic [0,1) hash — prop layout must not shimmer between frames. */
@@ -157,15 +201,41 @@ function hash01(n: number): number {
 
 const PROP_SPAN = 1400;
 
+/** Drifting pollen and leaf litter. Scenery only — recycled, never spawned. */
+interface Mote {
+  at: number;
+  yFrac: number;
+  size: number;
+  phase: number;
+}
+
+function buildMotes(): Mote[] {
+  const motes: Mote[] = [];
+  for (let i = 0; i < 46; i++) {
+    motes.push({
+      at: hash01(i * 1.31) * PROP_SPAN,
+      yFrac: hash01(i * 7.7),
+      size: hash01(i * 2.9) > 0.72 ? 2 : 1,
+      phase: hash01(i * 5.1) * Math.PI * 2,
+    });
+  }
+  return motes;
+}
+
 function buildProps(): Prop[] {
   const props: Prop[] = [];
-  for (let i = 0; i < 22; i++) {
-    props.push({ kind: 'tree', at: hash01(i) * PROP_SPAN, layer: 'tree' });
+  for (let i = 0; i < 34; i++) {
+    props.push({
+      kind: 'tree',
+      at: hash01(i) * PROP_SPAN,
+      layer: 'tree',
+      variant: Math.floor(hash01(i * 3.7) * 3),
+    });
   }
-  for (let i = 0; i < 110; i++) {
+  for (let i = 0; i < 150; i++) {
     const r = hash01(i + 500);
     const kind: Prop['kind'] = r < 0.11 ? 'rock' : r < 0.3 ? 'flower' : 'tuft';
-    props.push({ kind, at: hash01(i + 900) * PROP_SPAN, layer: 'ground' });
+    props.push({ kind, at: hash01(i + 900) * PROP_SPAN, layer: 'ground', variant: 0 });
   }
   return props;
 }
@@ -175,11 +245,14 @@ const FENCE_PITCH = 74;
 
 interface SkinnedSprites {
   monsters: BakedSprite[];
-  tree: BakedSprite;
+  /** Three canopy silhouettes; a treeline of one shape reads as a stamp. */
+  trees: BakedSprite[];
   rock: BakedSprite;
   fence: BakedSprite;
   tuft: BakedSprite;
   flower: BakedSprite;
+  fern: BakedSprite;
+  birds: BakedSprite[];
 }
 
 export function createScene(canvas: HTMLCanvasElement): Scene {
@@ -204,17 +277,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const sInk = sceneryInk(skin);
     const built: SkinnedSprites = {
       monsters: MONSTER_SHAPES.map((m) => bakeSprite(m, mInk)),
-      tree: bakeSprite(TREE, sInk),
+      trees: [TREE, TREE_TALL, TREE_WIDE].map((t) => bakeSprite(t, sInk)),
       rock: bakeSprite(ROCK, sInk),
       fence: bakeSprite(FENCE, sInk),
       tuft: bakeSprite(TUFT, sInk),
       flower: bakeSprite(FLOWER, sInk),
+      fern: bakeSprite(FERN, sInk),
+      birds: [BIRD_UP, BIRD_DOWN].map((b) => bakeSprite(b, sInk)),
     };
     skinCache.set(key, built);
     return built;
   }
 
   const props = buildProps();
+  const motes = buildMotes();
 
   // Ground texture (grass blades, fringe dots, soil strata) is a deterministic
   // function of index and the current turf geometry, so it is baked once per
@@ -232,13 +308,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const turfH = Math.max(6, Math.floor(belowH * 0.76));
 
     groundBlades = [];
-    for (let i = 0; i < 2200; i++) {
+    for (let i = 0; i < 3400; i++) {
       const depth = hash01(i * 1.7);
       groundBlades.push({
         x0: hash01(i * 4.1 + 3) * PROP_SPAN,
         y: groundY + 3 + Math.floor(depth * (turfH - 4)),
         toneAlt: i % 3 === 0,
-        tall: depth < 0.45,
+        tall: depth < 0.62,
         dot: i % 5 === 0,
       });
     }
@@ -278,6 +354,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let scrollHillNear = 0;
   let scrollHillFar = 0;
   let scrollClouds = 0;
+  let scrollRange = 0;
+  let scrollFore = 0;
+  let scrollBirds = 0;
 
   let shake = 0;
   let swingCooldown = 0;
@@ -285,14 +364,21 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let heroFlash = 0;
   let dustCooldown = 0;
   let damageTextCooldown = 0;
+  let damageRung = 0;
 
-  let monster: Monster | null = null;
+  /**
+   * Index 0 is the monster the engine is actually killing; the rest are the
+   * kills queued behind it, walking in. One duel in an empty field is what the
+   * road looked like before, and it read as a paused screen.
+   */
+  const queue: Monster[] = [];
   let lastKills = -1;
   let deathBurstQueued = false;
 
   const arcs: LootArc[] = [];
   const particles: Particle[] = [];
   const floaters: Floater[] = [];
+  const rests: Rest[] = [];
   const streaks: Streak[] = [];
 
   let collectAnchor = { x: 0, y: 0 };
@@ -382,18 +468,25 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  function spawnMonster(): void {
-    monster = {
-      shape: Math.floor(hash01(model.kills * 1.37 + model.region) * MONSTER_SHAPES.length),
-      x: vw + 20,
-      flash: 0,
-      recoil: 0,
-      bob: hash01(model.kills) * Math.PI * 2,
-    };
+  /** Append one monster (or a swarm of three) to the back of the queue. */
+  function enqueueMonster(seed: number): void {
+    const shape = Math.floor(hash01(seed * 1.37 + model.region) * MONSTER_SHAPES.length);
+    const count = shape === SWARM_SHAPE ? 3 : 1;
+    for (let i = 0; i < count; i++) {
+      queue.push({
+        shape,
+        x: vw + 30 + i * 12,
+        flash: 0,
+        recoil: 0,
+        bob: hash01(seed + i) * Math.PI * 2,
+        spread: count === 1 ? 0 : (i - 1) * 11,
+      });
+    }
   }
 
   function killMonster(skin: RealmSkin): void {
-    const x = monster ? monster.x : heroX + engageGap;
+    const lead = queue[0];
+    const x = lead ? lead.x + lead.spread : heroX + engageGap;
     const y = groundY;
     burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, '#ffffff', skin.accent], 130);
     shake = Math.min(MAX_SHAKE, shake + 2.1);
@@ -416,7 +509,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         ),
       );
     }
-    monster = null;
+    queue.shift();
+    // Damage numbers belong to the thing that took the hit; a corpse's number
+    // left hanging in the air reads as unowned UI.
+    for (let i = floaters.length - 1; i >= 0; i--) {
+      if (floaters[i]!.owned) floaters.splice(i, 1);
+    }
   }
 
   function resolveArc(arc: LootArc, caught: boolean): void {
@@ -429,8 +527,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         age: 0,
         life: FLOATER_LIFE,
         text: 'CATCH',
-        color: '#ffffff',
-        big: true,
+        color: TEXT_CATCH,
+        tier: 'catch',
+        owned: false,
       });
       burst(p.x, p.y, 12, ['#ffffff', skin.accent, '#fbf236'], 150);
       shake = Math.min(MAX_SHAKE, shake + 1.2);
@@ -441,22 +540,30 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         age: 0,
         life: 0.8,
         text: `+${formatShort(arc.value)}`,
-        color: '#fbf236',
-        big: false,
+        color: TEXT_PAYOUT,
+        tier: 'payout',
+        owned: false,
       });
     }
-    streaks.push({ x0: p.x, y0: p.y, age: 0, gold: arc.kind === 'gold', spin: arc.spin });
+    if (caught) {
+      streaks.push({ x0: p.x, y0: p.y, age: 0, gold: arc.kind === 'gold', spin: arc.spin });
+    } else {
+      rests.push({ x: p.x, y: groundY - 3, age: 0, gold: arc.kind === 'gold', spin: arc.spin });
+    }
   }
 
   function swing(fromStrike: boolean): void {
     swingAnim = SWING_ANIM_SEC;
     const skin = realmSkin(model.region);
-    if (!monster || monster.x > heroX + engageGap + 14) return;
+    const lead = queue[0];
+    if (!lead || lead.x > heroX + engageGap + 14) return;
 
-    const contactX = monster.x - 6;
-    const contactY = groundY - 12;
-    monster.flash = 0.09;
-    monster.recoil = fromStrike ? 5 : 3;
+    const leadSprite = skinnedFor(model.region).monsters[lead.shape];
+    const leadHeight = leadSprite ? leadSprite.height : 16;
+    const contactX = lead.x + lead.spread - 6;
+    const contactY = groundY - Math.round(leadHeight * 0.55);
+    lead.flash = 0.09;
+    lead.recoil = fromStrike ? 5 : 3;
     burst(contactX, contactY, fromStrike ? 9 : 5, ['#ffffff', skin.accent, skin.monBody], 105);
     shake = Math.min(MAX_SHAKE, shake + (fromStrike ? 1.5 : 0.7));
 
@@ -471,14 +578,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // Honest: real DPS across the interval this swing represents.
     const damage = model.dps * (1 / (SWINGS_PER_SEC * model.momentumMult));
     if (damage < 0.05) return;
+    // Fixed rungs, not random jitter: two damage numbers never land on the
+    // same pixels, and the eye can follow them upward in order.
+    damageRung = (damageRung + 1) % 3;
     addFloater({
-      x: contactX + Math.round((hash01(clockSec * 31) - 0.5) * 40),
-      y: contactY - 6 - Math.round(hash01(clockSec * 17) * 10),
+      x: contactX + 8,
+      y: contactY - damageRung * 5,
       age: 0,
       life: 0.5,
       text: formatShort(damage),
-      color: '#ffffff',
-      big: false,
+      color: TEXT_DAMAGE,
+      tier: 'damage',
+      owned: true,
     });
   }
 
@@ -515,6 +626,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     scrollHillNear = wrap(scrollHillNear + speed * 0.28 * dtSec, vw * 4);
     scrollHillFar = wrap(scrollHillFar + speed * 0.13 * dtSec, vw * 4);
     scrollClouds = wrap(scrollClouds + speed * 0.05 * dtSec, vw * 3);
+    scrollRange = wrap(scrollRange + speed * 0.07 * dtSec, vw * 4);
+    // Faster than the ground: the foreground is nearer than the road is.
+    scrollFore = wrap(scrollFore + speed * 1.75 * dtSec, PROP_SPAN);
+    scrollBirds = wrap(scrollBirds + (speed * 0.12 + 9) * dtSec, vw * 3);
 
     shake = decayTo(shake, 0, SHAKE_DECAY, dtSec);
     damageTextCooldown = Math.max(0, damageTextCooldown - dtSec);
@@ -534,17 +649,21 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       killMonster(skin);
     }
 
-    if (!monster) spawnMonster();
-    if (monster) {
-      // Position is driven by the engine's kill progress, so the monster always
-      // reaches the hero exactly when the kill resolves.
-      const t = Math.min(1, model.killProgress / APPROACH_FRAC);
-      const eased = 1 - (1 - t) * (1 - t);
-      const target = vw + 20 + (heroX + engageGap - (vw + 20)) * eased;
-      monster.x = target + monster.recoil;
-      monster.recoil = decayTo(monster.recoil, 0, 12, dtSec);
-      monster.flash = Math.max(0, monster.flash - dtSec);
-      monster.bob += dtSec * 7;
+    while (queue.length < QUEUE_DEPTH) enqueueMonster(model.kills + queue.length);
+
+    // The engaged monster's position is driven by the engine's kill progress,
+    // so it reaches the hero exactly when the kill resolves. Everyone behind it
+    // just walks to their slot in the line.
+    const t = Math.min(1, model.killProgress / APPROACH_FRAC);
+    const eased = 1 - (1 - t) * (1 - t);
+    const leadTarget = vw + 20 + (heroX + engageGap - (vw + 20)) * eased;
+    for (let i = 0; i < queue.length; i++) {
+      const m = queue[i]!;
+      const target = i === 0 ? leadTarget : leadTarget + i * QUEUE_GAP;
+      m.x = i === 0 ? target + m.recoil : decayTo(m.x, target, 2.4, dtSec);
+      m.recoil = decayTo(m.recoil, 0, 12, dtSec);
+      m.flash = Math.max(0, m.flash - dtSec);
+      m.bob += dtSec * 7;
     }
 
     // Boot dust: the ground-speed read. Frequency tracks momentum, so a hot
@@ -569,7 +688,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     swingCooldown -= dtSec * model.momentumMult;
     if (swingCooldown <= 0) {
       swingCooldown += 1 / SWINGS_PER_SEC;
-      if (monster) swing(false);
+      if (queue.length > 0) swing(false);
     }
 
     for (let i = arcs.length - 1; i >= 0; i--) {
@@ -594,6 +713,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const f = floaters[i]!;
       f.age += dtSec;
       if (f.age >= f.life) floaters.splice(i, 1);
+    }
+
+    for (let i = rests.length - 1; i >= 0; i--) {
+      const r = rests[i]!;
+      r.age += dtSec;
+      r.spin += dtSec * 4;
+      // Landed coins ride the road backwards until they are collected.
+      r.x -= speed * dtSec;
+      if (r.age >= REST_SEC || r.x < -10) {
+        streaks.push({ x0: r.x, y0: r.y, age: 0, gold: r.gold, spin: r.spin });
+        rests.splice(i, 1);
+      }
     }
 
     for (let i = streaks.length - 1; i >= 0; i--) {
@@ -635,13 +766,30 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /** A third depth on the horizon, behind the far hills. */
+  function drawRange(skin: RealmSkin): void {
+    const span = vw * 4;
+    ctx.fillStyle = skin.range;
+    const baseY = groundY - Math.floor(groundY * 0.02);
+    for (let x = 0; x < vw; x += 3) {
+      const wx = x + scrollRange;
+      const h = Math.floor(
+        groundY * 0.36 +
+          Math.sin(wx * 0.05) * groundY * 0.12 +
+          Math.sin(wx * 0.019 + 2.1) * groundY * 0.09,
+      );
+      ctx.fillRect(x, baseY - h, 3, h);
+    }
+    void span;
+  }
+
   function drawClouds(skin: RealmSkin): void {
     const span = vw * 3;
     ctx.fillStyle = skin.cloud;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 74; i++) {
       const base = hash01(i * 3.7) * span;
       const x = Math.floor(wrap(base - scrollClouds, span)) - vw;
-      const y = Math.floor(hash01(i * 9.1) * groundY * 0.5) + 4;
+      const y = Math.floor(hash01(i * 9.1) * groundY * 0.82) + 3;
       const w = 14 + Math.floor(hash01(i * 5.3) * 22);
       if (x > vw + 60 || x < -80) continue;
       ctx.fillStyle = skin.cloud;
@@ -697,7 +845,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const x = Math.floor(wrap(b.x0 - scrollGround, PROP_SPAN));
       if (x > vw) continue;
       ctx.fillStyle = b.toneAlt ? skin.turfLip : skin.grassBlade;
-      ctx.fillRect(x, b.y, 1, b.tall ? 2 : 1);
+      ctx.fillRect(x, b.y, 1, b.tall ? 3 : 2);
       if (b.dot) ctx.fillRect(x + 1, b.y + 1, 1, 1);
     }
     // Fringe standing proud of the horizon line. Its own fill: the blade loop
@@ -725,8 +873,45 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     for (const prop of props) {
       if (prop.kind !== 'tree') continue;
       const x = Math.floor(wrap(prop.at - scrollTrees, PROP_SPAN));
+      if (x < -24 || x > vw + 24) continue;
+      drawSprite(ctx, sprites.trees[prop.variant] ?? sprites.trees[0]!, x, y);
+    }
+  }
+
+  function drawMotes(skin: RealmSkin): void {
+    if (model.reduceMotion) return;
+    for (const m of motes) {
+      const x = Math.floor(wrap(m.at - scrollTrees * 1.2, PROP_SPAN));
+      if (x > vw) continue;
+      const bobY = Math.sin(clockSec * 1.4 + m.phase) * 5;
+      const y = Math.floor(groundY * 0.35 + m.yFrac * groundY * 0.75 + bobY);
+      ctx.fillStyle = m.size > 1 ? skin.petal : skin.turfLip;
+      ctx.fillRect(x, y, m.size, m.size);
+    }
+  }
+
+  /** Birds working the upper sky — the cheapest life in an otherwise flat band. */
+  function drawBirds(sprites: SkinnedSprites): void {
+    const span = vw * 3;
+    for (let i = 0; i < 9; i++) {
+      const x = Math.floor(wrap(hash01(i * 4.7) * span - scrollBirds, span)) - vw;
+      if (x < -12 || x > vw + 12) continue;
+      const y = Math.floor(hash01(i * 8.3) * groundY * 0.5) + 6;
+      const frame = Math.floor(clockSec * 5 + i) % 2;
+      drawSprite(ctx, sprites.birds[frame] ?? sprites.birds[0]!, x, y);
+    }
+  }
+
+  /**
+   * Fronds sweeping past ahead of the road. Drawn over everything at nearly
+   * twice ground speed: parallax the camera passes through is what stops a
+   * side-scroller reading as a flat backdrop.
+   */
+  function drawForeground(sprites: SkinnedSprites): void {
+    for (let i = 0; i < 44; i++) {
+      const x = Math.floor(wrap(hash01(i * 5.9 + 7) * PROP_SPAN - scrollFore, PROP_SPAN));
       if (x < -20 || x > vw + 20) continue;
-      drawSprite(ctx, sprites.tree, x, y);
+      drawSprite(ctx, sprites.fern, x, vh + 4 + Math.floor(hash01(i * 2.7) * 5));
     }
   }
 
@@ -786,41 +971,54 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawSpriteRotated(ctx, sword, handX, handY, angle, 2, 2);
 
     if (swingAnim > 0) {
-      // Crescent trail: chunky arc segments, brightest at the leading edge.
-      ctx.fillStyle = t > 0.5 ? '#ffffff' : '#eec39a';
-      const steps = 7;
+      // A crescent that tapers along the sweep and thins as the swing ends.
+      // The old version was a ring of equal blobs, which read as a broken
+      // sprite rather than as a blade trail.
+      const steps = 10;
       for (let i = 0; i < steps; i++) {
-        const a = angle + (i / steps) * 0.9;
-        const r = 15 + (i % 2);
+        const f = i / (steps - 1);
+        const a = angle + f * 1.15;
+        const r = 13 + f * 5;
+        // Thick at the blade, one pixel at the tail; brightest at the leading
+        // edge and dimmer behind it.
+        const thick = Math.max(1, Math.round((1 - f) * 3 * t));
+        if (thick <= 0) continue;
+        ctx.fillStyle = f < 0.35 ? '#ffffff' : f < 0.7 ? '#cbdbfc' : '#9badb7';
         ctx.fillRect(
           Math.floor(handX + Math.cos(a) * r),
           Math.floor(handY + Math.sin(a) * r),
-          2,
-          2,
+          thick,
+          thick,
         );
       }
     }
   }
 
-  function drawMonster(sprites: SkinnedSprites, skin: RealmSkin): void {
-    if (!monster) return;
-    const sprite = sprites.monsters[monster.shape] ?? sprites.monsters[0]!;
-    const bob = model.reduceMotion ? 0 : Math.round(Math.sin(monster.bob) * 1.2);
-    drawShadow(monster.x, sprite.width - 2);
-    drawSprite(ctx, sprite, monster.x, groundY + bob, true, monster.flash > 0);
+  function drawMonsters(sprites: SkinnedSprites, skin: RealmSkin): void {
+    // Back to front, so the one being fought overlaps the line behind it.
+    for (let i = queue.length - 1; i >= 0; i--) {
+      const m = queue[i]!;
+      const sprite = sprites.monsters[m.shape] ?? sprites.monsters[0]!;
+      const bob = model.reduceMotion ? 0 : Math.round(Math.sin(m.bob) * 1.2);
+      const x = m.x + m.spread;
+      if (x < -40 || x > vw + 60) continue;
+      drawShadow(x, sprite.width - 2);
+      drawSprite(ctx, sprite, x, groundY + bob, true, m.flash > 0);
 
-    // HP pips fall with the engine's kill progress — not a separate timer.
-    const remaining = Math.max(0, 1 - model.killProgress);
-    if (remaining < 1) {
+      // Only the engaged monster carries a bar, and only while it is alive:
+      // a bar over a corpse is the clearest possible "this UI is broken".
+      if (i !== 0) continue;
+      const remaining = Math.max(0, 1 - model.killProgress);
+      if (remaining >= 1 || remaining <= 0.02) continue;
       const w = sprite.width;
-      const x = Math.floor(monster.x - w / 2);
-      const y = groundY - sprite.height - 5 + bob;
+      const bx = Math.floor(x - w / 2);
+      const by = groundY - sprite.height - 5 + bob;
       ctx.fillStyle = OUTLINE_INK;
-      ctx.fillRect(x - 1, y - 1, w + 2, 4);
+      ctx.fillRect(bx - 1, by - 1, w + 2, 4);
       ctx.fillStyle = '#45283c';
-      ctx.fillRect(x, y, w, 2);
+      ctx.fillRect(bx, by, w, 2);
       ctx.fillStyle = remaining < 0.3 ? '#d95763' : skin.accent;
-      ctx.fillRect(x, y, Math.max(0, Math.round(w * remaining)), 2);
+      ctx.fillRect(bx, by, Math.max(0, Math.round(w * remaining)), 2);
     }
   }
 
@@ -847,6 +1045,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           const ang = (a / 8) * Math.PI * 2 + clockSec * 3;
           ctx.fillRect(Math.floor(p.x + Math.cos(ang) * r), Math.floor(p.y + Math.sin(ang) * r), 1, 1);
         }
+      }
+    }
+  }
+
+  function drawRests(): void {
+    for (const r of rests) {
+      const sprite = r.gold ? coin : gem;
+      // A short settling bounce, then it sits and glints.
+      const t = Math.min(1, r.age / 0.22);
+      const bounce = Math.round(Math.abs(Math.sin(t * Math.PI)) * -5 * (1 - t));
+      drawSprite(ctx, sprite, r.x, r.y + bounce + sprite.height / 2);
+      if (Math.sin(clockSec * 9 + r.spin) > 0.7) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(Math.floor(r.x + 3), Math.floor(r.y - 6), 1, 1);
       }
     }
   }
@@ -886,8 +1098,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     for (const f of floaters) {
       const life = lifeRemaining(f.age, f.life);
       if (life <= 0) continue;
-      const y = f.y + floaterOffsetY(f.age, f.life, FLOATER_RISE);
-      drawText(ctx, f.text, f.x, y, f.big ? 2 : 1, f.color, OUTLINE_INK, 'center');
+      const y = f.y + floaterOffsetY(f.age, f.life, TIER_RISE[f.tier]);
+      drawText(ctx, f.text, f.x, y, TIER_SCALE[f.tier], f.color, OUTLINE_INK, 'center');
     }
   }
 
@@ -930,8 +1142,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     drawSky(skin);
     drawClouds(skin);
-    drawHills(skin.hillFar, null, scrollHillFar, groundY * 0.12, groundY * 0.24, 1, 4);
-    drawHills(skin.hillNear, skin.hillLip, scrollHillNear, groundY * 0.09, groundY * 0.12, 1.7, 3);
+    drawBirds(sprites);
+    drawRange(skin);
+    drawHills(skin.hillFar, null, scrollHillFar, groundY * 0.12, groundY * 0.22, 1, 4);
+    drawHills(skin.hillNear, skin.hillLip, scrollHillNear, groundY * 0.09, groundY * 0.11, 1.7, 3);
     drawTreeline(sprites);
 
     const jolt = model.reduceMotion ? { x: 0, y: 0 } : shakeOffset(shake, clockSec);
@@ -941,12 +1155,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawGround(skin);
     drawFence(sprites, skin);
     drawProps(sprites);
-    drawMonster(sprites, skin);
+    drawMonsters(sprites, skin);
     drawHero();
     drawArcs();
     drawParticles();
+    drawRests();
     drawStreaks();
+    drawMotes(skin);
     drawFloaters();
+    drawForeground(sprites);
     drawMomentumMeter(skin);
 
     ctx.restore();
