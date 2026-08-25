@@ -7,6 +7,7 @@
 // then upscaled with smoothing off. That single indirection is what makes the
 // pixels square and identical everywhere instead of resolution-dependent mush.
 
+import { ditherAt, falloff, momentumLift, ringFalloff } from './light';
 import {
   arcCaughtBy,
   arcInFlight,
@@ -29,6 +30,7 @@ import {
   LOOT_INK,
   OUTLINE_INK,
   REALM_SKIN_COUNT,
+  lighten,
   mixHex,
   monsterInk,
   realmSkin,
@@ -131,6 +133,8 @@ const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 1, damage: 1
 const TEXT_PAYOUT = '#fbf236';
 const TEXT_CATCH = '#fbf236';
 const TEXT_DAMAGE = '#ffffff';
+const LOOT_GLOW = '#fbf236';
+const IMPACT_GLOW = '#ffffff';
 
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
@@ -356,6 +360,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let scrollClouds = 0;
   let scrollRange = 0;
   let scrollFore = 0;
+  const impacts: { x: number; y: number; age: number; life: number }[] = [];
   let scrollBirds = 0;
 
   let shake = 0;
@@ -492,6 +497,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const x = lead ? lead.x + lead.spread : heroX + engageGap;
     const y = groundY;
     burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, '#ffffff', skin.accent], 130);
+    impacts.push({ x, y: y - 12, age: 0, life: 0.34 });
     shake = Math.min(MAX_SHAKE, shake + 2.1);
 
     // The payout leaves the corpse on a visible arc; catching it mid-flight is
@@ -708,6 +714,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       }
     }
 
+    for (let i = impacts.length - 1; i >= 0; i--) {
+
+      const im = impacts[i]!;
+
+      im.age += dtSec;
+
+      if (im.age >= im.life) impacts.splice(i, 1);
+
+    }
+
     for (let i = particles.length - 1; i >= 0; i--) {
       if (!stepParticle(particles[i]!, dtSec)) particles.splice(i, 1);
     }
@@ -832,9 +848,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function drawGround(skin: RealmSkin): void {
     const belowH = Math.max(8, sceneBottomY - groundY);
     const turfH = Math.max(6, Math.floor(belowH * 0.76));
-    ctx.fillStyle = skin.turf;
+    // Momentum climbs the whole lit surface one palette step. A dithered
+    // overlay at this size read as static; a palette shift reads as sun.
+    const lift = momentumLift(model.momentum);
+    ctx.fillStyle = lighten(skin.turf, lift);
     ctx.fillRect(0, groundY, vw, turfH);
-    ctx.fillStyle = skin.turfLip;
+    ctx.fillStyle = lighten(skin.turfLip, lift);
     ctx.fillRect(0, groundY, vw, 3);
     ctx.fillStyle = skin.soil;
     ctx.fillRect(0, groundY + turfH, vw, vh - groundY - turfH);
@@ -1012,12 +1031,78 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /**
+   * A dithered disc of light. Every pixel is either painted or not -- the
+   * share painted carries the intensity, which is how you get real light
+   * without the blur DECISIONS.md #13 forbids.
+   */
+  function glowDisc(cx: number, cy: number, r: number, color: string, gain = 1): void {
+    if (r <= 0 || gain <= 0) return;
+    const x0 = Math.max(0, Math.floor(cx - r));
+    const x1 = Math.min(vw - 1, Math.ceil(cx + r));
+    const y0 = Math.max(0, Math.floor(cy - r));
+    const y1 = Math.min(sceneBottomY - 1, Math.ceil(cy + r));
+    ctx.fillStyle = color;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const d = Math.hypot(x - cx, y - cy);
+        if (!ditherAt(x, y, falloff(d, r) * gain)) continue;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+
+  /** A dithered ring: the shockwave read of an impact, no blur needed. */
+  function glowRing(cx: number, cy: number, r: number, width: number, color: string, gain = 1): void {
+    if (r <= 0 || gain <= 0) return;
+    const outer = r + width;
+    const x0 = Math.max(0, Math.floor(cx - outer));
+    const x1 = Math.min(vw - 1, Math.ceil(cx + outer));
+    const y0 = Math.max(0, Math.floor(cy - outer));
+    const y1 = Math.min(sceneBottomY - 1, Math.ceil(cy + outer));
+    ctx.fillStyle = color;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const d = Math.hypot(x - cx, y - cy);
+        if (!ditherAt(x, y, ringFalloff(d, r, width) * gain)) continue;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+
+  /** A lit pool on the turf: flattened, so it sits on the ground plane. */
+  function litPool(cx: number, r: number, color: string, gain: number): void {
+    if (gain <= 0) return;
+    const cy = groundY + 1;
+    const x0 = Math.max(0, Math.floor(cx - r));
+    const x1 = Math.min(vw - 1, Math.ceil(cx + r));
+    const y1 = Math.min(sceneBottomY - 1, Math.ceil(cy + r * 0.4));
+    ctx.fillStyle = color;
+    for (let y = cy; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        const d = Math.hypot((x - cx) * 0.42, y - cy);
+        if (!ditherAt(x, y, falloff(d, r * 0.42) * gain)) continue;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+
   function drawShadow(x: number, width: number): void {
     ctx.fillStyle = 'rgba(26, 28, 44, 0.28)';
     ctx.fillRect(Math.floor(x - width / 2), groundY, width, 2);
   }
 
   function drawHero(): void {
+    // The hero stands in his own light. White read as salt scattered on the
+    // grass, so the pool is a lit tone of the turf itself.
+    const lit = realmSkin(model.region);
+    litPool(
+      heroX,
+      20,
+      lighten(lit.turf, 0.42),
+      Math.min(0.6, 0.16 + momentumLift(model.momentum) * 1.5),
+    );
+
     const stride = model.reduceMotion ? 0 : Math.floor(clockSec * 7 * model.momentumMult) % 2;
     const sprite = stride === 0 ? heroA : heroB;
     const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(clockSec * 14) * 0.6);
@@ -1099,6 +1184,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function drawArcs(): void {
+    // Loot in flight is the brightest thing in the scene; it should light the
+    // air around it, not sit on the backdrop as a flat disc.
+    for (const arc of arcs) {
+      const p = arcPosition(arc, arc.age);
+      glowDisc(p.x, p.y, 7, LOOT_GLOW, 0.5);
+    }
+
     for (const arc of arcs) {
       const p = arcPosition(arc, arc.age);
       const sprite = arc.kind === 'gold' ? coin : gem;
@@ -1122,6 +1214,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           ctx.fillRect(Math.floor(p.x + Math.cos(ang) * r), Math.floor(p.y + Math.sin(ang) * r), 1, 1);
         }
       }
+    }
+  }
+
+  /** Expanding dithered shockwave at each kill. */
+  function drawImpacts(): void {
+    for (const im of impacts) {
+      const t = im.age / im.life;
+      glowRing(im.x, im.y, 4 + t * 22, 3, IMPACT_GLOW, (1 - t) * 0.85);
+      litPool(im.x, 16, IMPACT_GLOW, (1 - t) * 0.4);
     }
   }
 
@@ -1236,6 +1337,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawHero();
     drawArcs();
     drawParticles();
+    drawImpacts();
     drawRests();
     drawStreaks();
     drawMotes(skin);
