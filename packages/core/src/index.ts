@@ -8,11 +8,11 @@ export type { Rng } from './rng';
 
 // --- Constants -----------------------------------------------------------
 export {
+  REALM_STEP,
   hp0,
   rH,
   g0,
   rG,
-  bossHpMult,
   d0,
   rD,
   levelCostBase,
@@ -28,17 +28,26 @@ export {
   RARITIES,
   GEAR_SLOTS,
   killsPerZone,
-  zonesPerRegion,
-  regionsCount,
+  zonesPerRealm,
   leaguePerKill,
-  enrageWindowSec,
-  autoChallengeReadiness,
-  bossRetryCooldownSec,
   minKillTimeSec,
+  bossSwingSec,
+  MOMENTUM_PER_STRIKE,
+  MOMENTUM_HALF_LIFE_SEC,
+  MOMENTUM_MAX_BONUS,
+  ARC_FLIGHT_SEC,
+  ARC_CATCH_MULT,
+  bossHpMult,
+  ASC_PER_ZONE,
+  ASC_BOSS_PAYOUT,
+  ASC_REALM_GROWTH,
+  EARNINGS_BONUS_PER_VICTORY,
+  ASC_NODES,
+  ASC_NODE_IDS,
   SKILLS,
   SKILL_IDS,
 } from './constants';
-export type { SkillDef } from './constants';
+export type { AscNodeDef, SkillDef } from './constants';
 
 // --- Types ---------------------------------------------------------------
 export type {
@@ -47,7 +56,12 @@ export type {
   GearItem,
   GearState,
   HeroState,
-  GateState,
+  Phase,
+  MomentumState,
+  LootArc,
+  BossState,
+  AscendancyState,
+  CollectionState,
   LifetimeStats,
   GameState,
   Recap,
@@ -55,30 +69,52 @@ export type {
   EventLog,
 } from './types';
 
+// --- Momentum ------------------------------------------------------------
+export {
+  momentumAt,
+  addMomentum,
+  momentumMultiplier,
+  sustainStrikeRate,
+} from './momentum';
+
 // --- Formulas ------------------------------------------------------------
 export {
+  realmScale,
   enemyHp,
   enemyGold,
+  earningsMultiplier,
+  goldPerKill,
   bossHp,
+  gearPower,
   levelCost,
   skillCost,
+  ascNodeCost,
+  ascBonus,
   heroBaseDamage,
   skillMult,
   gearPowerTotal,
   heroDps,
-  bossZoneOf,
-  readiness,
+  ascSpeedMultiplier,
+  attackSpeedMultiplier,
+  killTime,
+  swingInterval,
+  damagePerSwing,
+  bossEtaSec,
+  ascendancyPerZone,
+  ascendancyBossPayout,
 } from './formulas';
+export type { AscNodeEffect } from './formulas';
 
 // --- Engine --------------------------------------------------------------
 export {
   EVENT_CAP,
   initialState,
-  killTime,
   buyHeroLevel,
   buySkill,
+  buyAscendancyNode,
+  enterPortal,
+  abandonBoss,
   advance,
-  challengeBoss,
   serialize,
   deserialize,
   summarizeEvents,
