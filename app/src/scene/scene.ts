@@ -126,7 +126,7 @@ const FLOATER_LIFE = 1.05;
  * world ranks below it and every in-world number is assigned a tier here, so
  * size and color are never picked per call site.
  */
-const TIER_SCALE: Record<FloaterTier, number> = { payout: 2, catch: 1, damage: 1 };
+const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 2, damage: 1 };
 const TEXT_PAYOUT = '#fbf236';
 const TEXT_CATCH = '#fbf236';
 const TEXT_DAMAGE = '#ffffff';
@@ -470,7 +470,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   /** Append one monster (or a swarm of three) to the back of the queue. */
   function enqueueMonster(seed: number): void {
-    const shape = Math.floor(hash01(seed * 1.37 + model.region) * MONSTER_SHAPES.length);
+    // r^0.6 biases the roll up the roster, so a big silhouette is usually on
+    // screen — the thing the scene was judged hardest on.
+    const roll = Math.pow(hash01(seed * 1.37 + model.region), 0.6);
+    const shape = Math.min(MONSTER_SHAPES.length - 1, Math.floor(roll * MONSTER_SHAPES.length));
     const count = shape === SWARM_SHAPE ? 3 : 1;
     for (let i = 0; i < count; i++) {
       queue.push({
@@ -536,7 +539,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     } else if (arc.value >= 0.05) {
       addFloater({
         x: p.x,
-        y: p.y - 6,
+        y: p.y - 14,
         age: 0,
         life: 0.8,
         text: `+${formatShort(arc.value)}`,
@@ -562,7 +565,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const leadHeight = leadSprite ? leadSprite.height : 16;
     const contactX = lead.x + lead.spread - 6;
     const contactY = groundY - Math.round(leadHeight * 0.55);
-    lead.flash = 0.09;
+    lead.flash = 0.05;
     lead.recoil = fromStrike ? 5 : 3;
     burst(contactX, contactY, fromStrike ? 9 : 5, ['#ffffff', skin.accent, skin.monBody], 105);
     shake = Math.min(MAX_SHAKE, shake + (fromStrike ? 1.5 : 0.7));
@@ -908,10 +911,28 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    * side-scroller reading as a flat backdrop.
    */
   function drawForeground(sprites: SkinnedSprites): void {
-    for (let i = 0; i < 44; i++) {
-      const x = Math.floor(wrap(hash01(i * 5.9 + 7) * PROP_SPAN - scrollFore, PROP_SPAN));
+    const band = Math.max(6, sceneBottomY - groundY);
+    // Mid depth: scattered through the turf, scrolling faster than the road.
+    for (let i = 0; i < 34; i++) {
+      const x = Math.floor(wrap(hash01(i * 5.9 + 7) * PROP_SPAN - scrollFore * 0.72, PROP_SPAN));
       if (x < -20 || x > vw + 20) continue;
-      drawSprite(ctx, sprites.fern, x, vh + 4 + Math.floor(hash01(i * 2.7) * 5));
+      const y = Math.floor(groundY + band * (0.42 + hash01(i * 3.3) * 0.5));
+      drawSprite(ctx, sprites.fern, x, y);
+    }
+    // Nearest depth: double-size fronds at the frame edge, the layer the
+    // camera actually passes through.
+    const fern = sprites.fern;
+    for (let i = 0; i < 14; i++) {
+      const x = Math.floor(wrap(hash01(i * 9.1 + 21) * PROP_SPAN - scrollFore, PROP_SPAN));
+      if (x < -40 || x > vw + 40) continue;
+      const y = vh + 6 + Math.floor(hash01(i * 2.7) * 6);
+      ctx.drawImage(
+        fern.image,
+        Math.floor(x - fern.width),
+        Math.floor(y - fern.height * 2),
+        fern.width * 2,
+        fern.height * 2,
+      );
     }
   }
 
@@ -959,7 +980,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const sprite = stride === 0 ? heroA : heroB;
     const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(clockSec * 14) * 0.6);
     drawShadow(heroX, 12);
-    drawSprite(ctx, sprite, heroX, groundY + bob, false, heroFlash > 0.06);
+    drawSprite(ctx, sprite, heroX, groundY + bob, false);
+    if (heroFlash > 0.06) {
+      ctx.globalAlpha = 0.5;
+      drawSprite(ctx, sprite, heroX, groundY + bob, false, true);
+      ctx.globalAlpha = 1;
+    }
 
     // The blade sweeps through a real arc; nearest-neighbour rotation keeps it
     // pixelated rather than feathering into an anti-aliased smear.
@@ -1003,7 +1029,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const x = m.x + m.spread;
       if (x < -40 || x > vw + 60) continue;
       drawShadow(x, sprite.width - 2);
-      drawSprite(ctx, sprite, x, groundY + bob, true, m.flash > 0);
+      drawSprite(ctx, sprite, x, groundY + bob, true);
+      // The flash lights the creature rather than replacing it. Swapping in the
+      // silhouette outright turned a 24x30 golem into a white mass for a third
+      // of all frames, which is what read as a missing sprite.
+      if (m.flash > 0) {
+        ctx.globalAlpha = 0.55;
+        drawSprite(ctx, sprite, x, groundY + bob, true, true);
+        ctx.globalAlpha = 1;
+      }
 
       // Only the engaged monster carries a bar, and only while it is alive:
       // a bar over a corpse is the clearest possible "this UI is broken".
