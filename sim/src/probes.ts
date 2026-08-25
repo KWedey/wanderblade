@@ -12,7 +12,7 @@ import {
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
-import { CAP_RATE, SEC_PER_HOUR, strikeTimes } from './policy';
+import { CAP_RATE, SEC_PER_HOUR, strikeThrough } from './policy';
 import { clone, runPlayer, timeToKill, type RunOptions } from './simulate';
 import type { SimConfig, Uplift } from './types';
 
@@ -40,12 +40,7 @@ function freeze(s: GameState): GameState {
 function goldOver(start: GameState, seconds: number, rate: number): number {
   const s = clone(start);
   const before = s.lifetime.goldEarned;
-  let left = seconds;
-  while (left > 1e-9) {
-    const dt = Math.min(60, left);
-    advance(s, dt, rate > 0 ? strikeTimes(s.timeSec, dt, rate) : []);
-    left -= dt;
-  }
+  strikeThrough(s, seconds, rate);
   return s.lifetime.goldEarned - before;
 }
 
@@ -116,7 +111,11 @@ export function eightHourReturn(states: GameState[]): number[] {
   });
 }
 
-/** Zones of road progress after a 24-hour idle return. */
+/**
+ * Zones of road progress after a 24-hour idle return. No purchases are made
+ * inside the window — a player who is away cannot buy anything, so spending
+ * gold mid-gap would measure a session, not a return.
+ */
 export function twentyFourHourReturn(states: GameState[]): number[] {
   return states.map((start) => {
     const s = clone(start);
@@ -126,7 +125,6 @@ export function twentyFourHourReturn(states: GameState[]): number[] {
       const dt = Math.min(300, left);
       advance(s, dt);
       left -= dt;
-      botTouch(s);
     }
     return s.collection.zonesCleared - before;
   });
@@ -161,9 +159,7 @@ export function abandonProbe(
   const attempt = clone(portalReadyState);
   if (!enterPortal(attempt).entered) return null;
   const etaBefore = bossEtaSec(attempt, 0);
-
-  const eta = bossEtaSec(attempt, 0);
-  const investSec = Number.isFinite(eta) ? eta / 3 : 2 * SEC_PER_HOUR;
+  const investSec = Number.isFinite(etaBefore) ? etaBefore / 3 : 2 * SEC_PER_HOUR;
   let left = investSec;
   while (left > 1e-9 && attempt.phase === 'boss') {
     const dt = Math.min(300, left);

@@ -1,11 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { initialState, SKILLS, type GameState } from '@wanderblade/core';
+import {
+  advance,
+  arcPositionAt,
+  ARC_FLIGHT_SEC,
+  initialState,
+  SKILLS,
+  type GameState,
+  type LootArc,
+} from '@wanderblade/core';
 import { parseArgs } from '../src/args';
-import { botBuyGold, botBuyTree } from '../src/bot';
-import { CAP_RATE, strikeTimes } from '../src/policy';
+import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
+import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
+import { twentyFourHourReturn } from '../src/probes';
 import { runPlayer } from '../src/simulate';
 import { runCorrectness, runPacing } from '../src/validators';
-import type { SimConfig } from '../src/types';
+import type { BreachKind, SeedResult, SimConfig } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
   days: 1,
@@ -99,15 +108,81 @@ describe('bot termination guards', () => {
 
 describe('strikeTimes', () => {
   it('emits evenly spaced timestamps strictly inside the window', () => {
-    const ts = strikeTimes(10, 1, 4);
-    expect(ts).toEqual([10.25, 10.5, 10.75, 11]);
+    expect(strikeTimes(10, 1, 4).map((s) => s.atSec)).toEqual([10.25, 10.5, 10.75, 11]);
     expect(strikeTimes(0, 0, 4)).toEqual([]);
     expect(strikeTimes(0, 10, 0)).toEqual([]);
+  });
+
+  it('carries the aim it was given, and no aim by default', () => {
+    expect(strikeTimes(0, 1, 4).every((s) => s.aim === null)).toBe(true);
+    const aimed = strikeTimes(0, 1, 4, { x: 0.5, y: 1 });
+    expect(aimed.every((s) => s.aim?.x === 0.5 && s.aim.y === 1)).toBe(true);
   });
 
   it('uses the momentum-sustaining rate as the reference cadence', () => {
     expect(CAP_RATE).toBeGreaterThan(3);
     expect(CAP_RATE).toBeLessThan(4);
+  });
+});
+
+// `f?.(advance(...))` never calls advance when f is undefined, so a driver loop
+// that folds the advance into the optional report spins forever on the callers
+// that pass no callback — every P1 probe arm among them.
+describe('the driver loops advance whether or not anyone is listening', () => {
+  it('runIdle moves the clock with no hooks at all', () => {
+    const s = initialState(11);
+    runIdle(s, 600);
+    expect(s.timeSec).toBe(600);
+    expect(s.lifetime.kills).toBeGreaterThan(0);
+  });
+
+  it('strikeThrough moves the clock with no onEvents, striking and idle alike', () => {
+    const striking = initialState(11);
+    strikeThrough(striking, 600, CAP_RATE);
+    expect(striking.timeSec).toBeGreaterThanOrEqual(600 - 1e-9);
+    expect(striking.lifetime.kills).toBeGreaterThan(0);
+
+    const idle = initialState(11);
+    strikeThrough(idle, 600, 0);
+    expect(idle.timeSec).toBeGreaterThanOrEqual(600 - 1e-9);
+    expect(idle.lifetime.kills).toBeGreaterThan(0);
+  });
+
+  it('reports the same events it would have advanced silently', () => {
+    const quiet = initialState(12);
+    strikeThrough(quiet, 300, CAP_RATE);
+
+    const loud = initialState(12);
+    let seen = 0;
+    strikeThrough(loud, 300, CAP_RATE, (e) => {
+      seen += e.length;
+    });
+    expect(seen).toBeGreaterThan(0);
+    expect(loud.gold).toBe(quiet.gold);
+  });
+});
+
+describe('aimAtOldestArc', () => {
+  it('aims at the oldest arc still in flight, and nowhere when all have landed', () => {
+    const s = initialState(31);
+    advance(s, 4.001);
+    expect(s.arcs.length).toBeGreaterThanOrEqual(2);
+
+    const aim = aimAtOldestArc(s, 4.05);
+    expect(aim).toEqual(arcPositionAt(s.arcs[0] as LootArc, 4.05));
+
+    // Long past every arc's flight time, there is nothing left to aim at.
+    expect(aimAtOldestArc(s, 4.05 + ARC_FLIGHT_SEC * 2)).toBeNull();
+  });
+
+  it('turns strikes into catches that blind striking never gets', () => {
+    const blind = initialState(37);
+    advance(blind, 600, strikeTimes(0, 600, CAP_RATE));
+
+    const aimed = initialState(37);
+    strikeThrough(aimed, 600, CAP_RATE);
+
+    expect(aimed.gold).toBeGreaterThan(blind.gold);
   });
 });
 
@@ -146,43 +221,96 @@ describe('runPlayer determinism and contract watching', () => {
   });
 });
 
+/** One real run, reused by every stub — building it is the expensive part. */
+let cachedRun: ReturnType<typeof runPlayer> | null = null;
+
+function stubResult(over: Partial<SeedResult> = {}): SeedResult {
+  const main = (cachedRun ??= runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' }));
+  return {
+    seed: 1,
+    config: cfg(),
+    realms: main.realms,
+    samples: main.samples,
+    correctness: [],
+    pacing: [],
+    roadUplift: [],
+    roadWindowUplift: [],
+    bossUplift: [],
+    eightHourBuys: [],
+    twentyFourHourZones: [],
+    portalReachSec: { idle: null, active: null },
+    promptVsOverfarm: null,
+    abandonProbe: null,
+    totalKills: main.state.lifetime.kills,
+    finalRealm: main.state.realm,
+    victories: 0,
+    correctnessBreaches: main.breaches,
+    correctnessLive: main.violations,
+    offlineMatchesLive: true,
+    offlineMatchesLiveDetail: '',
+    replayIdentical: true,
+    replayIdenticalDetail: '',
+    abandonClean: true,
+    abandonCleanDetail: '',
+    remainingTimeCarried: true,
+    remainingTimeCarriedDetail: '',
+    earningsBonusIsolated: true,
+    earningsBonusIsolatedDetail: '',
+    ...over,
+  };
+}
+
 describe('validators are total', () => {
   it('emits every C and P id with a boolean verdict', () => {
-    const main = runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' });
-    const stub = {
-      seed: 1,
-      config: cfg(),
-      realms: main.realms,
-      samples: main.samples,
-      correctness: [],
-      pacing: [],
-      roadUplift: [],
-      roadWindowUplift: [],
-      bossUplift: [],
-      eightHourBuys: [],
-      twentyFourHourZones: [],
-      portalReachSec: { idle: null, active: null },
-      promptVsOverfarm: null,
-      abandonProbe: null,
-      totalKills: main.state.lifetime.kills,
-      finalRealm: main.state.realm,
-      victories: 0,
-      correctnessLive: main.violations,
-      offlineMatchesLive: true,
-      offlineMatchesLiveDetail: '',
-      replayIdentical: true,
-      replayIdenticalDetail: '',
-      abandonClean: true,
-      abandonCleanDetail: '',
-      remainingTimeCarried: true,
-      remainingTimeCarriedDetail: '',
-      earningsBonusIsolated: true,
-      earningsBonusIsolatedDetail: '',
-    };
+    const stub = stubResult();
     const c = runCorrectness(stub);
     const p = runPacing(stub);
     expect(c.map((v) => v.id)).toEqual(['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10']);
     expect(p.map((v) => v.id)).toEqual(['P1','P2','P3','P4','P5','P6','P7']);
     for (const v of [...c, ...p]) expect(typeof v.pass).toBe('boolean');
+  });
+});
+
+// The readable message list is capped at 20 lines, so a validator that read only
+// that list would call its own breach clean once some other breach had filled it.
+describe('a full message list cannot hide a breach', () => {
+  const noisy = Array.from({ length: 20 }, (_, i) => `t=${i}: gold moved during boss elapsed time`);
+  const cases: Array<[BreachKind, string]> = [
+    ['auto-entry', 'C1'],
+    ['boss-income', 'C2'],
+    ['non-finite', 'C9'],
+    ['hp-regen', 'C10'],
+  ];
+
+  for (const [kind, id] of cases) {
+    it(`${id} still fails on a '${kind}' breach with no message left to show it`, () => {
+      const verdict = runCorrectness(
+        stubResult({ correctnessBreaches: [kind], correctnessLive: noisy }),
+      );
+      expect(verdict.find((v) => v.id === id)?.pass).toBe(false);
+    });
+  }
+
+  it('passes every live validator when the breach set is empty', () => {
+    const verdict = runCorrectness(stubResult({ correctnessBreaches: [], correctnessLive: noisy }));
+    for (const id of ['C1', 'C2', 'C9', 'C10']) {
+      expect(verdict.find((v) => v.id === id)?.pass).toBe(true);
+    }
+  });
+});
+
+describe('the idle-return probes measure a return, not a session', () => {
+  it('makes no purchase inside the 24h window', () => {
+    const s = initialState(5);
+    for (let i = 0; i < 24; i++) advance(s, 300);
+    botTouch(s); // the last thing the player did before walking away
+    const before = { level: s.hero.level, gold: s.gold, banked: s.ascendancy.banked };
+
+    expect(twentyFourHourReturn([s])[0]).toBeGreaterThan(0);
+    // The probe clones, so the fixture is untouched either way; what it must not
+    // do is spend the gold that accrues inside the window.
+    expect(s.hero.level).toBe(before.level);
+    expect(s.gold).toBe(before.gold);
+    expect(s.ascendancy.banked).toBe(before.banked);
   });
 });

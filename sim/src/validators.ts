@@ -2,7 +2,7 @@
 // docs/ECONOMY.md "Redesigned simulator contract"; P-validators are the pacing
 // bands in docs/ACTIVE-PLAY.md. Both are pure functions of a SeedResult.
 
-import type { SeedResult, Uplift, ValidatorResult } from './types';
+import type { BreachKind, SeedResult, Uplift, ValidatorResult } from './types';
 
 const SEC_PER_HOUR = 3600;
 const SEC_PER_DAY = 86_400;
@@ -41,21 +41,28 @@ export function runCorrectness(r: SeedResult): ValidatorResult[] {
   const out: ValidatorResult[] = [];
   const entered = r.realms.filter((x) => x.portalEnterSec !== null);
   const won = r.realms.filter((x) => x.victorySec !== null);
+  const clean = (kind: BreachKind): boolean => !r.correctnessBreaches.includes(kind);
+  /** The capped message lines belonging to `kind`, for the FAIL detail. */
+  const why = (match: string): string => r.correctnessLive.filter((v) => v.includes(match)).join('; ');
 
   out.push(
     ok(
       'C1',
       'No automatic portal entry, online or offline',
-      r.correctnessLive.every((v) => !v.includes('no explicit action')),
-      `${entered.length} entries, all explicit`,
+      clean('auto-entry'),
+      clean('auto-entry')
+        ? `${entered.length} entries, all explicit`
+        : why('no explicit action') || 'the boss phase was entered with no explicit action',
     ),
   );
   out.push(
     ok(
       'C2',
       'No Road income during boss elapsed time',
-      r.correctnessLive.every((v) => !v.includes('during boss elapsed time')),
-      r.correctnessLive.filter((v) => v.includes('during boss')).join('; ') || 'gold, gear, pending, road, collection all frozen',
+      clean('boss-income'),
+      clean('boss-income')
+        ? 'gold, gear, pending, road, collection all frozen'
+        : why('during boss') || 'a Road resource moved during boss elapsed time',
     ),
   );
   out.push(
@@ -104,17 +111,19 @@ export function runCorrectness(r: SeedResult): ValidatorResult[] {
   out.push(
     ok(
       'C9',
-      'No non-finite HP, DPS, currency, or multiplier',
-      r.correctnessLive.every((v) => !v.includes('non-finite')),
-      `${r.samples.length} samples clean`,
+      'No non-finite HP, DPS, currency, duration, or multiplier',
+      clean('non-finite'),
+      clean('non-finite')
+        ? 'every watched slice finite'
+        : why('non-finite') || 'a non-finite value reached client state',
     ),
   );
   out.push(
     ok(
       'C10',
       'Guardian HP never regenerates',
-      r.correctnessLive.every((v) => !v.includes('regenerated')),
-      'monotonic across every attempt',
+      clean('hp-regen'),
+      clean('hp-regen') ? 'monotonic across every attempt' : why('regenerated'),
     ),
   );
   return out;

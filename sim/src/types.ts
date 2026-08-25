@@ -17,6 +17,12 @@ export interface SimConfig {
 /** Which player is being simulated. */
 export type PolicyName = 'road-idle' | 'road-active';
 
+/**
+ * A phase-contract breach the live watch can see. Validators match on these,
+ * not on the human-readable message list, which is capped.
+ */
+export type BreachKind = 'auto-entry' | 'boss-income' | 'hp-regen' | 'non-finite';
+
 /** One realm's full Road → Portal Boss → Ascension lifecycle. */
 export interface RealmRecord {
   realm: number;
@@ -30,7 +36,6 @@ export interface RealmRecord {
   bossSec: number;
   /** Active (striking) seconds inside this realm. */
   activeSec: number;
-  abandons: number;
   /** Predicted seconds-to-kill at entry, at zero momentum. */
   bossEtaAtEntrySec: number | null;
   /** The same prediction at sustained full momentum — the fight's active length. */
@@ -109,7 +114,9 @@ export interface SeedResult {
   finalRealm: number;
   victories: number;
 
-  /** Phase-contract breaches seen live; empty is the passing case. */
+  /** Every kind of phase-contract breach seen live; empty is the passing case. */
+  correctnessBreaches: BreachKind[];
+  /** Readable detail for those breaches, capped at 20 lines. */
   correctnessLive: string[];
   offlineMatchesLive: boolean;
   offlineMatchesLiveDetail: string;

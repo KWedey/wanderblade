@@ -12,13 +12,16 @@ import {
   gearPowerTotal,
   heroDps,
   initialState,
+  killTime,
+  momentumAt,
   serialize,
+  swingInterval,
   type GameEvent,
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
 import { CAP_RATE, runActive, runIdle, SEC_PER_DAY, strikeTimes, type RunHooks } from './policy';
-import type { PolicyName, RealmRecord, Sample, SimConfig } from './types';
+import type { BreachKind, PolicyName, RealmRecord, Sample, SimConfig } from './types';
 
 /** How often a Road clone is kept as a probe fixture. */
 const ROAD_STATE_INTERVAL_SEC = 3600;
@@ -58,7 +61,9 @@ export interface RunResult {
   state: GameState;
   realms: RealmRecord[];
   samples: Sample[];
-  /** Phase-contract breaches observed live. Empty is the passing case. */
+  /** Every kind of breach seen live — never truncated. Empty is the passing case. */
+  breaches: BreachKind[];
+  /** Readable detail for the breaches above, capped at 20 lines. */
   violations: string[];
   totalActiveSec: number;
   /** Realm index → a clone taken the instant that realm's portal was entered. */
@@ -81,7 +86,6 @@ function blankRealm(realm: number, startSec: number): RealmRecord {
     roadSec: null,
     bossSec: 0,
     activeSec: 0,
-    abandons: 0,
     bossEtaAtEntrySec: null,
     bossActiveEtaAtEntrySec: null,
     gearPowerAtEntry: 0,
@@ -112,18 +116,60 @@ function sampleOf(s: GameState): Sample {
 }
 
 /**
+ * The scalars the watch compares between slices. Active play calls `check`
+ * once per strike, so this is a hot path — a full `clone` there is a JSON
+ * round-trip of the whole state, arcs included, for nine numbers.
+ */
+interface Watched {
+  phase: string;
+  gold: number;
+  pending: number;
+  leagues: number;
+  zone: number;
+  kills: number;
+  gearFound: number;
+  zonesCleared: number;
+  killIndex: number;
+  rngState: number;
+  bossHpRemaining: number;
+}
+
+function watched(s: GameState): Watched {
+  return {
+    phase: s.phase,
+    gold: s.gold,
+    pending: s.ascendancy.pending,
+    leagues: s.leagues,
+    zone: s.zone,
+    kills: s.lifetime.kills,
+    gearFound: s.collection.gearFound,
+    zonesCleared: s.collection.zonesCleared,
+    killIndex: s.killIndex,
+    rngState: s.rngState,
+    bossHpRemaining: s.boss.hpRemaining,
+  };
+}
+
+/**
  * Watches the live run for anything the phase contract forbids. This is the
  * correctness evidence, gathered from the real run rather than asserted after.
  */
 class ContractWatch {
+  /**
+   * Every kind of breach seen. Uncapped on purpose: the message list below is
+   * capped for readability, and a validator that read only that list would call
+   * its own breach clean once 20 messages of some other kind had filled it.
+   */
+  readonly breaches = new Set<BreachKind>();
   readonly violations: string[] = [];
-  private prev: GameState;
+  private prev: Watched;
 
   constructor(state: GameState) {
-    this.prev = clone(state);
+    this.prev = watched(state);
   }
 
-  private note(msg: string): void {
+  private note(kind: BreachKind, msg: string): void {
+    this.breaches.add(kind);
     if (this.violations.length < 20) this.violations.push(msg);
   }
 
@@ -132,32 +178,47 @@ class ContractWatch {
     const wasBoss = this.prev.phase === 'boss';
 
     if (!wasBoss && state.phase === 'boss' && !events.some((e) => e.type === 'portalEnter')) {
-      this.note(`t=${t}: entered the boss phase with no explicit action`);
+      this.note('auto-entry', `t=${t}: entered the boss phase with no explicit action`);
     }
     if (wasBoss && state.phase === 'boss') {
+      const now = watched(state);
       const frozen: Array<[string, number]> = [
-        ['gold', state.gold - this.prev.gold],
-        ['pendingAscendancy', state.ascendancy.pending - this.prev.ascendancy.pending],
-        ['leagues', state.leagues - this.prev.leagues],
-        ['zone', state.zone - this.prev.zone],
-        ['kills', state.lifetime.kills - this.prev.lifetime.kills],
-        ['gearFound', state.collection.gearFound - this.prev.collection.gearFound],
-        ['zonesCleared', state.collection.zonesCleared - this.prev.collection.zonesCleared],
-        ['killIndex', state.killIndex - this.prev.killIndex],
-        ['rngState', state.rngState - this.prev.rngState],
+        ['gold', now.gold - this.prev.gold],
+        ['pendingAscendancy', now.pending - this.prev.pending],
+        ['leagues', now.leagues - this.prev.leagues],
+        ['zone', now.zone - this.prev.zone],
+        ['kills', now.kills - this.prev.kills],
+        ['gearFound', now.gearFound - this.prev.gearFound],
+        ['zonesCleared', now.zonesCleared - this.prev.zonesCleared],
+        ['killIndex', now.killIndex - this.prev.killIndex],
+        ['rngState', now.rngState - this.prev.rngState],
       ];
       for (const [name, delta] of frozen) {
-        if (delta !== 0) this.note(`t=${t}: ${name} moved during boss elapsed time`);
+        if (delta !== 0) {
+          this.note('boss-income', `t=${t}: ${name} moved during boss elapsed time`);
+        }
       }
-      if (state.boss.hpRemaining > this.prev.boss.hpRemaining) {
-        this.note(`t=${t}: guardian HP regenerated`);
+      if (now.bossHpRemaining > this.prev.bossHpRemaining) {
+        this.note('hp-regen', `t=${t}: guardian HP regenerated`);
       }
     }
-    const finite = [state.gold, state.ascendancy.banked, state.boss.hpRemaining, heroDps(state)];
+    // HP, DPS, currency, duration, and multiplier — the five classes
+    // docs/ECONOMY.md "Determinism and numerical safety" names.
+    const momentum = momentumAt(state.momentum, state.timeSec);
+    const finite = [
+      state.boss.hpRemaining,
+      heroDps(state),
+      state.gold,
+      state.ascendancy.banked,
+      state.ascendancy.pending,
+      state.phase === 'boss' ? swingInterval(state, momentum) : killTime(state, momentum),
+      earningsMultiplier(state.ascendancy.victories),
+      attackSpeedMultiplier(state, momentum),
+    ];
     if (finite.some((v) => !Number.isFinite(v))) {
-      this.note(`t=${t}: a non-finite value reached client state`);
+      this.note('non-finite', `t=${t}: a non-finite value reached client state`);
     }
-    this.prev = clone(state);
+    this.prev = watched(state);
   }
 }
 
@@ -209,6 +270,9 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
         }
       }
     },
+    onPurchases: (bought) => {
+      current().treePurchasesTotal += bought.tree;
+    },
     onSlice: () => {
       const r = current();
       if (state.gold > r.goldPeak) r.goldPeak = state.gold;
@@ -237,7 +301,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     ) {
       return;
     }
-    botTouch(state);
+    current().treePurchasesTotal += botTouch(state).tree;
     const r = current();
     if (
       r.portalReadySec !== null &&
@@ -271,7 +335,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
         realmAtStart.activeSec += session;
       } else {
         runIdle(state, session, hooks);
-        botTouch(state);
+        realmAtStart.treePurchasesTotal += botTouch(state).tree;
       }
     }
 
@@ -279,7 +343,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     const gap = Math.min(gapSec, horizon - state.timeSec);
     if (gap > 0) {
       runIdle(state, gap, hooks);
-      botTouch(state);
+      current().treePurchasesTotal += botTouch(state).tree;
     }
   }
 
@@ -293,6 +357,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     state,
     realms,
     samples,
+    breaches: [...watch.breaches],
     violations: watch.violations,
     totalActiveSec,
     snapshots,
