@@ -94,6 +94,7 @@ const MONSTER_LEGEND: Record<string, string> = {
   ...OUTLINE,
   b: 'body',
   B: 'bodyDark',
+  h: 'bodyLight',
   a: 'sclera',
   e: 'pupil',
 };
@@ -230,13 +231,35 @@ export const MON_OOZE: SpriteMap = {
 };
 
 /** Ordered small to large; the scene picks by kill index. */
+/**
+ * Rim-lights the upper contour of a body so a two-tone creature reads as
+ * volume rather than a flat cut-out. Light comes from above: the first body
+ * pixel down each column turns light, but only in the sprite's top band, so
+ * undersides and limbs stay in shadow.
+ */
+export function withTopLight(map: SpriteMap, band = 0.45): SpriteMap {
+  const height = map.rows.length;
+  const limit = Math.max(2, Math.round(height * band));
+  const grid = map.rows.map((r) => r.split(''));
+  const width = grid[0]?.length ?? 0;
+  for (let x = 0; x < width; x++) {
+    for (let y = 0; y < limit; y++) {
+      const cell = grid[y]?.[x];
+      if (cell === undefined || cell === '.' || cell === 'o') continue;
+      if (cell === 'b') grid[y]![x] = 'h';
+      break;
+    }
+  }
+  return { rows: grid.map((r) => r.join('')), legend: map.legend };
+}
+
 export const MONSTER_SHAPES = [
   MON_SWARMLING,
   MON_OOZE,
   MON_HOUND,
   MON_STALKER,
   MON_GOLEM,
-];
+].map((m) => withTopLight(m));
 
 /** Index into MONSTER_SHAPES of the shape that spawns as a group of three. */
 export const SWARM_SHAPE = 0;

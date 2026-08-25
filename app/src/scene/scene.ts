@@ -273,10 +273,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const cached = skinCache.get(key);
     if (cached) return cached;
     const skin = realmSkin(key);
-    const mInk = monsterInk(skin);
     const sInk = sceneryInk(skin);
     const built: SkinnedSprites = {
-      monsters: MONSTER_SHAPES.map((m) => bakeSprite(m, mInk)),
+      monsters: MONSTER_SHAPES.map((m, i) => bakeSprite(m, monsterInk(skin, i))),
       trees: [TREE, TREE_TALL, TREE_WIDE].map((t) => bakeSprite(t, sInk)),
       rock: bakeSprite(ROCK, sInk),
       fence: bakeSprite(FENCE, sInk),

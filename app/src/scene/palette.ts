@@ -339,11 +339,62 @@ export function sceneryInk(skin: RealmSkin): InkSet {
   };
 }
 
-export function monsterInk(skin: RealmSkin): InkSet {
+function toHsl(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+
+function channel(p1: number, q: number, t: number): number {
+  let u = t;
+  if (u < 0) u += 1;
+  if (u > 1) u -= 1;
+  if (u < 1 / 6) return p1 + (q - p1) * 6 * u;
+  if (u < 1 / 2) return q;
+  if (u < 2 / 3) return p1 + (q - p1) * (2 / 3 - u) * 6;
+  return p1;
+}
+
+function toHex(h: number, s: number, l: number): string {
+  const hue = ((h % 1) + 1) % 1;
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return `#${((v << 16) | (v << 8) | v).toString(16).padStart(6, '0')}`;
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p1 = 2 * l - q;
+  const r = Math.round(channel(p1, q, hue + 1 / 3) * 255);
+  const g = Math.round(channel(p1, q, hue) * 255);
+  const b = Math.round(channel(p1, q, hue - 1 / 3) * 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+/** Hue offsets per roster slot, so five creatures share one realm skin
+ *  without three identically-coloured bodies standing in the same frame. */
+const SHAPE_HUE = [0, 0.07, -0.06, 0.13, -0.11];
+
+export function monsterInk(skin: RealmSkin, shape = 0): InkSet {
+  const turn = SHAPE_HUE[((shape % SHAPE_HUE.length) + SHAPE_HUE.length) % SHAPE_HUE.length] ?? 0;
+  const [bh, bs, bl] = toHsl(skin.monBody);
+  const [dh, ds, dl] = toHsl(skin.monBodyDark);
+  const vivid = Math.max(bs, 0.5);
   return {
     outline: INK.black,
-    body: skin.monBody,
-    bodyDark: skin.monBodyDark,
+    body: toHex(bh + turn, vivid, bl),
+    bodyDark: toHex(dh + turn, Math.max(ds, 0.45), dl),
+    bodyLight: toHex(bh + turn, Math.max(vivid - 0.1, 0.4), Math.min(0.92, bl + 0.16)),
     sclera: '#ffffff',
     pupil: INK.black,
   };

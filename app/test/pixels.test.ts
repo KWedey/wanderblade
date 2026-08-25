@@ -3,10 +3,12 @@ import {
   ALL_SPRITE_MAPS,
   FONT,
   FONT_COVERAGE,
-  fontFaults,
   GLYPH_W,
+  MONSTER_SHAPES,
+  fontFaults,
   spriteMapFaults,
   textWidth,
+  withTopLight,
 } from '../src/scene/pixels';
 
 describe('sprite grids', () => {
@@ -54,5 +56,28 @@ describe('bitmap font', () => {
     expect(textWidth('7', 1)).toBe(GLYPH_W);
     expect(textWidth('12', 1)).toBe(GLYPH_W * 2 + 1);
     expect(textWidth('12', 3)).toBe((GLYPH_W * 2 + 1) * 3);
+  });
+});
+
+describe('withTopLight', () => {
+  it('lights the first body pixel down each column', () => {
+    const lit = withTopLight({
+      rows: ['.oo.', 'obbo', 'obbo', '.oo.'],
+      legend: { o: 'outline', b: 'body', h: 'bodyLight' },
+    }, 0.6);
+    expect(lit.rows[1]).toBe('ohho');
+    expect(lit.rows[2]).toBe('obbo');
+  });
+
+  it('leaves the lower band untouched', () => {
+    const rows = ['....', '....', 'bbbb', 'bbbb'];
+    const lit = withTopLight({ rows, legend: { b: 'body', h: 'bodyLight' } }, 0.5);
+    expect(lit.rows[2]).toBe('bbbb');
+  });
+
+  it('preserves every sprite dimension', () => {
+    for (const map of MONSTER_SHAPES) {
+      expect(spriteMapFaults('monster', map)).toEqual([]);
+    }
   });
 });
