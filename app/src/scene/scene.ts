@@ -836,7 +836,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const sy = sunY;
     // Halo first. A bare disc clipped by a canopy read as a crescent moon in a
     // bright blue sky; light spilling past the leaves reads as sun.
-    glowDisc(sx, sy, sunR * 2.1, skin.sun, 0.5);
+    glowDisc(sx, sy, Math.round(sunR * 1.45), skin.sun, 0.34);
     ctx.fillStyle = skin.sun;
     const r = sunR;
     for (let dy = -r; dy <= r; dy++) {
