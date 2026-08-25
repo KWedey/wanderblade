@@ -37,6 +37,9 @@ export {
   MOMENTUM_MAX_BONUS,
   ARC_FLIGHT_SEC,
   ARC_CATCH_MULT,
+  ARC_MIN_REACH,
+  ARC_MAX_REACH,
+  ARC_CATCH_RADIUS,
   bossHpMult,
   BOSS_REALM_GAIN,
   ASC_PER_ZONE,
@@ -52,6 +55,8 @@ export type { AscNodeDef, SkillDef } from './constants';
 
 // --- Types ---------------------------------------------------------------
 export type {
+  ArcPoint,
+  Strike,
   Rarity,
   GearSlot,
   GearItem,
@@ -69,6 +74,9 @@ export type {
   GameEvent,
   EventLog,
 } from './types';
+
+// --- Loot arcs -----------------------------------------------------------
+export { arcLandingX, arcPositionAt, arcHitIndex } from './arcs';
 
 // --- Momentum ------------------------------------------------------------
 export {

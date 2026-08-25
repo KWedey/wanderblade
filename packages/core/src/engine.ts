@@ -5,6 +5,7 @@
 import {
   ARC_CATCH_MULT,
   ARC_FLIGHT_SEC,
+  ASC_NODE_IDS,
   ASC_NODES,
   dropChance,
   GEAR_SLOTS,
@@ -13,6 +14,7 @@ import {
   MOMENTUM_PER_STRIKE,
   RARITIES,
   RARITY_WEIGHTS,
+  SKILL_IDS,
   SKILLS,
   zonesPerRealm,
 } from './constants';
@@ -29,6 +31,7 @@ import {
   skillCost,
   swingInterval,
 } from './formulas';
+import { arcHitIndex, arcLandingX } from './arcs';
 import { addMomentum, momentumAt } from './momentum';
 import { createRng, type Rng } from './rng';
 import type {
@@ -39,6 +42,7 @@ import type {
   LootArc,
   Rarity,
   Recap,
+  Strike,
 } from './types';
 
 /**
@@ -47,6 +51,13 @@ import type {
  * attached `recap` stays exact.
  */
 export const EVENT_CAP = 50_000;
+
+/** Every id at rank 0 — derived from the id list, so a new entry cannot be missed. */
+function zeroRanks(ids: readonly string[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const id of ids) out[id] = 0;
+  return out;
+}
 
 /** Fresh state for a new run seeded with `seed`. */
 export function initialState(seed: number): GameState {
@@ -64,10 +75,10 @@ export function initialState(seed: number): GameState {
     portalReady: false,
     leagues: 0,
     gold: 0,
-    hero: { level: 0, skills: { cleave: 0, warcry: 0 } },
+    hero: { level: 0, skills: zeroRanks(SKILL_IDS) },
     gear: { weapon: null, armor: null, trinket: null },
     boss: { hpRemaining: 0, hpMax: 0, enteredAtSec: null },
-    ascendancy: { pending: 0, banked: 0, nodes: { edge: 0, heft: 0, fury: 0 }, victories: 0 },
+    ascendancy: { pending: 0, banked: 0, nodes: zeroRanks(ASC_NODE_IDS), victories: 0 },
     momentum: { value: 0, atSec: 0 },
     arcs: [],
     collection: { bossTrophies: 0, gearFound: 0, zonesCleared: 0 },
@@ -276,7 +287,12 @@ function processKill(
     arcGear = { slot, rarity, realm, zone: z };
   }
 
-  state.arcs.push({ gold, expiresAtSec: clock + ARC_FLIGHT_SEC, gear: arcGear });
+  state.arcs.push({
+    gold,
+    expiresAtSec: clock + ARC_FLIGHT_SEC,
+    landingX: arcLandingX(state.killIndex),
+    gear: arcGear,
+  });
 
   state.leagues += leaguePerKill;
   recap.leaguesTraveled += leaguePerKill;
@@ -347,7 +363,7 @@ function ascend(state: GameState, events: GameEvent[], recap: Recap, clock: numb
   state.portalReady = false;
   state.leagues = 0;
   state.gold = 0;
-  state.hero = { level: 0, skills: { cleave: 0, warcry: 0 } };
+  state.hero = { level: 0, skills: zeroRanks(SKILL_IDS) };
   state.gear = { weapon: null, armor: null, trinket: null };
   state.boss = { hpRemaining: 0, hpMax: 0, enteredAtSec: null };
   state.momentum = { value: 0, atSec: clock };
@@ -385,13 +401,18 @@ function processStrike(
   state: GameState,
   events: GameEvent[],
   recap: Recap,
-  clock: number,
+  strike: Strike,
 ): void {
+  const clock = strike.atSec;
   state.momentum = addMomentum(state.momentum, clock, MOMENTUM_PER_STRIKE);
   if (state.phase !== 'road') return;
 
+  // A strike that catches nothing still swings and still builds momentum.
   pruneArcs(state, clock);
-  const arc = state.arcs.shift();
+  if (!strike.aim) return;
+  const hit = arcHitIndex(state.arcs, strike.aim, clock);
+  if (hit < 0) return;
+  const arc = state.arcs.splice(hit, 1)[0];
   if (!arc) return;
 
   const bonus = arc.gold * (ARC_CATCH_MULT - 1);
@@ -434,7 +455,7 @@ function scheduleNext(state: GameState, clock: number): void {
 export function advance(
   state: GameState,
   seconds: number,
-  strikes: readonly number[] = [],
+  strikes: readonly Strike[] = [],
 ): GameEvent[] {
   const events: EventLog = [];
   const recap = emptyRecap(Math.max(0, seconds));
@@ -449,16 +470,17 @@ export function advance(
   const target = start + seconds;
 
   let si = 0;
-  while (si < strikes.length && (strikes[si] as number) <= start) si += 1;
+  while (si < strikes.length && (strikes[si] as Strike).atSec <= start) si += 1;
 
   for (;;) {
-    const nextStrike = si < strikes.length ? (strikes[si] as number) : Infinity;
+    const strike = si < strikes.length ? (strikes[si] as Strike) : null;
+    const nextStrike = strike ? strike.atSec : Infinity;
     const strikeDue = nextStrike <= target;
     const actionDue = state.nextActionAtSec <= target;
     if (!strikeDue && !actionDue) break;
 
-    if (strikeDue && (!actionDue || nextStrike <= state.nextActionAtSec)) {
-      processStrike(state, events, recap, nextStrike);
+    if (strike && strikeDue && (!actionDue || nextStrike <= state.nextActionAtSec)) {
+      processStrike(state, events, recap, strike);
       si += 1;
       continue;
     }

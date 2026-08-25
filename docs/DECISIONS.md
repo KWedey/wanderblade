@@ -156,3 +156,11 @@ Content from D&D books, settings, adventures, brands, or art that is not in the 
 - **P6** (boss duration) records `bossEtaSec(state, 1)` at entry — the fight's length at sustained momentum, the number the portal preview shows — because the band is stated in *active* minutes.
 
 **Why:** Each of these validators initially failed against a correct engine because it measured the wrong quantity. P1 spread to 3.85x from build divergence, P5 counted idle gaps between sessions, and P6 counted wall clock for a mostly-idle player. Writing the measurement definition into the ADR keeps the band and the instrument from drifting apart again.
+
+## 25. A loot-arc catch is a position hit test, never a queue — 2026-08-25
+
+**Decision:** A Strike is `{ atSec, aim }`, where `aim` is a point in an arc space core defines (hero at the origin, apex one unit high) or `null`. Core computes every live arc's position at the strike's timestamp and catches the nearest arc inside `ARC_CATCH_RADIUS`; an exact tie goes to the older arc. A strike aimed at nothing catches nothing and still lands its swing and its momentum. Arc reach is derived from the kill index through a golden-ratio spread, so it consumes no RNG draw and leaves the kill-keyed stream untouched. The client renders `state.arcs` and reacts to the `arcCatch` event; it never decides a catch.
+
+**Why:** The first implementation popped the oldest arc off the front of the queue with no spatial test at all. A tap at empty sky caught a coin, and a tap on the third coin caught the first — which removes position from the mechanic and makes Loot Arcs an auto-collect with extra steps. The layer earns its place only if *where and when* you strike decides what you get. Keeping the trajectory in core is what lets that stay deterministic: render timing never enters the rules, and identical timestamped aimed inputs still produce byte-identical results under any split.
+
+**Also settled here:** `ARC_CATCH_MULT` is 1.15, not the 2.0 `docs/ACTIVE-PLAY.md` carried before anything was simulated. Momentum's ×1.75 and arc catching compound; 1.15 puts the Road-active ceiling at ≈2.0×, mid-band, measured at 1.95× with zero spread across five seeds. 2.0 would reach ~3.5× and break the 1.8–2.2× band it was written to satisfy.

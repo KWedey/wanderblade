@@ -85,7 +85,10 @@ describe('split-advance determinism: strikes', () => {
 
   it('is invariant when a strike and a kill share an instant', () => {
     // Strike exactly on the instants zone-0 kills land on.
-    const strikes = [1, 2, 3, 4, 5].map((n) => n * ROAD_KILL0_SEC);
+    const strikes = [1, 2, 3, 4, 5].map((n) => ({
+      atSec: n * ROAD_KILL0_SEC,
+      aim: { x: 0.5, y: 1 },
+    }));
     const span = 6 * ROAD_KILL0_SEC;
     const single = initialState(8);
     const evSingle = advance(single, 2 * span, strikes);

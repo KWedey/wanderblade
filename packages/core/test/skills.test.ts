@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advance,
+  ASC_NODE_IDS,
   buyHeroLevel,
   buySkill,
+  enterPortal,
   heroDps,
   initialState,
   levelCost,
   skillCost,
+  SKILL_IDS,
   skillMult,
   skillMultPerLevel,
   SKILLS,
 } from '../src/index';
+import { portalReady } from './helpers';
 
 describe('buyHeroLevel', () => {
   it('deducts gold and raises level when affordable', () => {
@@ -131,5 +136,27 @@ describe('buySkill hard cap (bounded multiplier)', () => {
       10,
     );
     expect(1 + skillMultPerLevel * capC).toBeCloseTo(1.5, 10);
+  });
+});
+
+describe('the id lists are what a fresh and a post-ascension state are built from', () => {
+  it('gives a fresh state a rank-0 entry for every skill and every tree node', () => {
+    const s = initialState(1);
+    expect(Object.keys(s.hero.skills).sort()).toEqual([...SKILL_IDS].sort());
+    expect(Object.keys(s.ascendancy.nodes).sort()).toEqual([...ASC_NODE_IDS].sort());
+    expect(Object.values(s.hero.skills).every((r) => r === 0)).toBe(true);
+    expect(Object.values(s.ascendancy.nodes).every((r) => r === 0)).toBe(true);
+  });
+
+  it('rebuilds the same skill map on ascension, keeping the tree untouched', () => {
+    const s = portalReady(41, 600);
+    s.hero.level = 20;
+    for (const id of SKILL_IDS) s.hero.skills[id] = 3;
+    enterPortal(s);
+    advance(s, 3600);
+    expect(s.lifetime.ascensions).toBe(1);
+    expect(Object.keys(s.hero.skills).sort()).toEqual([...SKILL_IDS].sort());
+    expect(Object.values(s.hero.skills).every((r) => r === 0)).toBe(true);
+    expect(Object.keys(s.ascendancy.nodes).sort()).toEqual([...ASC_NODE_IDS].sort());
   });
 });

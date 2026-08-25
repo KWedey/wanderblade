@@ -1,5 +1,6 @@
 import {
   advance,
+  arcPositionAt,
   bossHp,
   deserialize,
   enemyHp,
@@ -9,7 +10,9 @@ import {
   killTime,
   serialize,
   zonesPerRealm,
+  type ArcPoint,
   type GameState,
+  type Strike,
 } from '../src/index';
 
 /** Seconds a zone-0 kill takes at the starting build, with no momentum. */
@@ -26,12 +29,38 @@ export function idleTo(seed: number, seconds: number): GameState {
   return s;
 }
 
-/** Evenly spaced strike timestamps in (from, from + seconds]. */
-export function strikesAt(from: number, seconds: number, rate: number): number[] {
-  const out: number[] = [];
+/** Evenly spaced strikes in (from, from + seconds], all aimed at `aim`. */
+export function strikesAt(
+  from: number,
+  seconds: number,
+  rate: number,
+  aim: ArcPoint | null = null,
+): Strike[] {
+  const out: Strike[] = [];
   const step = 1 / rate;
-  for (let t = from + step; t <= from + seconds + 1e-12; t += step) out.push(t);
+  for (let t = from + step; t <= from + seconds + 1e-12; t += step) out.push({ atSec: t, aim });
   return out;
+}
+
+/** Where the oldest arc still in flight at `atSec` will be — a perfect aim. */
+export function aimAtOldestArc(state: GameState, atSec: number): ArcPoint | null {
+  for (const arc of state.arcs) {
+    const p = arcPositionAt(arc, atSec);
+    if (p) return p;
+  }
+  return null;
+}
+
+/** Advance `seconds` striking at `rate`, aiming every strike at a live arc. */
+export function playActive(state: GameState, seconds: number, rate: number): void {
+  const end = state.timeSec + seconds;
+  const step = 1 / rate;
+  let next = state.timeSec + step;
+  while (next <= end + 1e-12) {
+    advance(state, next - state.timeSec, [{ atSec: next, aim: aimAtOldestArc(state, next) }]);
+    next += step;
+  }
+  if (end > state.timeSec) advance(state, end - state.timeSec);
 }
 
 function equip(s: GameState, power: number): void {

@@ -106,6 +106,16 @@ describe('hero damage model', () => {
     expect(skillMult({ cleave: 2, warcry: 4 })).toBeCloseTo(f(2) * f(4), 10);
   });
 
+  it('walks SKILL_IDS, so key order and stray keys cannot move the product', () => {
+    // JSON round-trips preserve insertion order, so a hand-edited or older save
+    // can hand skillMult the same ranks in a different order.
+    const forward = skillMult({ cleave: 3, warcry: 7 });
+    expect(skillMult({ warcry: 7, cleave: 3 })).toBe(forward);
+    expect(skillMult({ cleave: 3, warcry: 7, ghost: 9 })).toBe(forward);
+    // A skill the state never recorded counts as rank 0, not as absent.
+    expect(skillMult({ cleave: 3 })).toBe(skillMult({ cleave: 3, warcry: 0 }));
+  });
+
   it('gearPowerTotal sums the three slots, treating empty as 0', () => {
     expect(gearPowerTotal({ weapon: null, armor: null, trinket: null })).toBe(0);
     expect(

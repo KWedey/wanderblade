@@ -25,6 +25,7 @@ import {
   RARITY_MULTIPLIERS,
   skillCostBase,
   skillCostRate,
+  SKILL_IDS,
   skillMultPerLevel,
   zonesPerRealm,
 } from './constants';
@@ -110,11 +111,14 @@ export function heroBaseDamage(level: number, realm: number): number {
   return d0 * Math.pow(rD, level) * realmScale(realm);
 }
 
-/** skillMult = Π over realm-local skills of (1 + 0.05 * rank). */
+/**
+ * skillMult = Π over realm-local skills of (1 + 0.05 * rank), walked in
+ * SKILL_IDS order so the float product cannot depend on a save's key order.
+ */
 export function skillMult(skills: Record<string, number>): number {
   let m = 1;
-  for (const rank of Object.values(skills)) {
-    m *= 1 + skillMultPerLevel * rank;
+  for (const id of SKILL_IDS) {
+    m *= 1 + skillMultPerLevel * (skills[id] ?? 0);
   }
   return m;
 }

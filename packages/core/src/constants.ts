@@ -9,7 +9,7 @@ import type { Rarity } from './types';
 /**
  * Scales every gold- and power-denominated quantity by `REALM_STEP^realm`,
  * making a realm ratio-identical to realm 0. Ascendancy and the earnings bonus
- * are then the only cross-realm asymmetries (docs/DECISIONS.md #19).
+ * are then the only cross-realm asymmetries (docs/DECISIONS.md #21).
  */
 export const REALM_STEP = 8;
 
@@ -97,7 +97,7 @@ export const MOMENTUM_PER_STRIKE = 0.1;
 export const MOMENTUM_HALF_LIFE_SEC = 2;
 /**
  * Attack-speed bonus at full momentum: multiplier = 1 + this * momentum.
- * Tuned to 0.6 so a capped boss fight lands mid-band (1.4x-1.8x faster).
+ * Tuned so a capped boss fight lands mid-band (1.4x-1.8x faster).
  */
 export const MOMENTUM_MAX_BONUS = 0.75;
 
@@ -110,6 +110,14 @@ export const ARC_FLIGHT_SEC = 1.5;
  * Tuned with MOMENTUM_MAX_BONUS so capped Road play lands at 1.75 * 1.15 ~= 2.0x.
  */
 export const ARC_CATCH_MULT = 1.15;
+/** Arc space reach: the nearest and furthest an arc lands from the hero. */
+export const ARC_MIN_REACH = 0.5;
+export const ARC_MAX_REACH = 1.5;
+/**
+ * How near a strike must land to catch. Wide enough that aiming at a coin
+ * works, tight enough that a strike at empty sky misses.
+ */
+export const ARC_CATCH_RADIUS = 0.12;
 
 // --- Portal guardian -----------------------------------------------------
 /** Guardian HP = this * enemyHp(realm, last zone) * BOSS_REALM_GAIN^realm. */
@@ -124,7 +132,7 @@ export const BOSS_REALM_GAIN = 1.22;
 // --- Ascendancy ----------------------------------------------------------
 /**
  * Pending Ascendancy is granted per zone cleared, never per second, so farming
- * an already portal-ready realm earns none of it (docs/DECISIONS.md #20).
+ * an already portal-ready realm earns none of it (docs/DECISIONS.md #22).
  */
 export const ASC_PER_ZONE = 1;
 /** Guardian victory payout, the dominant share of a realm's Ascendancy. */

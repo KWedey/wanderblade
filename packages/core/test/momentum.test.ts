@@ -110,7 +110,7 @@ describe('strikes are inputs into advance', () => {
     const before = serialize(s);
 
     const stale = initialState(21);
-    advance(stale, 600, [-50, 0, 700, 5000]);
+    advance(stale, 600, [-50, 0, 700, 5000].map((atSec) => ({ atSec, aim: null })));
     expect(serialize(stale)).toBe(before);
   });
 

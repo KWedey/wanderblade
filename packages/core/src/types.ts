@@ -40,6 +40,19 @@ export interface MomentumState {
   atSec: number;
 }
 
+/** A point in arc space (see arcs.ts). */
+export interface ArcPoint {
+  x: number;
+  y: number;
+}
+
+/** One Strike: an explicit timestamped input, with where it landed. */
+export interface Strike {
+  atSec: number;
+  /** Aim point in arc space. A strike with no aim catches nothing. */
+  aim: ArcPoint | null;
+}
+
 /**
  * A loot arc thrown by a kill. The kill already credited full base gold, so an
  * uncaught arc costs the idle player nothing; catching one pays the *bonus*
@@ -50,6 +63,8 @@ export interface LootArc {
   gold: number;
   /** Absolute time the arc lands; catchable strictly before this. */
   expiresAtSec: number;
+  /** How far this arc flies, fixing its position at any instant. */
+  landingX: number;
   /** Gear rolled by this kill, if any, at its un-upgraded rarity. */
   gear: { slot: GearSlot; rarity: Rarity; realm: number; zone: number } | null;
 }

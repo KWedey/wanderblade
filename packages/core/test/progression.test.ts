@@ -8,9 +8,10 @@ import {
   leaguePerKill,
   summarizeEvents,
   zonesPerRealm,
+  type EventLog,
   type GameEvent,
 } from '../src/index';
-import { nearPortal, ROAD_KILL0_SEC, strikesAt } from './helpers';
+import { aimAtOldestArc, nearPortal, ROAD_KILL0_SEC } from './helpers';
 
 describe('road progression sanity', () => {
   it('the first kill lands on schedule and pays gold', () => {
@@ -90,10 +91,13 @@ describe('recap accuracy', () => {
     const goldBefore = s.gold;
     const killsBefore = s.lifetime.kills;
 
-    const events = advance(s, 5000, strikesAt(0, 5000, 2));
+    // Aimed strikes, so the recap has catch gold in it as well as kill gold.
+    const events: GameEvent[] = [];
+    for (let t = 0.5; t <= 5000 + 1e-9; t += 0.5) {
+      events.push(...advance(s, t - s.timeSec, [{ atSec: t, aim: aimAtOldestArc(s, t) }]));
+    }
     const recap = summarizeEvents(events);
 
-    expect(recap.seconds).toBe(5000);
     expect(recap.kills).toBe(s.lifetime.kills - killsBefore);
     expect(recap.goldEarned).toBeCloseTo(s.gold - goldBefore, 3);
     expect(recap.leaguesTraveled).toBeCloseTo(s.leagues, 6);
@@ -112,10 +116,15 @@ describe('recap accuracy', () => {
 
   it('recomputes from a hand-assembled event list', () => {
     const s = initialState(4);
-    const events = advance(s, 3000);
+    const events: EventLog = advance(s, 3000);
+    expect(events.recap?.seconds).toBe(3000);
+
     const plain = [...events]; // the spread strips the attached recap
     const recap = summarizeEvents(plain);
     expect(recap.kills).toBe(s.lifetime.kills);
     expect(recap.leaguesTraveled).toBeCloseTo(s.leagues, 6);
+    // Recomputed seconds come from the last event, so they trail the advance.
+    expect(recap.seconds).toBeGreaterThan(0);
+    expect(recap.seconds).toBeLessThanOrEqual(3000);
   });
 });
