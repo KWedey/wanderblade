@@ -202,3 +202,27 @@ export function wrap(v: number, span: number): number {
   const m = v % span;
   return m < 0 ? m + span : m;
 }
+
+/**
+ * Apex of a loot arc in scene pixels for a given flight time: g*T^2/8.
+ * This is the y scale of arc space, so it must come from the same constants
+ * the ballistics use rather than being picked to look right.
+ */
+export function arcApexHeight(flightSec: number, gravity = ARC_GRAVITY): number {
+  return Math.max(1, (gravity * flightSec * flightSec) / 8);
+}
+
+/**
+ * Scene pixels to the engine's arc space: hero at the origin, x along the
+ * road, apex at y = 1. Scene units never cross the engine boundary, so a
+ * resize or a pixel-scale change cannot move where a Strike lands.
+ */
+export function arcSpaceFromScene(
+  px: number,
+  py: number,
+  heroX: number,
+  groundY: number,
+  apex: number,
+): Vec2 {
+  return { x: px - heroX, y: (groundY - py) / Math.max(1, apex) };
+}

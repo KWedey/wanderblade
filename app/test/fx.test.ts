@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   ARC_GRAVITY,
+  arcApexHeight,
   arcCaughtBy,
   arcFlightSec,
   arcInFlight,
   arcPosition,
+  arcSpaceFromScene,
   decayTo,
   floaterOffsetY,
   launchArc,
@@ -12,8 +14,8 @@ import {
   liftForFlight,
   shakeOffset,
   stepParticle,
-  wrap,
   type Particle,
+  wrap,
 } from '../src/scene/fx';
 
 function coin(spanX = 60, lift = 150) {
@@ -159,5 +161,54 @@ describe('wrap', () => {
     expect(wrap(11, 10)).toBe(1);
     expect(wrap(10, 10)).toBe(0);
     expect(wrap(5, 0)).toBe(0);
+  });
+});
+
+describe('arcApexHeight', () => {
+  it('is g*T^2/8', () => {
+    expect(arcApexHeight(1.5, 160)).toBeCloseTo((160 * 1.5 * 1.5) / 8);
+  });
+
+  it('never returns a degenerate scale', () => {
+    expect(arcApexHeight(0, 160)).toBe(1);
+  });
+
+  it('matches the apex the ballistics reach over level ground', () => {
+    // The y scale of arc space is a constant, so it is the level-flight apex.
+    // A real arc that lands lower than it launched rises further than this by
+    // exactly that drop, which is why the scale must not depend on either.
+    const y = 100;
+    const flight = 1.5;
+    const arc = launchArc(0, y, -40, y, liftForFlight(y, y, flight), 5, 'gold', 0);
+    const apexY = arcPosition(arc, -arc.vy / ARC_GRAVITY).y;
+    expect(y - apexY).toBeCloseTo(arcApexHeight(flight), 6);
+  });
+
+  it('is exceeded by exactly the drop when the arc lands lower', () => {
+    const y0 = 90;
+    const landY = 100;
+    const flight = 1.5;
+    const arc = launchArc(0, y0, -40, landY, liftForFlight(y0, landY, flight), 5, 'gold', 0);
+    const apexY = arcPosition(arc, -arc.vy / ARC_GRAVITY).y;
+    const rise = landY - apexY;
+    expect(rise).toBeGreaterThan(arcApexHeight(flight));
+    expect(rise).toBeLessThan(arcApexHeight(flight) + (landY - y0) + 1);
+  });
+});
+
+describe('arcSpaceFromScene', () => {
+  it('puts the hero at the origin', () => {
+    expect(arcSpaceFromScene(50, 100, 50, 100, 40)).toEqual({ x: 0, y: 0 });
+  });
+
+  it('puts the apex at y = 1', () => {
+    expect(arcSpaceFromScene(50, 60, 50, 100, 40).y).toBeCloseTo(1);
+  });
+
+  it('is independent of pixel scale', () => {
+    const a = arcSpaceFromScene(120, 60, 50, 100, 40);
+    const b = arcSpaceFromScene(240, 120, 100, 200, 80);
+    expect(b.x).toBeCloseTo(a.x * 2);
+    expect(b.y).toBeCloseTo(a.y);
   });
 });

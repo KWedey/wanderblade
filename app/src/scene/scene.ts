@@ -9,6 +9,8 @@
 
 import { ditherAt, falloff, momentumLift, ringFalloff } from './light';
 import {
+  arcApexHeight,
+  arcSpaceFromScene,
   arcCaughtBy,
   arcInFlight,
   arcPosition,
@@ -83,8 +85,25 @@ export interface SceneModel {
   reduceMotion: boolean;
 }
 
+/**
+ * Where a Strike landed, in the engine's arc space: hero at the origin, x
+ * along the road, arc apex at y = 1. The scene renders arcs and reports the
+ * pointer; the engine decides what a Strike hits. Scene units never cross
+ * this boundary, so a resize or a scale change cannot move a hit.
+ */
+export interface AimPoint {
+  x: number;
+  y: number;
+}
+
 export interface StrikeOutcome {
-  /** The strike caught a loot arc in flight. */
+  /**
+   * The tap position in arc space, or null when the Strike had no position
+   * (keyboard, or a tap that could not be located). A positionless Strike is
+   * still a real Strike: it swings and it builds momentum.
+   */
+  aim: AimPoint | null;
+  /** The scene's local catch read. Provisional: the engine owns the decision. */
   caughtArc: boolean;
   /** Base gold of the caught arc; the bonus it pays is the engine's to decide. */
   caughtValue: number;
@@ -607,6 +626,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     });
   }
 
+  function toArcSpace(px: number, py: number): AimPoint {
+    return arcSpaceFromScene(px, py, heroX, groundY, arcApexHeight(ARC_FLIGHT_SEC));
+  }
+
   function strikeAt(clientX: number | null, clientY: number | null): StrikeOutcome {
     heroFlash = 0.12;
     // Restart the auto-attack cadence rather than zeroing it — zero would go
@@ -614,18 +637,21 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     swingCooldown = 1 / SWINGS_PER_SEC;
     swing(true);
 
-    if (clientX === null || clientY === null) return { caughtArc: false, caughtValue: 0 };
+    if (clientX === null || clientY === null) {
+      return { aim: null, caughtArc: false, caughtValue: 0 };
+    }
     const rect = canvas.getBoundingClientRect();
     const px = (clientX - rect.left) / pixelScale;
     const py = (clientY - rect.top) / pixelScale;
+    const aim = toArcSpace(px, py);
 
     for (const arc of arcs) {
       if (!arcCaughtBy(arc, px, py, CATCH_RADIUS)) continue;
       arc.caught = true;
       resolveArc(arc, true);
-      return { caughtArc: true, caughtValue: arc.value };
+      return { aim, caughtArc: true, caughtValue: arc.value };
     }
-    return { caughtArc: false, caughtValue: 0 };
+    return { aim, caughtArc: false, caughtValue: 0 };
   }
 
   // --- Simulation --------------------------------------------------------

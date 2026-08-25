@@ -49,6 +49,12 @@ export function momentumMultiplier(momentum: number, maxBonus = MOMENTUM_MAX_BON
 export interface Strike {
   /** Engine time (seconds) the strike was made at. */
   atSec: number;
+  /**
+   * Where the Strike landed in the engine's arc space, or null when it had no
+   * position. Carried so the engine can hit-test it; the scene never decides
+   * a catch.
+   */
+  aim: { x: number; y: number } | null;
   /** A strike that caught a loot arc in flight. */
   caughtArc: boolean;
 }

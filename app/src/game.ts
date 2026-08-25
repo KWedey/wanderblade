@@ -246,6 +246,7 @@ export class Game {
     this.momentum = strikeMomentum(this.momentum);
     this.pendingStrikes.push({
       atSec: this.state.timeSec,
+      aim: outcome.aim,
       caughtArc: outcome.caughtArc,
     });
   }
