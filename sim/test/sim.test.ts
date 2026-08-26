@@ -17,6 +17,8 @@ import {
   spendDepth,
   SPEND_GRACE_SEC,
   SPEND_TARGET,
+  permanentUplift,
+  PERMANENT_HORIZON_SEC,
   twentyFourHourReturn,
 } from '../src/probes';
 import { runPlayer } from '../src/simulate';
@@ -37,7 +39,7 @@ const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
 describe('parseArgs', () => {
   it('applies documented defaults with no flags', () => {
     expect(parseArgs([])).toEqual({
-      days: 14,
+      days: 30,
       seed: 1,
       seeds: 3,
       sessionMin: 20,
@@ -497,4 +499,22 @@ describe('the dead-time and starvation clauses bite', () => {
     });
     expect(find(parked, 'P9').pass).toBe(false);
   });
+});
+
+// P10's band was measured at a fixed 30 days. The probe used to take its
+// horizon from --days, so `npm run sim` at the shorter default printed FAIL on
+// a question it had not asked: 2 of 3 seeds at 10 days, 6 of 6 seeds at 30.
+describe('P10 asks its question at its own horizon', () => {
+  function upliftAt(days: number) {
+    const config = cfg({ days, seed: 5 });
+    const main = runPlayer(config.seed, config, { policy: 'road-active', entry: 'prompt' });
+    return permanentUplift(config.seed, config, main);
+  }
+
+  it('reaches 30 days even when the run is three days long', () => {
+    const pu = upliftAt(3);
+    expect(pu).not.toBeNull();
+    expect(pu!.horizonSec).toBe(PERMANENT_HORIZON_SEC);
+  });
+
 });

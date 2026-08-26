@@ -281,7 +281,8 @@ export const PERMANENT_RANK_TARGET = 20;
  * arc of the tree, and long past the point where a session's worth of
  * Ascendancy stops being noise.
  */
-export const PERMANENT_HORIZON_SEC = 30 * SEC_PER_DAY;
+export const PERMANENT_HORIZON_DAYS = 30;
+export const PERMANENT_HORIZON_SEC = PERMANENT_HORIZON_DAYS * SEC_PER_DAY;
 
 /** Summarise every look at the upgrade panel taken past the grace window. */
 export function spendDepth(samples: ShopSample[]): SpendDepth {
@@ -413,10 +414,18 @@ export function permanentUplift(
     earnedTrail: { timeSec: number; earned: number }[];
   },
 ): PermanentUplift | null {
-  // The active side is the headline run, already computed; only the idle
-  // counterpart has to be simulated here.
-  const idle = runPlayer(seed, config, { policy: 'road-idle', entry: 'prompt' });
+  // P10's band was measured at a fixed 30 days, so the probe must reach it
+  // whatever --days the caller passed. A shorter run collapsed the horizon and
+  // reported FAIL on a question it had not asked.
+  const atHorizon: SimConfig =
+    config.days >= PERMANENT_HORIZON_DAYS ? config : { ...config, days: PERMANENT_HORIZON_DAYS };
+  const idle = runPlayer(seed, atHorizon, { policy: 'road-idle', entry: 'prompt' });
   if (idle.state.timeSec <= 0) return null;
+  // The headline run is reused only when it already spans the horizon.
+  const act =
+    atHorizon === config
+      ? active
+      : runPlayer(seed, atHorizon, { policy: 'road-active', entry: 'prompt' });
 
   const firstWin = (r: RealmRecord[]): number | null =>
     r.find((x) => x.victorySec !== null)?.victorySec ?? null;
@@ -430,18 +439,18 @@ export function permanentUplift(
     for (const x of trail) if (x.timeSec <= horizon) out = x.earned;
     return trail.length === 0 || final.timeSec <= horizon ? totalEarned(final) : out;
   };
-  const horizonSec = Math.min(PERMANENT_HORIZON_SEC, idle.state.timeSec, active.state.timeSec);
+  const horizonSec = Math.min(PERMANENT_HORIZON_SEC, idle.state.timeSec, act.state.timeSec);
   const idleEarned = earnedAt(idle.earnedTrail, idle.state, horizonSec);
-  const activeEarned = earnedAt(active.earnedTrail, active.state, horizonSec);
+  const activeEarned = earnedAt(act.earnedTrail, act.state, horizonSec);
   return {
     horizonSec,
     idleEarned,
     activeEarned,
     ratio: idleEarned > 0 ? activeEarned / idleEarned : Infinity,
     idleFirstAscensionSec: firstWin(idle.realms),
-    activeFirstAscensionSec: firstWin(active.realms),
+    activeFirstAscensionSec: firstWin(act.realms),
     rankTarget: PERMANENT_RANK_TARGET,
     idleRankSec: secToRanks(idle.rankTrail, PERMANENT_RANK_TARGET),
-    activeRankSec: secToRanks(active.rankTrail, PERMANENT_RANK_TARGET),
+    activeRankSec: secToRanks(act.rankTrail, PERMANENT_RANK_TARGET),
   };
 }

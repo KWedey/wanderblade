@@ -1,10 +1,14 @@
 // Dependency-free argv parsing. Both `--flag value` and `--flag=value` work;
 // the flag list lives once, in HELP below.
 
+import { PERMANENT_HORIZON_DAYS } from './probes';
 import type { SimConfig } from './types';
 
 const DEFAULTS: SimConfig = {
-  days: 14,
+  // The default run must be long enough to answer every validator it prints.
+  // P10's band is measured at 30 days; a shorter default reported FAIL on a
+  // question it had not asked.
+  days: PERMANENT_HORIZON_DAYS,
   seed: 1,
   seeds: 3,
   sessionMin: 20,
