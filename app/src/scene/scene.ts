@@ -123,6 +123,8 @@ export interface Scene {
   strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null;
   /** Play the catch flourish for an `arcCatch` the engine resolved. */
   catchArc(bonusGold: number, upgraded: boolean): void;
+  /** CSS pixels of chrome above the world band. */
+  setSceneTop(cssPx: number): void;
   /** Viewport point loot streaks fly to — the HUD's gold readout. */
   setCollectAnchor(clientX: number, clientY: number): void;
   dispose(): void;
@@ -138,6 +140,8 @@ const MAX_PIXEL_SCALE = 8;
 /** Ground scroll in scene units/sec at momentum zero. */
 const WALK_SPEED = 34;
 const HERO_X_FRAC = 0.24;
+/** The world band never shrinks below this, however tall the chrome gets. */
+const MIN_BAND_H = 60;
 /** Gap between hero and monster once the monster has closed, as a share of the
  * scene width — a fixed pixel gap crowds a phone and wastes a desktop frame. */
 /**
@@ -387,6 +391,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let vw = 100;
   let vh = 100;
   let groundY = 60;
+  /** CSS pixels of chrome above the world band. The view measures it and tells us. */
+  let sceneTopCss = 0;
+  /** Scene units the band is pushed down the display canvas by. */
+  let sceneOffsetY = 0;
   /**
    * Lowest scene row the player can actually see. In portrait the panel sheet
    * covers the bottom half, so world-anchored HUD (the momentum meter) has to
@@ -472,12 +480,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     displayCtx.imageSmoothingEnabled = false;
     ctx.imageSmoothingEnabled = false;
 
-    // Portrait docks the panel sheet to the bottom half, so the horizon rides
-    // high; landscape gives the world the whole frame.
+    // Portrait puts the panels above and gives the road the bottom band, so
+    // the core verb lives under the thumb; landscape docks the panel right and
+    // gives the world the whole frame.
     const landscape = cssW / cssH >= 1;
-    groundY = Math.floor(vh * (landscape ? 0.72 : 0.33));
+    sceneOffsetY = landscape ? 0 : Math.min(vh - MIN_BAND_H, Math.round(sceneTopCss / pixelScale));
+    sceneOffsetY = Math.max(0, sceneOffsetY);
+    const bandH = vh - sceneOffsetY;
+    groundY = Math.floor(bandH * (landscape ? 0.72 : 0.66));
     arcBaseY = groundY - 2;
-    sceneBottomY = landscape ? vh : Math.floor(vh * 0.48);
+    sceneBottomY = bandH;
     heroX = Math.floor(vw * (landscape ? HERO_X_FRAC : 0.3));
     if (collectAnchorCss) setCollectAnchor(collectAnchorCss.x, collectAnchorCss.y);
     buildGroundTexture();
@@ -485,11 +497,27 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   function setCollectAnchor(clientX: number, clientY: number): void {
     collectAnchorCss = { x: clientX, y: clientY };
+    const p = toScene(clientX, clientY);
+    // The gold counter sits above the band in portrait, so a coin would fly to
+    // a point off the top of the world. Clamp it to the band's own edge.
+    collectAnchor = { x: p.x, y: Math.max(2, p.y) };
+  }
+
+  /** Client coords to scene units inside the world band. */
+  function toScene(clientX: number, clientY: number): { x: number; y: number } {
     const rect = canvas.getBoundingClientRect();
-    collectAnchor = {
+    return {
       x: (clientX - rect.left) / pixelScale,
-      y: (clientY - rect.top) / pixelScale,
+      y: (clientY - rect.top) / pixelScale - sceneOffsetY,
     };
+  }
+
+  /** The view owns layout; it tells the scene how much chrome sits above the road. */
+  function setSceneTop(cssPx: number): void {
+    const next = Math.max(0, Math.round(cssPx));
+    if (next === sceneTopCss) return;
+    sceneTopCss = next;
+    resize();
   }
 
   const onResize = (): void => resize();
@@ -654,9 +682,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     swing(true);
 
     if (clientX === null || clientY === null) return null;
-    const rect = canvas.getBoundingClientRect();
-    const sx = (clientX - rect.left) / pixelScale;
-    const sy = (clientY - rect.top) / pixelScale;
+    const { x: sx, y: sy } = toScene(clientX, clientY);
     lastAim = { x: sx, y: sy };
     return toArcSpace(sx, sy);
   }
@@ -1628,7 +1654,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     displayCtx.setTransform(1, 0, 0, 1, 0, 0);
     displayCtx.imageSmoothingEnabled = false;
     displayCtx.clearRect(0, 0, canvas.width, canvas.height);
-    displayCtx.drawImage(buffer, 0, 0, vw, vh, 0, 0, canvas.width, canvas.height);
+    // Blit only the world band, offset down the display canvas: in portrait the
+    // panels own the top and the road owns the thumb zone.
+    const scale = canvas.width / vw;
+    displayCtx.drawImage(
+      buffer,
+      0,
+      0,
+      vw,
+      sceneBottomY,
+      0,
+      Math.round(sceneOffsetY * scale),
+      canvas.width,
+      Math.round(sceneBottomY * scale),
+    );
   }
 
   function frame(dtSec: number, next: SceneModel): void {
@@ -1641,7 +1680,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     window.removeEventListener('resize', onResize);
   }
 
-  return { frame, strikeAt, catchArc, setCollectAnchor, dispose };
+  return { frame, strikeAt, catchArc, setCollectAnchor, setSceneTop, dispose };
 }
 
 /**

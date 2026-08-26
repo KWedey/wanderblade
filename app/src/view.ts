@@ -150,6 +150,7 @@ function template(): string {
   return `
   <canvas class="scene" data-role="scene" aria-hidden="true"></canvas>
 
+  <div class="chrome">
   <div class="hud">
     <div class="hud-realm">
       <div class="wordmark">WANDERBLADE</div>
@@ -171,8 +172,6 @@ function template(): string {
       <span class="hud-label">DPS</span>
     </div>
   </div>
-
-  <div class="strike-hint" data-role="strike-hint">Tap the road to strike</div>
 
   <div class="screen">
     <section class="goal-strip">
@@ -232,6 +231,9 @@ function template(): string {
       <ul class="log-list" data-role="log"></ul>
     </section>
   </div>
+  </div>
+
+  <div class="strike-hint" data-role="strike-hint">Tap the road to strike</div>
 
   <div class="toast" data-role="toast" hidden></div>
 
@@ -395,12 +397,23 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
   // Loot streaks home on the gold readout, so the scene needs its live position.
   const hudGoldEl = q(root, '[data-role="hud-gold"]');
+  const chromeEl = q(root, '.chrome');
   function syncCollectAnchor(): void {
     const r = hudGoldEl.getBoundingClientRect();
     scene.setCollectAnchor(r.left + r.width / 2, r.top + r.height / 2);
   }
-  syncCollectAnchor();
-  window.addEventListener('resize', syncCollectAnchor);
+  /**
+   * The view owns layout, so it is the view that tells the scene how much
+   * chrome sits above the road. In portrait that is the whole panel column;
+   * in landscape the panel is docked right and the scene ignores it.
+   */
+  function syncSceneBand(): void {
+    const portrait = window.innerWidth < window.innerHeight;
+    scene.setSceneTop(portrait ? chromeEl.getBoundingClientRect().bottom : 0);
+    syncCollectAnchor();
+  }
+  syncSceneBand();
+  window.addEventListener('resize', syncSceneBand);
 
   // --- Strike input ------------------------------------------------------
   // One verb for the whole game: tap, click, or hold Space/Enter. Holding
@@ -483,6 +496,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const hudRoot = q(root, '.hud');
 
   function renderPanels(vm: ViewModel): void {
+    queueMicrotask(syncSceneBand);
     regionEl.textContent = vm.regionName;
     zoneEl.textContent = vm.boss
       ? 'In the Portal'

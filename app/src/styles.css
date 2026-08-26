@@ -217,7 +217,7 @@ body {
 .strike-hint {
   position: absolute;
   left: 22px;
-  bottom: calc(52% + 12px);
+  bottom: 14px;
   z-index: 4;
   pointer-events: none;
   padding: 5px 12px;
@@ -262,17 +262,50 @@ body {
     inset -4px 0 0 var(--bevel-dark);
 }
 
-/* Portrait: a bottom sheet under the world. */
+/* Portrait: the panels sit above and the road owns the bottom of the screen.
+   Docked below, the panel made the whole thumb zone dead to the core verb -
+   every strike meant reaching to the top half of the phone, for minutes. */
 .screen {
   left: 0;
   right: 0;
-  bottom: 0;
+  top: 0;
   max-height: 52%;
+  border-top: 0;
+  border-bottom: 4px solid var(--panel-edge);
 }
 
 /* Portrait cannot fit realm, gold and DPS on one line at any readable size, so
    the counter takes the first row and the realm gets the full width below it. */
 @media (max-aspect-ratio: 1/1) {
+  /* Static, so the panel starts exactly below the HUD instead of under it. */
+  .hud,
+  .screen {
+    position: static;
+  }
+
+  /* HUD then panel, as one column the road starts below. The cap lives here
+     because .screen's own max-height is a percentage, and a percentage needs a
+     definite basis - against an auto-height parent it constrains nothing. */
+  .chrome {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    max-height: 56%;
+    display: flex;
+    flex-direction: column;
+    /* The HUD used to float over the sky. Above the road band the canvas is
+       transparent, so without this it reads as a second, paler sky. */
+    background: var(--panel);
+    z-index: 3;
+  }
+
+  .screen {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+
   .hud {
     grid-template-columns: 1fr auto;
     grid-template-areas:
