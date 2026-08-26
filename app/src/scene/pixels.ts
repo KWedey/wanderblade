@@ -657,27 +657,111 @@ export const FONT: Record<string, string[]> = {
   Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####'],
 };
 
-/** Every character in-world text is allowed to use. */
+/** Every character panel and HUD text is allowed to use. */
 export const FONT_COVERAGE =
-  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-.×! ' +
-  "abcdefghijklmnopqrstuvwxyz,:/()%'·—~";
+  '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-.\u00d7! ' +
+  "abcdefghijklmnopqrstuvwxyz,:/()%'\u00b7\u2014~";
 
 /**
- * Malformed or missing glyphs. A missing glyph is not a blank — drawText
+ * A companion 3x5 face for in-world numerals. Damage, payouts and catch
+ * bonuses render in this rather than the 5x7 body face: a late-realm payout
+ * at 5x7 is wider than the hero sprite, and the answer is a smaller glyph set,
+ * not a different rendering path. Uppercase only \u2014 every string that reaches
+ * it is a number plus a magnitude suffix, so callers upper-case first and the
+ * face keeps one baseline with no descenders to steal rows from a 5px cap.
+ */
+export const NUMERAL_GLYPHS: Record<string, string[]> = {
+  '0': ['.#.', '#.#', '#.#', '#.#', '.#.'],
+  '1': ['.#.', '##.', '.#.', '.#.', '###'],
+  '2': ['##.', '..#', '.#.', '#..', '###'],
+  '3': ['##.', '..#', '.#.', '..#', '##.'],
+  '4': ['#.#', '#.#', '###', '..#', '..#'],
+  '5': ['###', '#..', '##.', '..#', '##.'],
+  '6': ['.##', '#..', '###', '#.#', '###'],
+  '7': ['###', '..#', '.#.', '.#.', '.#.'],
+  '8': ['###', '#.#', '###', '#.#', '###'],
+  '9': ['###', '#.#', '###', '..#', '##.'],
+  A: ['.#.', '#.#', '###', '#.#', '#.#'],
+  B: ['##.', '#.#', '##.', '#.#', '##.'],
+  C: ['.##', '#..', '#..', '#..', '.##'],
+  D: ['##.', '#.#', '#.#', '#.#', '##.'],
+  E: ['###', '#..', '##.', '#..', '###'],
+  F: ['###', '#..', '##.', '#..', '#..'],
+  G: ['.##', '#..', '#.#', '#.#', '.##'],
+  H: ['#.#', '#.#', '###', '#.#', '#.#'],
+  I: ['###', '.#.', '.#.', '.#.', '###'],
+  J: ['..#', '..#', '..#', '#.#', '.#.'],
+  K: ['#.#', '#.#', '##.', '#.#', '#.#'],
+  L: ['#..', '#..', '#..', '#..', '###'],
+  M: ['#.#', '###', '###', '#.#', '#.#'],
+  N: ['##.', '#.#', '#.#', '#.#', '#.#'],
+  O: ['###', '#.#', '#.#', '#.#', '###'],
+  P: ['##.', '#.#', '##.', '#..', '#..'],
+  Q: ['###', '#.#', '#.#', '###', '..#'],
+  R: ['##.', '#.#', '##.', '#.#', '#.#'],
+  S: ['.##', '#..', '.#.', '..#', '##.'],
+  T: ['###', '.#.', '.#.', '.#.', '.#.'],
+  U: ['#.#', '#.#', '#.#', '#.#', '###'],
+  V: ['#.#', '#.#', '#.#', '#.#', '.#.'],
+  W: ['#.#', '#.#', '###', '###', '#.#'],
+  X: ['#.#', '#.#', '.#.', '#.#', '#.#'],
+  Y: ['#.#', '#.#', '.#.', '.#.', '.#.'],
+  Z: ['###', '..#', '.#.', '#..', '###'],
+  '.': ['...', '...', '...', '.##', '.##'],
+  '+': ['...', '.#.', '###', '.#.', '...'],
+  '-': ['...', '...', '###', '...', '...'],
+  '\u00d7': ['...', '#.#', '.#.', '#.#', '...'],
+  '/': ['..#', '..#', '.#.', '#..', '#..'],
+  '%': ['#.#', '..#', '.#.', '#..', '#.#'],
+  '!': ['.#.', '.#.', '.#.', '...', '.#.'],
+  ' ': ['...', '...', '...', '...', '...'],
+};
+
+export const NUMERAL_COVERAGE = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-.\u00d7/%! ';
+
+/** A glyph set plus the cell it is drawn on. Every text routine takes one. */
+export interface BitmapFont {
+  name: string;
+  glyphs: Record<string, string[]>;
+  coverage: string;
+  w: number;
+  h: number;
+}
+
+/** Panels, HUD, widget labels \u2014 anything that is words. */
+export const BODY_FONT: BitmapFont = {
+  name: 'body',
+  glyphs: FONT,
+  coverage: FONT_COVERAGE,
+  w: GLYPH_W,
+  h: GLYPH_H,
+};
+
+/** In-world numbers, which rank below the DOM gold headline. */
+export const NUMERAL_FONT: BitmapFont = {
+  name: 'numeral',
+  glyphs: NUMERAL_GLYPHS,
+  coverage: NUMERAL_COVERAGE,
+  w: 3,
+  h: 5,
+};
+
+/**
+ * Malformed or missing glyphs. A missing glyph is not a blank \u2014 drawText
  * advances past it, so the word renders with a hole in it.
  */
-export function fontFaults(): string[] {
+export function fontFaults(font: BitmapFont = BODY_FONT): string[] {
   const faults: string[] = [];
-  for (const ch of FONT_COVERAGE) {
-    if (!(ch in FONT)) faults.push(`glyph '${ch}' is missing from FONT`);
+  for (const ch of font.coverage) {
+    if (!(ch in font.glyphs)) faults.push(`${font.name} glyph '${ch}' is missing`);
   }
-  for (const [ch, rows] of Object.entries(FONT)) {
-    if (rows.length !== GLYPH_H) {
-      faults.push(`glyph '${ch}': ${rows.length} rows, expected ${GLYPH_H}`);
+  for (const [ch, rows] of Object.entries(font.glyphs)) {
+    if (rows.length !== font.h) {
+      faults.push(`${font.name} glyph '${ch}': ${rows.length} rows, expected ${font.h}`);
     }
     rows.forEach((row, y) => {
-      if (row.length !== GLYPH_W) {
-        faults.push(`glyph '${ch}' row ${y}: ${row.length} wide, expected ${GLYPH_W}`);
+      if (row.length !== font.w) {
+        faults.push(`${font.name} glyph '${ch}' row ${y}: ${row.length} wide, expected ${font.w}`);
       }
     });
   }
@@ -685,7 +769,31 @@ export function fontFaults(): string[] {
 }
 
 /** Rendered width of `text` in scene units at `scale`, including 1px letter gaps. */
-export function textWidth(text: string, scale: number): number {
+export function textWidth(text: string, scale: number, font: BitmapFont = BODY_FONT): number {
   if (text.length === 0) return 0;
-  return (text.length * (GLYPH_W + 1) - 1) * scale;
+  return (text.length * (font.w + 1) - 1) * scale;
+}
+
+export interface MassProfile {
+  /** Row of the sprite\u2019s shoulders \u2014 where it first reaches half its widest. */
+  top: number;
+  /** Width of the widest row, which is the mass a bar should span. */
+  width: number;
+}
+
+/**
+ * Where a sprite\u2019s visual mass begins. A bounding box puts a health bar on a
+ * shelf of empty air over a tall creature\u2019s antenna; the shoulders are where
+ * the creature actually is.
+ */
+export function massProfile(map: SpriteMap): MassProfile {
+  const fill = map.rows.map((row) => {
+    let n = 0;
+    for (const ch of row) if (ch !== '.') n++;
+    return n;
+  });
+  const widest = Math.max(0, ...fill);
+  if (widest === 0) return { top: 0, width: map.rows[0]?.length ?? 0 };
+  const shoulders = fill.findIndex((n) => n * 2 >= widest);
+  return { top: shoulders < 0 ? 0 : shoulders, width: widest };
 }

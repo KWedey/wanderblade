@@ -2,15 +2,19 @@
 // every floater rises by the same amount, because two runs spaced only at
 // spawn still converge when they rise at different rates.
 
-import { GLYPH_H } from './pixels';
+import { NUMERAL_FONT } from './pixels';
 
 /**
  * Text-lane geometry. Every run of in-world text snaps to this grid and drifts
- * by the same FLOATER_RISE, so LANE_STEP >= FLOATER_RISE + GLYPH_H makes two
- * runs in different lanes unable to share a pixel however they are timed.
+ * by the same FLOATER_RISE, so LANE_STEP >= FLOATER_RISE + FLOATER_GLYPH_H
+ * makes two runs in different lanes unable to share a pixel however they are
+ * timed. The cell is the numeral face's, because that is what floaters are
+ * drawn in; a widget or bar taller than one lane reserves every lane it
+ * touches through lanesTouching instead of assuming one.
  */
+export const FLOATER_GLYPH_H = NUMERAL_FONT.h;
 export const FLOATER_RISE = 6;
-export const LANE_STEP = GLYPH_H + FLOATER_RISE + 1;
+export const LANE_STEP = FLOATER_GLYPH_H + FLOATER_RISE + 1;
 export const LANE_COUNT = 3;
 /** Lane 0 sits this far above the ground line, clear of the tallest monster. */
 export const LANE_BASE_OFFSET = 30;
@@ -25,7 +29,7 @@ export function laneBaseline(lane: number, groundY: number): number {
 /** The band a run in `lane` can occupy at any point in its life. */
 export function laneLifeBox(lane: number, groundY: number, x: number, w: number): TextBox {
   const baseline = laneBaseline(lane, groundY);
-  return { x, y: baseline - FLOATER_RISE, w, h: GLYPH_H + FLOATER_RISE };
+  return { x, y: baseline - FLOATER_RISE, w, h: FLOATER_GLYPH_H + FLOATER_RISE };
 }
 
 export interface TextBox {

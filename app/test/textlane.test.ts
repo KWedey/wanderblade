@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { GLYPH_H, textWidth } from '../src/scene/pixels';
+import { NUMERAL_FONT, textWidth } from '../src/scene/pixels';
 import {
   boxesOverlap,
   COMBO_LANE,
+  FLOATER_GLYPH_H,
   FLOATER_RISE,
   laneBaseline,
   laneLifeBox,
@@ -84,7 +85,13 @@ describe('placeRun', () => {
 // BONUS floater rising onto the combo label 21px above its spawn point.
 describe('lane geometry makes overlap impossible', () => {
   it('separates lanes by more than a glyph plus its whole drift', () => {
-    expect(LANE_STEP).toBeGreaterThanOrEqual(FLOATER_RISE + GLYPH_H);
+    expect(LANE_STEP).toBeGreaterThanOrEqual(FLOATER_RISE + FLOATER_GLYPH_H);
+  });
+
+  // The step is only safe against the face floaters are actually drawn in.
+  // Measuring it against the body face passed while lanes were 2px too tight.
+  it('measures the step against the face floaters are drawn in', () => {
+    expect(FLOATER_GLYPH_H).toBe(NUMERAL_FONT.h);
   });
 
   it('leaves no life-box of one lane touching the next', () => {
@@ -110,7 +117,7 @@ describe('lane geometry makes overlap impossible', () => {
 
     for (let i = 0; i < 400; i++) {
       const text = texts[i % texts.length]!;
-      const w = textWidth(text, 1);
+      const w = textWidth(text, 1, NUMERAL_FONT);
       // Cluster spawns tightly, which is exactly when the bug showed up.
       const x = 90 + ((i * 7) % 40);
       const taken = live.map((f) => f.span);

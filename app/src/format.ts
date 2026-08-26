@@ -45,11 +45,22 @@ export function formatNumber(n: number): string {
   }
   if (n < 1000) return Math.floor(n).toString();
 
-  const tier = Math.floor(Math.log10(n) / 3);
+  let tier = Math.floor(Math.log10(n) / 3);
+  let scaled = n / Math.pow(1000, tier);
+  // Both fixups are the same fault: the precision is chosen from the raw value
+  // and then rounding moves it into the next bracket. 9.999e12 printed
+  // "10.00T" and 9.9999e14 printed "1000T", four significant digits in a
+  // column where every neighbouring value shows three.
+  if (Number(scaled.toFixed(0)) >= 1000) {
+    tier += 1;
+    scaled = n / Math.pow(1000, tier);
+  }
   const suffix = suffixFor(tier);
   if (suffix === null) return n.toExponential(2);
-  const scaled = n / Math.pow(1000, tier);
-  const decimals = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
+  let decimals = scaled < 10 ? 2 : scaled < 100 ? 1 : 0;
+  while (decimals > 0 && Number(scaled.toFixed(decimals)) >= (decimals === 2 ? 10 : 100)) {
+    decimals--;
+  }
   return scaled.toFixed(decimals) + suffix;
 }
 

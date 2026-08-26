@@ -173,3 +173,23 @@ describe('formatNumber keeps small payouts visible', () => {
     expect(formatNumber(1234)).toBe('1.23K');
   });
 });
+
+describe('formatNumber rounding never widens the mantissa', () => {
+  // Precision was chosen from the raw value and rounding then moved it into
+  // the next bracket: 9.999e12 printed "10.00T" and 9.9999e14 printed "1000T".
+  it('promotes rather than printing a fourth digit', () => {
+    expect(formatNumber(9.999e12)).toBe('10.0T');
+    expect(formatNumber(9.9999e14)).toBe('1.00Qa');
+    expect(formatNumber(999.999e3)).toBe('1.00M');
+  });
+
+  it('holds to three significant digits across the whole ladder', () => {
+    for (let e = 3; e < 300; e++) {
+      for (const m of [1, 5.5, 9.99, 9.999, 9.9999]) {
+        const out = formatNumber(m * 10 ** e);
+        const digits = out.replace(/[^0-9]/g, '').replace(/^0+/, '');
+        expect(digits.length, `${m}e${e} -> ${out}`).toBeLessThanOrEqual(3);
+      }
+    }
+  });
+});

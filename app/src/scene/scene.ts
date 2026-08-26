@@ -46,7 +46,9 @@ import {
   FERN,
   FLOWER,
   GEM,
+  BODY_FONT,
   GLYPH_H,
+  NUMERAL_FONT,
   HERO_WALK_A,
   HERO_WALK_B,
   MONSTER_SHAPES,
@@ -494,7 +496,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const laneY = (lane: number): number => laneBaseline(lane, groundY);
 
   function floaterSpan(f: Floater): LaneSpan {
-    const w = textWidth(f.text, TIER_SCALE[f.tier]);
+    const w = textWidth(f.text, TIER_SCALE[f.tier], NUMERAL_FONT);
     return { x: f.x - w / 2, w, lane: f.lane };
   }
 
@@ -502,14 +504,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    * `y` on the incoming floater is a wish, not a position: it picks the lane to
    * start looking from, and the allocator moves it to the nearest free one.
    */
-  function addFloater(f: Omit<Floater, 'lane'>): void {
+  function addFloater(raw: Omit<Floater, 'lane'>): void {
     if (floaters.length >= FLOATER_CAP) floaters.shift();
-    const w = textWidth(f.text, TIER_SCALE[f.tier]);
+    // The numeral face is uppercase-only: every string that reaches it is a
+    // number plus a magnitude suffix, and folding here means no call site can
+    // punch a hole in a payout by passing a lowercase 'a'.
+    const f = { ...raw, text: raw.text.toUpperCase() };
+    const w = textWidth(f.text, TIER_SCALE[f.tier], NUMERAL_FONT);
     const wish = Math.round((groundY - LANE_BASE_OFFSET - f.y) / LANE_STEP);
     const preferred = Math.max(0, Math.min(LANE_COUNT - 1, wish));
     const taken = floaters.map(floaterSpan);
     const evictable = taken.length;
-    if (model.momentum > 0.02) taken.push(comboSpan());
+    if (model.momentum > 0.02) taken.push(...comboSpans());
     taken.push(...barSpans);
     const { lane, evict } = placeRun(f.x - w / 2, w, taken, LANE_COUNT, 3, preferred, evictable);
     // Descending, so each splice leaves the lower indices valid.
@@ -1322,9 +1328,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       if (i !== 0) continue;
       const remaining = Math.max(0, 1 - model.killProgress);
       if (remaining >= 1 || remaining <= 0.02) continue;
-      const w = sprite.width;
+      // Anchored to the creature's mass, not its box: a stalker's antenna
+      // put its bar on a shelf of empty air well above the thing being fought.
+      const w = sprite.mass.width;
       const bx = Math.floor(x - w / 2);
-      const by = groundY - sprite.height - 2 + bob;
+      const by = groundY - sprite.height + sprite.mass.top - 3 + bob;
       barSpans = lanesTouching(by - 1, by + 3, groundY, LANE_COUNT).map((lane) => ({
         x: bx - 1,
         w: w + 2,
@@ -1443,7 +1451,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const life = lifeRemaining(f.age, f.life);
       if (life <= 0) continue;
       const y = laneY(f.lane) + floaterOffsetY(f.age, f.life, FLOATER_RISE);
-      drawText(ctx, f.text, f.x, y, TIER_SCALE[f.tier], f.color, OUTLINE_INK, 'center');
+      drawText(ctx, f.text, f.x, y, {
+        scale: TIER_SCALE[f.tier],
+        fill: f.color,
+        outline: OUTLINE_INK,
+        font: NUMERAL_FONT,
+      });
     }
   }
 
@@ -1457,10 +1470,29 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     return `\u00d7${model.momentumMult.toFixed(1)}`;
   }
 
-  /** The lane the widget occupies, so floaters route around it. */
-  function comboSpan(): LaneSpan {
-    const w = textWidth(comboLabel(), 1) + 3 + COMBO_METER_W;
-    return { x: Math.floor(heroX + 3 - w / 2), w, lane: COMBO_LANE };
+  /**
+   * The widget's plate in scene pixels. It is drawn in the body face while
+   * floaters ride the shorter numeral grid, so it is taller than one lane and
+   * has to reserve every lane it covers rather than claiming just its own.
+   */
+  function comboBox(): { x: number; w: number; top: number; height: number } {
+    const w = textWidth(comboLabel(), 1, BODY_FONT) + 3 + COMBO_METER_W;
+    return {
+      x: Math.floor(heroX + 3 - w / 2) - 2,
+      w: w + 4,
+      top: laneBaseline(COMBO_LANE, groundY) - 2,
+      height: GLYPH_H + 4,
+    };
+  }
+
+  /** Lanes the widget sits across, so floaters route around all of them. */
+  function comboSpans(): LaneSpan[] {
+    const box = comboBox();
+    return lanesTouching(box.top, box.top + box.height, groundY, LANE_COUNT).map((lane) => ({
+      x: box.x,
+      w: box.w,
+      lane,
+    }));
   }
 
   function drawMomentumMeter(skin: RealmSkin): void {
@@ -1468,19 +1500,24 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // announcing that nothing is happening.
     if (model.momentum <= 0.02) return;
     const label = comboLabel();
-    const labelW = textWidth(label, 1);
-    const span = comboSpan();
+    const labelW = textWidth(label, 1, BODY_FONT);
+    const box = comboBox();
     const y = laneY(COMBO_LANE);
     const hot = model.momentum > 0.7;
 
     // Opaque plate: anything that does reach this band reads as behind a
     // widget rather than as garbled type.
     ctx.fillStyle = OUTLINE_INK;
-    ctx.fillRect(span.x - 2, y - 2, span.w + 4, GLYPH_H + 4);
+    ctx.fillRect(box.x, box.top, box.w, box.height);
 
-    drawText(ctx, label, span.x, y, 1, hot ? '#ffffff' : skin.accent, null, 'left');
+    drawText(ctx, label, box.x + 2, y, {
+      scale: 1,
+      fill: hot ? '#ffffff' : skin.accent,
+      outline: null,
+      align: 'left',
+    });
 
-    const meterX = span.x + labelW + 3;
+    const meterX = box.x + 2 + labelW + 3;
     const meterY = y + 1;
     const filled = Math.round(model.momentum * COMBO_SEGS);
     // At rest a row of dark cells reads as broken, not idle. A slow chase
@@ -1562,9 +1599,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
  * Compact number for in-world floaters. Delegates past 1000 to the HUD's
  * formatter: its own ladder stopped at T, so a staged late run printed
  * "2.5866247188821906E+295T" across the middle of the frame.
+ *
+ * A non-finite value says so in words. formatNumber answers Infinity with an
+ * infinity sign, drawText skips any glyph its face lacks, and the two together
+ * put a silent hole in the frame where the number that broke should be.
  */
-function formatShort(n: number): string {
+export function formatShort(n: number): string {
+  if (!Number.isFinite(n)) return 'OVERFLOW';
   if (n < 10) return n.toFixed(1);
-  if (n < 1000) return String(Math.round(n));
+  // Round first, then re-test: 999.6 rounds to a bare "1000" where the ladder
+  // above prints "1.00K".
+  const whole = Math.round(n);
+  if (whole < 1000) return String(whole);
   return formatNumber(n);
 }

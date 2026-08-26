@@ -1,17 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
   ALL_SPRITE_MAPS,
+  BODY_FONT,
   FONT,
   FONT_COVERAGE,
   GLYPH_W,
   MONSTER_SHAPES,
+  NUMERAL_COVERAGE,
+  NUMERAL_FONT,
+  NUMERAL_GLYPHS,
   fontFaults,
+  massProfile,
   MONSTER_SILHOUETTES,
   sculpt,
   spriteMapFaults,
   textWidth,
   toneBands,
 } from '../src/scene/pixels';
+import { formatNumber } from '../src/format';
+import { formatShort } from '../src/scene/scene';
 
 describe('sprite grids', () => {
   // A ragged row or an unlegended glyph silently drops pixels at bake time;
@@ -157,6 +164,108 @@ describe('creatures read as dangerous', () => {
       const flat = map.rows.join('');
       expect(flat, `shape ${i} has no lit eye`).toContain('E');
       expect(flat, `shape ${i} has no bared tooth`).toContain('t');
+    }
+  });
+});
+
+describe('the 3x5 numeral face', () => {
+  it('has no ragged or missing glyph', () => {
+    expect(fontFaults(NUMERAL_FONT)).toEqual([]);
+  });
+
+  // Three columns is barely enough for M against N or 0 against O. Two glyphs
+  // with identical bitmaps do not fail any shape check - they just make a
+  // payout unreadable, which is the whole reason this face exists.
+  it('gives every character a bitmap no other character shares', () => {
+    const seen = new Map<string, string>();
+    for (const ch of NUMERAL_COVERAGE) {
+      if (ch === ' ') continue;
+      const key = NUMERAL_GLYPHS[ch]!.join('/');
+      const clash = seen.get(key);
+      expect(clash, `'${ch}' is drawn identically to '${clash ?? ''}'`).toBeUndefined();
+      seen.set(key, ch);
+    }
+  });
+
+  // drawText advances past a glyph its face lacks, so an uncovered character
+  // is a hole in the middle of a payout rather than a visible fallback.
+  it('covers every character a real floater can contain', () => {
+    const values = [0, 0.1, 0.33, 9.9, 42, 999, Infinity, -Infinity, NaN];
+    for (let e = -2; e < 320; e++) for (const m of [1, 1.5, 2.75, 9.99]) values.push(m * 10 ** e);
+    const strings = new Set<string>(['UPGRADED']);
+    for (const v of values) {
+      strings.add(formatShort(v).toUpperCase());
+      strings.add(`+${formatShort(v).toUpperCase()}`);
+    }
+    const missing = new Set<string>();
+    for (const text of strings) {
+      for (const ch of text) if (!NUMERAL_GLYPHS[ch]) missing.add(ch);
+    }
+    expect([...missing]).toEqual([]);
+  });
+
+  it('names the overflow rather than drawing nothing where it was', () => {
+    expect(formatShort(Infinity)).toBe('OVERFLOW');
+    expect(formatNumber(Infinity)).toContain('\u221e');
+  });
+
+  // The complaint this answers: "55.7dc rendering wider than the hero". A
+  // number cannot fit a 14px hero at any legible size, so the bar is the
+  // widest creature (30px) plus a glyph of overhang, which still reads as
+  // belonging to the thing it floats over. The body face missed it by 22px.
+  it('keeps every payout it can actually print inside 32 scene pixels', () => {
+    const values = [0, 0.1, 9.9, 42, 999, 999.6];
+    for (let e = -2; e < 310; e++) {
+      for (const m of [1, 1.5, 2.75, 9.99, 9.999, 9.9999]) values.push(m * 10 ** e);
+    }
+    let worst = '';
+    for (const v of values) {
+      const text = `+${formatShort(v).toUpperCase()}`;
+      if (text.includes('OVERFLOW')) continue;
+      if (textWidth(text, 1, NUMERAL_FONT) > textWidth(worst, 1, NUMERAL_FONT)) worst = text;
+    }
+    expect(worst.length, 'sweep produced no payout').toBeGreaterThan(1);
+    expect(textWidth(worst, 1, NUMERAL_FONT), `widest payout "${worst}"`).toBeLessThanOrEqual(32);
+    expect(textWidth(worst, 1, BODY_FONT), `"${worst}" in the body face`).toBeGreaterThan(32);
+  });
+
+  it('never prints a fourth significant digit', () => {
+    for (let e = 3; e < 300; e++) {
+      for (const m of [9.99, 9.999, 9.9999, 1, 5.5]) {
+        const digits = formatShort(m * 10 ** e).replace(/[^0-9]/g, '').replace(/^0+/, '');
+        expect(digits.length, `${m}e${e} -> ${formatShort(m * 10 ** e)}`).toBeLessThanOrEqual(3);
+      }
+    }
+  });
+});
+
+describe('sprite mass profile', () => {
+  it('never claims mass wider than the grid or a row that is not in it', () => {
+    for (const [name, map] of Object.entries(ALL_SPRITE_MAPS)) {
+      const mass = massProfile(map);
+      expect(mass.width, name).toBeLessThanOrEqual(map.rows[0]!.length);
+      expect(mass.width, name).toBeGreaterThan(0);
+      expect(mass.top, name).toBeGreaterThanOrEqual(0);
+      expect(mass.top, name).toBeLessThan(map.rows.length);
+    }
+  });
+
+  // A health bar hung off the bounding box floats on empty air over anything
+  // with a horn, an antenna or a raised tail.
+  it('starts below the bounding box on every creature with a thin crown', () => {
+    for (const [i, map] of MONSTER_SHAPES.entries()) {
+      const mass = massProfile(map);
+      const crown = map.rows[0]!.replace(/\./g, '').length;
+      if (crown * 2 >= mass.width) continue;
+      expect(mass.top, `shape ${i} anchors to its box, not its mass`).toBeGreaterThan(0);
+    }
+  });
+
+  it('anchors on a row that actually has ink in it', () => {
+    for (const [i, map] of MONSTER_SHAPES.entries()) {
+      const mass = massProfile(map);
+      const row = map.rows[mass.top]!;
+      expect(row.replace(/\./g, '').length, `shape ${i}`).toBeGreaterThan(0);
     }
   });
 });

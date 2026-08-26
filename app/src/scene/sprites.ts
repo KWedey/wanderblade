@@ -6,7 +6,14 @@
 // struck monster reads instantly without a tint pass per frame.
 
 import type { InkSet } from './palette';
-import { FONT, GLYPH_H, GLYPH_W, textWidth, type SpriteMap } from './pixels';
+import {
+  BODY_FONT,
+  massProfile,
+  textWidth,
+  type BitmapFont,
+  type MassProfile,
+  type SpriteMap,
+} from './pixels';
 
 export interface BakedSprite {
   image: HTMLCanvasElement;
@@ -14,6 +21,8 @@ export interface BakedSprite {
   flash: HTMLCanvasElement;
   width: number;
   height: number;
+  /** Where the creature actually is, as opposed to where its box is. */
+  mass: MassProfile;
 }
 
 function makeCanvas(width: number, height: number): HTMLCanvasElement {
@@ -56,7 +65,7 @@ export function bakeSprite(map: SpriteMap, ink: InkSet): BakedSprite {
       fctx.fillRect(x, y, 1, 1);
     }
   }
-  return { image, flash, width, height };
+  return { image, flash, width, height, mass: massProfile(map) };
 }
 
 /**
@@ -119,26 +128,37 @@ function blitGlyph(
   x: number,
   y: number,
   scale: number,
+  font: BitmapFont,
 ): void {
-  for (let gy = 0; gy < GLYPH_H; gy++) {
-    const row = rows[gy]!;
-    let run = 0;
-    // Coalesce horizontal runs so a glyph costs a handful of fills, not 35.
-    for (let gx = 0; gx <= GLYPH_W; gx++) {
-      if (gx < GLYPH_W && row[gx] === '#') {
-        run++;
+  for (let gy = 0; gy < font.h; gy++) {
+    const row = rows[gy];
+    if (!row) continue;
+    // Coalesce each horizontal run into one fillRect: a payout in a hot combo
+    // is redrawn nine times over for its outline, once per frame.
+    let runStart = -1;
+    for (let gx = 0; gx <= font.w; gx++) {
+      if (gx < font.w && row[gx] === '#') {
+        if (runStart < 0) runStart = gx;
         continue;
       }
-      if (run > 0) {
-        ctx.fillRect(x + (gx - run) * scale, y + gy * scale, run * scale, scale);
-        run = 0;
-      }
+      if (runStart < 0) continue;
+      ctx.fillRect(x + runStart * scale, y + gy * scale, (gx - runStart) * scale, scale);
+      runStart = -1;
     }
   }
 }
 
+export interface TextStyle {
+  scale: number;
+  fill: string;
+  /** 1px ring drawn as eight offset copies. Null on an opaque plate. */
+  outline?: string | null;
+  align?: TextAlign;
+  font?: BitmapFont;
+}
+
 /**
- * Chunky outlined bitmap text — the outline is a real 1px ring drawn as eight
+ * Chunky outlined bitmap text \u2014 the outline is a real 1px ring drawn as eight
  * offset copies, which is how the reference art keeps numbers legible against
  * both a bright sky and dark soil.
  */
@@ -147,14 +167,15 @@ export function drawText(
   text: string,
   x: number,
   y: number,
-  scale: number,
-  fill: string,
-  outline: string | null = '#1a1c2c',
-  align: TextAlign = 'center',
+  style: TextStyle,
 ): void {
-  const startX = Math.floor(align === 'center' ? x - textWidth(text, scale) / 2 : x);
+  const { scale, fill } = style;
+  const font = style.font ?? BODY_FONT;
+  const outline = style.outline === undefined ? '#1a1c2c' : style.outline;
+  const align = style.align ?? 'center';
+  const startX = Math.floor(align === 'center' ? x - textWidth(text, scale, font) / 2 : x);
   const startY = Math.floor(y);
-  const advance = (GLYPH_W + 1) * scale;
+  const advance = (font.w + 1) * scale;
 
   const passes: Array<[number, number, string]> = [];
   if (outline) {
@@ -169,9 +190,9 @@ export function drawText(
   for (const [ox, oy, color] of passes) {
     ctx.fillStyle = color;
     for (let i = 0; i < text.length; i++) {
-      const rows = FONT[text[i]!] ?? FONT[text[i]!];
+      const rows = font.glyphs[text[i]!];
       if (!rows) continue;
-      blitGlyph(ctx, rows, startX + i * advance + ox, startY + oy, scale);
+      blitGlyph(ctx, rows, startX + i * advance + ox, startY + oy, scale, font);
     }
   }
 }
