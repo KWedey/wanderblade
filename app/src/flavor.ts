@@ -5,7 +5,13 @@
 
 import type { GameEvent, GearSlot, Rarity } from '@wanderblade/core';
 import { formatNumber } from './format';
+import { NO_BREAK } from './pixeltext';
 import { speciesNamed } from './species';
+
+/** One phrase the log's wrap may not split — a name, or a whole reward. */
+function bind(...parts: string[]): string {
+  return parts.join(' ').replace(/ /g, NO_BREAK);
+}
 
 /** One rendered log line. `kind` drives its CSS accent. */
 export interface LogEntry {
@@ -115,7 +121,7 @@ export function describeEvent(e: GameEvent): LogEntry | null {
       const name = speciesNamed(e.realm, e.species).name;
       return {
         kind: 'kill',
-        text: `Felled ${article(name)} ${name} — +${formatNumber(e.gold)} gold`,
+        text: `Felled ${article(name)} ${bind(name)} ${bind('—', `+${formatNumber(e.gold)}`, 'gold')}`,
       };
     }
     case 'drop':
@@ -123,44 +129,44 @@ export function describeEvent(e: GameEvent): LogEntry | null {
     case 'equip':
       return {
         kind: 'equip',
-        text: `Equipped ${gearName(e.slot, e.rarity)} (power ${formatNumber(e.power)})`,
+        text: `Equipped ${bind(gearName(e.slot, e.rarity))} ${bind(`(power ${formatNumber(e.power)})`)}`,
       };
     case 'zone':
       return {
         kind: 'zone',
-        text: `Pressed on — ${regionName(e.realm)} Zone ${e.zone + 1}`,
+        text: `Pressed on ${bind('—', regionName(e.realm))} ${bind(`Zone ${e.zone + 1}`)}`,
       };
     case 'arcCatch':
       return {
         kind: 'kill',
-        text: `Snatched it mid-air — +${formatNumber(e.bonusGold)} gold${
+        text: `Snatched it mid-air ${bind('—', `+${formatNumber(e.bonusGold)}`, 'gold')}${
           e.upgraded ? ', and the loot came up a tier' : ''
         }`,
       };
     case 'portalReady':
       return {
         kind: 'gate',
-        text: `The road runs out — ${bossName(e.realm)} waits beyond the portal`,
+        text: `The road runs out ${bind('—', bossName(e.realm))} waits beyond the portal`,
       };
     case 'portalEnter':
       return {
         kind: 'region',
-        text: `Stepped through — ${capitalize(bossName(e.realm))} turns to face you`,
+        text: `Stepped through ${bind('—', capitalize(bossName(e.realm)))} turns to face you`,
       };
     case 'abandon':
       return {
         kind: 'bossFail',
-        text: `Withdrew from ${bossName(e.realm)} — its wounds keep`,
+        text: `Withdrew from ${bind(bossName(e.realm))} ${bind('—', 'its wounds keep')}`,
       };
     case 'bossVictory':
       return {
         kind: 'bossWin',
-        text: `Slew ${bossName(e.realm)} — +${formatNumber(e.pendingBanked)} Ascendancy banked`,
+        text: `Slew ${bind(bossName(e.realm))} ${bind('—', `+${formatNumber(e.pendingBanked)}`, 'Ascendancy')}`,
       };
     case 'ascend':
       return {
         kind: 'region',
-        text: `The realm ascends — ${regionName(e.toRealm)} opens ahead`,
+        text: `The realm ascends ${bind('—', regionName(e.toRealm))} ${bind('opens ahead')}`,
       };
     default:
       return null;

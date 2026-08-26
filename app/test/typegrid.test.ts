@@ -2,8 +2,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
+import type { GameEvent } from '@wanderblade/core';
 import { GLYPH_H, textWidth } from '../src/scene/pixels';
 import { lineHeight, pixelScaleFor, wrapPixelText } from '../src/pixeltext';
+import { describeEvent } from '../src/flavor';
+import { ROSTER_COUNT, rosterAt } from '../src/species';
 
 /** Comments stripped: a rule's selector is whatever precedes its brace, and a
  *  comment sitting in front of one made it stop matching. */
@@ -37,10 +40,51 @@ const WIDEST_ROW_LABEL = 'Level up your blade';
 const WIDEST_PRICE = '29.4B G';
 const ROW_GAP = 10;
 const ROW_PAD = 24;
-/** A road-log entry at its longest, and the three the panel promises to show. */
-const LOG_LINE = 'Felled a Thornback Lynx - +220M gold';
+/** The three entries the panel promises to show, and the gap between them. */
 const LOG_ENTRIES = 3;
 const LOG_GAP = 4;
+/**
+ * What the panel's own gutter, the entry's padding and its rule take off the
+ * panel before a glyph is drawn. Measured in the browser, not derived: 41px at
+ * every viewport that docks, 37px at every one that stacks, so the docked
+ * figure is the conservative one to model with.
+ */
+const LOG_PAD = 41;
+
+/** The widest creature on any roster — the name that decides where a line breaks. */
+function widestSpecies(): { realm: number; slot: number } {
+  let found = { realm: 0, slot: 0, len: 0 };
+  for (let realm = 0; realm < ROSTER_COUNT; realm++) {
+    rosterAt(realm).forEach((s, slot) => {
+      if (s.name.length > found.len) found = { realm, slot, len: s.name.length };
+    });
+  }
+  return found;
+}
+
+/** Every log shape at its widest: longest name, longest number the log prints. */
+function widestLogLines(): string[] {
+  const { realm, slot } = widestSpecies();
+  const big = 344_652_000_000;
+  const events: GameEvent[] = [
+    { type: 'kill', timeSec: 0, realm, zone: 49, killIndex: 0, gold: big, species: slot },
+    { type: 'equip', timeSec: 0, slot: 'weapon', power: big, rarity: 'epic', previousPower: 1 },
+    { type: 'arcCatch', timeSec: 0, bonusGold: big, ascendancy: 0, upgraded: true },
+    { type: 'zone', timeSec: 0, realm: 4, zone: 48 },
+    { type: 'portalReady', timeSec: 0, realm: 0 },
+    { type: 'portalEnter', timeSec: 0, realm: 3, bossHp: big },
+    { type: 'abandon', timeSec: 0, realm: 3, hpRemaining: big },
+    { type: 'bossVictory', timeSec: 0, realm: 0, payout: big, pendingBanked: big },
+    { type: 'ascend', timeSec: 0, fromRealm: 3, toRealm: 4, banked: big, victories: 1 },
+  ];
+  return events.flatMap((e) => {
+    const entry = describeEvent(e);
+    return entry ? [entry.text] : [];
+  });
+}
+
+/** `+345B` and the word it is counting. Split across rows, the unit reads as debris. */
+const REWARD = /^\+[\d.]+[KMBT]?$/;
 
 // --- Enough of a CSS engine to answer "what applies at this size" ----------
 
@@ -208,9 +252,30 @@ describe('the panel type grid', () => {
       expect(/max-height/.test(css), 'a pixel cap can cut an entry in half').toBe(false);
       expect(/overflow-y:\s*auto/.test(css), 'a scroll cap can cut an entry in half').toBe(false);
       const scale = pixelScaleFor(rampAt(vp).get('--ui-1')!);
-      const lines = wrapPixelText(LOG_LINE, scale, panelWidth(vp) - ROW_PAD).length;
-      const needed = LOG_ENTRIES * lines * lineHeight(scale) + (LOG_ENTRIES - 1) * LOG_GAP;
+      const box = panelWidth(vp) - LOG_PAD;
+      const tallest = Math.max(...widestLogLines().map((t) => wrapPixelText(t, scale, box).length));
+      const needed = LOG_ENTRIES * tallest * lineHeight(scale) + (LOG_ENTRIES - 1) * LOG_GAP;
       expect(needed, `${LOG_ENTRIES} entries must still fit the panel`).toBeLessThanOrEqual(1080);
+    });
+
+    // The judge read `+171M` on one row and `gold` alone on the next. A number
+    // without its unit is not a smaller reward, it is debris - so the two travel
+    // together, and only a box too narrow for the pair may separate them.
+    it(`never strands a reward's unit at ${vp.name}`, () => {
+      const scale = pixelScaleFor(rampAt(vp).get('--ui-1')!);
+      const box = panelWidth(vp) - LOG_PAD;
+      for (const text of widestLogLines()) {
+        const lines = wrapPixelText(text, scale, box);
+        const flat = text.replace(/\u00a0/g, ' ').split(' ');
+        for (let i = 0; i < flat.length - 1; i++) {
+          const pair = `${flat[i]!} ${flat[i + 1]!}`;
+          if (!REWARD.test(flat[i]!) || textWidth(pair, scale) > box) continue;
+          expect(
+            lines.some((line) => line.includes(pair)),
+            `"${pair}" split across rows in a ${box}px box: ${JSON.stringify(lines)}`,
+          ).toBe(true);
+        }
+      }
     });
   }
 
