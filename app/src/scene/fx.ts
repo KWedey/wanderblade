@@ -1,124 +1,22 @@
-// Pure presentation math for the road scene: loot-arc ballistics, particle and
-// floater lifetimes, and camera shake. No DOM, no canvas, no clocks — the
-// renderer owns those, so every trajectory here is unit-testable.
+// Pure presentation math for the road scene: particle and floater lifetimes,
+// camera shake, and the mapping between scene pixels and core's arc space. No
+// DOM, no canvas, no clocks — the renderer owns those, so this is unit-testable.
+//
+// Loot-arc trajectories and catches are core's (arcPositionAt, arcHitIndex).
+// The client maps them onto the scene; it never decides one.
 //
 // All coordinates are *scene units* (virtual pixels), y growing downward.
 
 /**
- * Downward acceleration for loot arcs and gibs, units/s². Tuned so a launched
- * coin stays airborne about a second — long enough for a deliberate tap to
- * catch it, which is the whole point of the mechanic.
+ * Downward acceleration for gibs and sparks, units/s². Also sets the pixel
+ * height of one unit of core's arc space, so a coin drawn along core's
+ * trajectory rises to the same apex a thrown gib would.
  */
 export const ARC_GRAVITY = 110;
-
-export type LootKind = 'gold' | 'gear';
-
-export interface LootArc {
-  x0: number;
-  y0: number;
-  vx: number;
-  /** Launch vertical velocity; negative is upward. */
-  vy: number;
-  /** Scene y the arc settles on. */
-  landY: number;
-  /** Seconds since launch. */
-  age: number;
-  /** Seconds from launch to landing. */
-  flightSec: number;
-  /** Base payout, for the floater the arc spawns when it resolves. */
-  value: number;
-  kind: LootKind;
-  caught: boolean;
-  /** Spin phase so tumbling coins do not all flash in lockstep. */
-  spin: number;
-}
 
 export interface Vec2 {
   x: number;
   y: number;
-}
-
-/**
- * Time for a projectile launched at `vy` from `y0` to fall to `landY`.
- * Returns 0 when the launch already sits at or below the ground.
- */
-export function arcFlightSec(y0: number, vy: number, landY: number, gravity = ARC_GRAVITY): number {
-  const drop = landY - y0;
-  const disc = vy * vy + 2 * gravity * drop;
-  if (disc <= 0) return 0;
-  return (-vy + Math.sqrt(disc)) / gravity;
-}
-
-/**
- * Upward launch speed that puts a projectile on `landY` after exactly
- * `flightSec`. Solving for it — rather than picking a lift and accepting
- * whatever flight falls out — is what lets the coin's time in the air match the
- * engine's catch window instead of merely resembling it.
- */
-export function liftForFlight(
-  y0: number,
-  landY: number,
-  flightSec: number,
-  gravity = ARC_GRAVITY,
-): number {
-  if (flightSec <= 0) return 0;
-  return (gravity * flightSec) / 2 - (landY - y0) / flightSec;
-}
-
-/** Position of `arc` at `t` seconds after launch (unclamped — see arcAlive). */
-export function arcPosition(arc: LootArc, t: number, gravity = ARC_GRAVITY): Vec2 {
-  return {
-    x: arc.x0 + arc.vx * t,
-    y: arc.y0 + arc.vy * t + 0.5 * gravity * t * t,
-  };
-}
-
-/**
- * Build an arc that leaves (x0, y0) and lands `spanX` units away on `landY`.
- * `lift` is the upward launch speed — bigger throws a taller, slower arc.
- */
-export function launchArc(
-  x0: number,
-  y0: number,
-  spanX: number,
-  landY: number,
-  lift: number,
-  value: number,
-  kind: LootKind,
-  spin: number,
-  gravity = ARC_GRAVITY,
-): LootArc {
-  const flightSec = arcFlightSec(y0, -lift, landY, gravity);
-  return {
-    x0,
-    y0,
-    vx: flightSec > 0 ? spanX / flightSec : 0,
-    vy: -lift,
-    landY,
-    age: 0,
-    flightSec,
-    value,
-    kind,
-    caught: false,
-    spin,
-  };
-}
-
-/** An arc is catchable from launch until it touches down. */
-export function arcInFlight(arc: LootArc): boolean {
-  return !arc.caught && arc.age < arc.flightSec;
-}
-
-/**
- * Whether a strike at (px, py) with radius `r` catches `arc`. The catch box is
- * generous on purpose: this is a thumb on a phone, not a precision test.
- */
-export function arcCaughtBy(arc: LootArc, px: number, py: number, r: number): boolean {
-  if (!arcInFlight(arc)) return false;
-  const p = arcPosition(arc, arc.age);
-  const dx = p.x - px;
-  const dy = p.y - py;
-  return dx * dx + dy * dy <= r * r;
 }
 
 export interface Particle {
@@ -206,9 +104,9 @@ export function wrap(v: number, span: number): number {
 }
 
 /**
- * Apex of a loot arc in scene pixels for a given flight time: g*T^2/8.
- * This is the y scale of arc space, so it must come from the same constants
- * the ballistics use rather than being picked to look right.
+ * Pixel height of core's unit-high arc apex over `flightSec`: g*T^2/8. Derived
+ * from the scene's own gravity rather than picked to look right, so loot and
+ * gibs share one sense of weight.
  */
 export function arcApexHeight(flightSec: number, gravity = ARC_GRAVITY): number {
   return Math.max(1, (gravity * flightSec * flightSec) / 8);

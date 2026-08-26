@@ -1,20 +1,20 @@
-import { sustainStrikeRate } from '@wanderblade/core';
+import {
+  ARC_FLIGHT_SEC,
+  arcLandingX,
+  arcPositionAt,
+  sustainStrikeRate,
+  type LootArc,
+} from '@wanderblade/core';
 import { HOLD_STRIKE_INTERVAL_SEC } from '../src/active';
 import { describe, expect, it } from 'vitest';
 import {
   ARC_GRAVITY,
   arcApexHeight,
-  arcCaughtBy,
-  arcFlightSec,
-  arcInFlight,
-  arcPosition,
   arcSpaceFromScene,
   sceneFromArcSpace,
   decayTo,
   floaterOffsetY,
-  launchArc,
   lifeRemaining,
-  liftForFlight,
   shakeOffset,
   stepParticle,
   type Particle,
@@ -26,79 +26,10 @@ import {
   nudgeFromPocket,
 } from '../src/scene/fx';
 
-function coin(spanX = 60, lift = 150) {
-  return launchArc(100, 40, spanX, 100, lift, 7, 'gold', 0);
+/** A core arc launched at t=0, so `arcPositionAt(arc, t)` reads as flight time. */
+function coreArc(killIndex = 3): LootArc {
+  return { gold: 7, expiresAtSec: ARC_FLIGHT_SEC, landingX: arcLandingX(killIndex), gear: null };
 }
-
-describe('arc ballistics', () => {
-  it('lands on the ground plane exactly at flightSec', () => {
-    const arc = coin();
-    expect(arcPosition(arc, arc.flightSec).y).toBeCloseTo(arc.landY, 6);
-  });
-
-  it('travels the requested horizontal span over the flight', () => {
-    const arc = coin(-90);
-    expect(arcPosition(arc, arc.flightSec).x).toBeCloseTo(100 - 90, 6);
-  });
-
-  it('peaks above the launch point before falling', () => {
-    const arc = coin();
-    const apex = arcPosition(arc, -arc.vy / ARC_GRAVITY).y;
-    expect(apex).toBeLessThan(arc.y0);
-    expect(arcPosition(arc, arc.flightSec).y).toBeGreaterThan(apex);
-  });
-
-  it('returns zero flight time when the launch is already below the ground', () => {
-    expect(arcFlightSec(120, 0, 100)).toBe(0);
-  });
-
-  // The coin's time in the air has to equal the engine's catch window, or the
-  // player can tap a coin that is no longer catchable.
-  it('liftForFlight hits the requested flight time exactly', () => {
-    for (const [y0, landY, t] of [
-      [40, 100, 1.5],
-      [100, 100, 0.8],
-      [90, 40, 1.2],
-    ] as const) {
-      const lift = liftForFlight(y0, landY, t);
-      expect(arcFlightSec(y0, -lift, landY)).toBeCloseTo(t, 9);
-    }
-  });
-
-  it('liftForFlight is zero for a zero-length flight', () => {
-    expect(liftForFlight(0, 10, 0)).toBe(0);
-  });
-
-  it('is catchable only while in flight', () => {
-    const arc = coin();
-    expect(arcInFlight(arc)).toBe(true);
-    arc.age = arc.flightSec;
-    expect(arcInFlight(arc)).toBe(false);
-  });
-
-  it('a caught arc is no longer catchable', () => {
-    const arc = coin();
-    arc.caught = true;
-    expect(arcInFlight(arc)).toBe(false);
-  });
-});
-
-describe('arcCaughtBy', () => {
-  it('catches a strike inside the radius and misses one outside', () => {
-    const arc = coin();
-    arc.age = arc.flightSec / 2;
-    const p = arcPosition(arc, arc.age);
-    expect(arcCaughtBy(arc, p.x + 4, p.y - 4, 20)).toBe(true);
-    expect(arcCaughtBy(arc, p.x + 40, p.y, 20)).toBe(false);
-  });
-
-  it('never catches a landed arc, however close the strike', () => {
-    const arc = coin();
-    arc.age = arc.flightSec + 0.01;
-    const p = arcPosition(arc, arc.age);
-    expect(arcCaughtBy(arc, p.x, p.y, 40)).toBe(false);
-  });
-});
 
 describe('particles', () => {
   function spark(): Particle {
@@ -181,26 +112,15 @@ describe('arcApexHeight', () => {
     expect(arcApexHeight(0, 160)).toBe(1);
   });
 
-  it('matches the apex the ballistics reach over level ground', () => {
-    // The y scale of arc space is a constant, so it is the level-flight apex.
-    // A real arc that lands lower than it launched rises further than this by
-    // exactly that drop, which is why the scale must not depend on either.
-    const y = 100;
-    const flight = 1.5;
-    const arc = launchArc(0, y, -40, y, liftForFlight(y, y, flight), 5, 'gold', 0);
-    const apexY = arcPosition(arc, -arc.vy / ARC_GRAVITY).y;
-    expect(y - apexY).toBeCloseTo(arcApexHeight(flight), 6);
-  });
-
-  it('is exceeded by exactly the drop when the arc lands lower', () => {
-    const y0 = 90;
-    const landY = 100;
-    const flight = 1.5;
-    const arc = launchArc(0, y0, -40, landY, liftForFlight(y0, landY, flight), 5, 'gold', 0);
-    const apexY = arcPosition(arc, -arc.vy / ARC_GRAVITY).y;
-    const rise = landY - apexY;
-    expect(rise).toBeGreaterThan(arcApexHeight(flight));
-    expect(rise).toBeLessThan(arcApexHeight(flight) + (landY - y0) + 1);
+  // The scale exists to put core's arc on the pixel grid, so it is measured
+  // against core's arc. Asserting it against a client-side ballistic copy only
+  // ever proved the copy agreed with itself.
+  it('lands core\'s unit apex on exactly that many pixels', () => {
+    const apex = arcApexHeight(ARC_FLIGHT_SEC);
+    const peak = arcPositionAt(coreArc(), ARC_FLIGHT_SEC / 2);
+    const ground = 100;
+    const drawn = sceneFromArcSpace(peak!.x, peak!.y, 0, ground, apex);
+    expect(ground - drawn.y).toBeCloseTo(apex, 6);
   });
 });
 
@@ -231,23 +151,35 @@ describe('arcSpaceFromScene', () => {
   });
 });
 
-describe('level-flight arcs', () => {
-  it('launches and lands on one line, so arc-space y = 0 at both ends', () => {
-    const base = 120;
-    const flight = 1.5;
-    const arc = launchArc(0, base, -50, base, liftForFlight(base, base, flight), 5, 'gold', 0);
-    const apex = arcApexHeight(flight);
-    expect(arcSpaceFromScene(arc.x0, base, 0, base, apex).y).toBeCloseTo(0);
-    const landing = arcPosition(arc, flight);
-    expect(arcSpaceFromScene(landing.x, landing.y, 0, base, apex).y).toBeCloseTo(0, 4);
+describe("core's arc drawn on the scene's pixel grid", () => {
+  const ground = 120;
+  const heroX = 40;
+  const apex = arcApexHeight(ARC_FLIGHT_SEC);
+
+  /** Where core says the arc is at `t`, in scene pixels. */
+  function drawn(t: number) {
+    const p = arcPositionAt(coreArc(), t)!;
+    return sceneFromArcSpace(p.x, p.y, heroX, ground, apex);
+  }
+
+  it('leaves the hero on the ground line', () => {
+    const p = drawn(1e-6);
+    expect(p.x).toBeCloseTo(heroX, 3);
+    expect(p.y).toBeCloseTo(ground, 3);
   });
 
-  it('peaks at arc-space y = 1 halfway through the flight', () => {
-    const base = 120;
-    const flight = 1.5;
-    const arc = launchArc(0, base, -50, base, liftForFlight(base, base, flight), 5, 'gold', 0);
-    const mid = arcPosition(arc, flight / 2);
-    expect(arcSpaceFromScene(mid.x, mid.y, 0, base, arcApexHeight(flight)).y).toBeCloseTo(1, 4);
+  it('rises exactly arcApexHeight pixels at the half-way point', () => {
+    expect(ground - drawn(ARC_FLIGHT_SEC / 2).y).toBeCloseTo(apex, 6);
+  });
+
+  it('touches back down on the ground line', () => {
+    expect(drawn(ARC_FLIGHT_SEC * (1 - 1e-6)).y).toBeCloseTo(ground, 3);
+  });
+
+  // Reach is measured in apex units, so x scales by the same factor as y. A
+  // pixel-scale change must not move where the coin is drawn relative to reach.
+  it('lands core\'s reach at reach x apex pixels down the road', () => {
+    expect(drawn(ARC_FLIGHT_SEC * (1 - 1e-6)).x - heroX).toBeCloseTo(arcLandingX(3) * apex, 2);
   });
 });
 
