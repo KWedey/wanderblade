@@ -3,7 +3,7 @@ import {
   advance,
   arcPositionAt,
   ARC_CATCH_MULT,
-  ARC_CATCH_RADIUS,
+  arcCatchRadius,
   ARC_FLIGHT_SEC,
   ARC_STAGGER_SEC,
   ARC_SPLIT_MIN,
@@ -222,15 +222,18 @@ describe('a catch is a hit test, not a queue', () => {
     const s = roadAt(31, 20, 10);
     advance(s, 10.001);
     const at = 10.5;
-    const p = aimAt(s.arcs[0] as LootArc, at) as { x: number; y: number };
+    const arc = s.arcs[0] as LootArc;
+    const p = aimAt(arc, at) as { x: number; y: number };
+    const r = arcCatchRadius(arc, at);
+    expect(r).toBeGreaterThan(0);
 
     const near = advance(clone(s), 0.6, [
-      { atSec: at, aim: { x: p.x + ARC_CATCH_RADIUS * 0.9, y: p.y } },
+      { atSec: at, aim: { x: p.x + r * 0.9, y: p.y } },
     ]);
     expect(near.filter((e) => e.type === 'arcCatch')).toHaveLength(1);
 
     const far = advance(clone(s), 0.6, [
-      { atSec: at, aim: { x: p.x + ARC_CATCH_RADIUS * 1.1, y: p.y } },
+      { atSec: at, aim: { x: p.x + r * 1.1, y: p.y } },
     ]);
     expect(far.filter((e) => e.type === 'arcCatch')).toHaveLength(0);
   });

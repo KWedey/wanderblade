@@ -278,3 +278,28 @@ The gap was a **shape** problem, not a level one. It widened ~1.29× per realm, 
 **The frontier realm is not sampled as play.** A Road whose guardian can never be felled has no reward at the end of it, so the simulator stops on *arrival* at that realm rather than after walking it. Walking it cost P8 its margin at 90 days — 4,356 of 4,372 lean panel looks came from realm 301 alone, dragging the 95% clause to 94.8% while realms 0–300 sat at 100%.
 
 **It is reachable.** A 90-day run at 3 seeds reaches **realm 301**. This is a real endgame boundary at roughly three months of steady play, not a theoretical one. `packages/core/test/magnitude.test.ts` pins entry succeeding at realm 300 and refusing at 301, 302, 400 and 5000, with the Road left untouched by the refusal.
+
+## 35. The catch window is constant in time, not in distance — 2026-08-25
+
+**Decision:** `ARC_CATCH_RADIUS` (a fixed 0.12 arc units) is replaced by `ARC_CATCH_SEC` = **0.14 s**. `arcCatchRadius(arc, atSec) = ARC_CATCH_SEC · arcSpeedAt(arc, atSec)`, so the forgiveness a player gets is the same number of milliseconds anywhere along a coin's flight. `arcHitIndex` now compares distance as a fraction of each arc's own radius, so the coin a strike is most clearly inside wins.
+
+**Why:** The geometry made *which coin you reach for* matter more than how fast you reacted. A coin's vertical speed passes through zero at the apex, so a late strike still lands inside a fixed radius; near the ground `|dy/dt|` peaks and the same strike misses by the height the coin fell in the meantime. Measured here, one coin alone in the air at a 50 ms reach:
+
+| | apex | near landing |
+|---|---|---|
+| fixed radius | 6/6 reaches | **3/6 reaches** |
+| constant time | 6/6 | **6/6** |
+
+And in play with several coins up, at a 250 ms human reach: apex **36.0%** vs landing **18.5%** before, **30.8%** vs **29.6%** after — a 1.95× penalty for reaching at the wrong moment, down to 1.04×.
+
+**A 100× cliff on undocumented knowledge does not sort players into skilled and unskilled.** It sorts them into *found it* and *concluded the mechanic is fake*, and the second group is right about what they experienced. Guardrail 3 bans gimmick-led design and a hidden apex-timing trick is a gimmick; guardrail 4 wants active play materially faster, not conditionally faster on a secret.
+
+**0.14 s is the value that keeps aim honest.** At mid-reach it makes the apex radius 0.093, near the old 0.12, so apex play barely moves; near the ground it opens to 0.385, which is what closes the gap. A tap at empty sky still catches nothing, and wild aim — 0.5 units of scatter, over three times the old radius — falls to under a fifth of a modest thumb's rate. A window wide enough to forgive a full 250 ms everywhere would make any tap near the ground catch a neighbouring coin, which is mercy that has eaten the mechanic.
+
+`packages/core/test/thumb.test.ts` is the acceptance test and holds the table above.
+
+## 36. The starvation and dead-time clauses are proven to bite — 2026-08-25
+
+**Decision:** `sim/test/sim.test.ts` feeds the pre-fix measurements straight into `runPacing` and asserts the verdict flips. P8 fails on `minAffordable: 0` and on a four-hour drought; P9 fails on the pre-fix dead time (14.74 h longest wait, **56%** of Road time waiting, 1.01 d slowest realm), on a cadence past three days, and on a portal parked open for 76 hours.
+
+**Why:** A ceiling set from a measured distribution is only trustworthy if we can see it reject the thing it was written to catch. If a clause passes on both the broken and the fixed numbers it is decoration, and nobody finds that out until it fails to catch the next regression. Pinning it as a test rather than as a one-off run means a later tuning pass cannot widen the clause into decoration without turning something red.

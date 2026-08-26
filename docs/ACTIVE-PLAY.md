@@ -104,6 +104,13 @@ onboarding, not a failure: realm 0's fight measures **16.1 minutes**, so a new p
 reaches their first ascension inside one session. Realms 1–94 sit between 20 and 90
 minutes, so 15 is a floor for the opening realm rather than a loosening of the band.
 
+**The catch window is constant in time, not in distance.** The radius is
+`ARC_CATCH_SEC` seconds of the coin's own travel, so a player gets the same
+forgiveness in milliseconds at the apex and near the ground. A fixed distance is
+silently generous where a coin is slow and near-zero where it is fast, which
+made *which coin you reach for* matter more than how fast you reacted
+(`docs/DECISIONS.md` #35).
+
 ## Determinism
 
 Strikes are explicit timestamped inputs into `advance`, never render-driven. Each is

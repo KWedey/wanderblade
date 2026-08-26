@@ -39,7 +39,7 @@ export {
   ARC_STAGGER_SEC,
   ARC_MIN_REACH,
   ARC_MAX_REACH,
-  ARC_CATCH_RADIUS,
+  ARC_CATCH_SEC,
   bossHpMult,
   BOSS_REALM_GAIN,
   ASC_COST_STEP,
@@ -83,7 +83,15 @@ export type {
 } from './types';
 
 // --- Loot arcs -----------------------------------------------------------
-export { arcLandingX, arcPositionAt, arcHitIndex, arcsForKill, arcSplitCount } from './arcs';
+export {
+  arcCatchRadius,
+  arcHitIndex,
+  arcLandingX,
+  arcPositionAt,
+  arcsForKill,
+  arcSpeedAt,
+  arcSplitCount,
+} from './arcs';
 
 // --- Momentum ------------------------------------------------------------
 export {

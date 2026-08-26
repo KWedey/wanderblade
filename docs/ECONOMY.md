@@ -142,7 +142,13 @@ Two of those shapes are load-bearing rather than tuning, and `docs/DECISIONS.md`
 
 ### Numerical frontier
 
-Every client-facing scalar is finite and exact at realm 199. Finiteness ends at **realm 301**, where `bossHp` overflows and no build can fell a guardian, and the hero level ladder tops out at 2102 at realm 199 and 659 at realm 296. `packages/core/test/magnitude.test.ts` pins all three so a constant change cannot quietly move them.
+**The current hard horizon is realm 300.** It is the last realm whose guardian has finite HP; at realm 301 `bossHp` is `Infinity` and `enterPortal` refuses with `reason: 'unwinnable'` rather than opening a fight no build can end (`docs/DECISIONS.md` #34). A 90-day simulated run at 3 seeds reaches it around **day 88**, so this is a boundary a real player meets at roughly three months, not a theoretical one.
+
+⚠️ **This is an arithmetic wall, not a designed ending, and the game must reach a designed ending or a defined endless mode before it reaches this.** That is M4 realm-sequence work — `docs/VISION.md` sells "World's Edge" as the long-horizon destination — and it is recorded here so nobody rediscovers the wall by accident.
+
+The rest of the economy follows close behind: `enemyHp` overflows at realm 330, `gearPower` at 331, `enemyGold` at 333, `levelCost` at 341. Carrying `bossHp` alone in a wider representation buys 30 realms and leaves the wall standing, so a representation that survives means a big-number layer through the whole economy with its own determinism contract.
+
+Every client-facing scalar is finite and exact at realm 199, and the hero level ladder tops out at 2102 at realm 199 and 659 at realm 296. `packages/core/test/magnitude.test.ts` pins every frontier above — including entry succeeding at realm 300 and refusing at 301 — so a constant change cannot quietly move them.
 
 ## Implemented legacy baseline (historical reference)
 
