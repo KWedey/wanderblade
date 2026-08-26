@@ -1224,3 +1224,62 @@ body {
 [data-px] {
   position: relative;
 }
+
+/* --- Ascendancy ------------------------------------------------------- */
+
+/* The persistent tree's front door. Sits above the road panels because what
+   it opens outlives everything under it. */
+.asc-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 12px;
+  font-family: var(--font-ui);
+  font-size: var(--ui-1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--panel-inner);
+  border: 3px solid var(--panel-edge);
+  box-shadow: var(--drop);
+  cursor: pointer;
+}
+
+.asc-open-bank {
+  font-family: var(--font-num);
+  font-size: var(--num-1);
+  color: var(--ink-light);
+}
+
+.asc-open-bank::after {
+  content: ' a';
+  color: var(--ink-dim);
+}
+
+.asc-card {
+  max-width: 620px;
+}
+
+/* The tree's rows carry a longer sentence than the road's shop rows do, so
+   the price column is given its own track rather than crowding the copy. */
+.asc-node {
+  grid-template-columns: 1fr max-content;
+  column-gap: 18px;
+}
+
+.asc-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 14px 0 4px;
+  text-align: left;
+}
+
+/* A node nobody can afford still has to say what it would do, so it dims
+   rather than greys out to unreadable. */
+.asc-node:disabled {
+  cursor: default;
+  opacity: 0.72;
+}

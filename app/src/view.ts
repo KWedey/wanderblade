@@ -3,6 +3,8 @@
 // the controller hands it and forwards user intents through ViewHandlers.
 
 import {
+  ASC_NODES,
+  ASC_NODE_IDS,
   GEAR_SLOTS,
   SKILLS,
   SKILL_IDS,
@@ -60,6 +62,33 @@ export interface BossVM {
   etaSec: number;
 }
 
+/** One node of the persistent tree, priced and ranked by core. */
+export interface AscNodeVM {
+  id: string;
+  name: string;
+  /** What the node multiplies, in words. */
+  effect: string;
+  rank: number;
+  cost: number;
+  canAfford: boolean;
+  /** The tree's current multiplier for this node's effect. */
+  multiplier: number;
+}
+
+/**
+ * The persistent side of the game (DECISIONS.md #17). Banked Ascendancy and
+ * the tree survive ascension; `pending` is this run's earnings, which only
+ * victory banks.
+ */
+export interface AscendancyVM {
+  banked: number;
+  pending: number;
+  victories: number;
+  /** Automatic realm-completion bonus. Multiplies gold only (guardrail 8). */
+  earningsMult: number;
+  nodes: AscNodeVM[];
+}
+
 /** Everything the view needs to paint one frame of the panels (not the gold count-up). */
 export interface ViewModel {
   regionName: string;
@@ -91,6 +120,7 @@ export interface ViewModel {
   purchaseReady: boolean;
   skills: SkillVM[];
   gear: Record<GearSlot, GearVM | null>;
+  ascendancy: AscendancyVM;
 }
 
 export interface ViewHandlers {
@@ -100,6 +130,7 @@ export interface ViewHandlers {
   onBuySkill: (id: string) => void;
   onEnterPortal: () => void;
   onAbandonBoss: () => void;
+  onBuyAscendancyNode: (id: string) => void;
   onCollectRecap: () => void;
   onReset: () => void;
   /** Returns the new muted state, so the button can label itself. */
@@ -136,6 +167,26 @@ function skillMarkup(): string {
         <span class="upgrade-name">${name}</span>
         <span class="upgrade-detail" data-role="detail"></span>
         <span class="upgrade-cost" data-role="cost"></span>
+      </button>`;
+  }).join('');
+}
+
+const ASC_EFFECT_LABEL: Record<string, string> = {
+  damage: 'Blade damage',
+  gearPower: 'Gear power',
+  attackSpeed: 'Attack speed',
+};
+
+function ascNodeMarkup(): string {
+  return ASC_NODE_IDS.map((id) => {
+    const def = ASC_NODES[id];
+    const name = def?.name ?? id;
+    const effect = ASC_EFFECT_LABEL[def?.effect ?? ''] ?? '';
+    return `
+      <button class="upgrade-btn asc-node" type="button" data-asc="${id}">
+        <span class="upgrade-name">${name}</span>
+        <span class="upgrade-detail" data-role="asc-detail">${effect}</span>
+        <span class="upgrade-cost" data-role="asc-cost"></span>
       </button>`;
   }).join('');
 }
@@ -221,6 +272,11 @@ function template(): string {
       <div class="boss-banner" data-role="boss-banner" hidden></div>
     </section>
 
+    <button class="asc-open" type="button" data-role="asc-open">
+      <span class="asc-open-label">Ascendancy</span>
+      <span class="asc-open-bank" data-role="asc-open-bank">0</span>
+    </button>
+
     <section class="panel upgrades">
       <h2 class="panel-title">Upgrades</h2>
       <button class="upgrade-btn hero-btn" type="button" data-role="hero-btn">
@@ -257,6 +313,21 @@ function template(): string {
       <button class="debug-btn" type="button" data-role="warp-8h">Time-warp +8h</button>
       <button class="debug-btn" type="button" data-role="mute" aria-pressed="false">Sound: on</button>
       <button class="debug-btn danger" type="button" data-role="reset">Reset save</button>
+    </div>
+  </div>
+
+  <div class="recap-overlay asc-overlay" data-role="asc" hidden>
+    <div class="recap-card asc-card">
+      <div class="recap-eyebrow">Ascendancy</div>
+      <div class="recap-sub" data-role="asc-sub">What you keep when the realm ends.</div>
+      <ul class="recap-stats">
+        <li><span class="recap-num" data-role="asc-banked">0</span><span>banked to spend</span></li>
+        <li><span class="recap-num" data-role="asc-pending">0</span><span>earned this realm</span></li>
+        <li><span class="recap-num" data-role="asc-victories">0</span><span>realms completed</span></li>
+        <li><span class="recap-num" data-role="asc-earnings">1.00x</span><span>gold multiplier</span></li>
+      </ul>
+      <div class="asc-nodes">${ascNodeMarkup()}</div>
+      <button class="recap-btn" type="button" data-role="asc-close">Back to the Road</button>
     </div>
   </div>
 
@@ -468,7 +539,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   }
 
   root.addEventListener('pointerdown', (event) => {
-    if (isChrome(event.target) || isRecapOpen()) return;
+    if (isChrome(event.target) || isRecapOpen() || !ascOverlay.hidden) return;
     event.preventDefault();
     fireStrike(event.clientX, event.clientY);
     startHold(event.clientX, event.clientY);
@@ -478,7 +549,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
   window.addEventListener('keydown', (event) => {
     if (event.key !== ' ' && event.key !== 'Enter') return;
-    if (isChrome(event.target) || isRecapOpen()) return;
+    if (isChrome(event.target) || isRecapOpen() || !ascOverlay.hidden) return;
     event.preventDefault();
     if (event.repeat) return;
     fireStrike(null, null);
@@ -486,6 +557,31 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   });
   window.addEventListener('keyup', (event) => {
     if (event.key === ' ' || event.key === 'Enter') stopHold();
+  });
+
+  // The persistent tree lives behind an overlay, not in the road column: it is
+  // read between realms, and the road panel is already the densest thing here.
+  const ascOverlay = q(root, '[data-role="asc"]');
+  const ascOpenBank = q(root, '[data-role="asc-open-bank"]');
+  const ascBanked = q(root, '[data-role="asc-banked"]');
+  const ascPending = q(root, '[data-role="asc-pending"]');
+  const ascVictories = q(root, '[data-role="asc-victories"]');
+  const ascEarnings = q(root, '[data-role="asc-earnings"]');
+  const ascNodeEls = new Map<string, { btn: HTMLButtonElement; detail: HTMLElement; cost: HTMLElement }>();
+  for (const id of ASC_NODE_IDS) {
+    const btn = q<HTMLButtonElement>(root, `[data-asc="${id}"]`);
+    ascNodeEls.set(id, {
+      btn,
+      detail: q(btn, '[data-role="asc-detail"]'),
+      cost: q(btn, '[data-role="asc-cost"]'),
+    });
+    btn.addEventListener('click', () => handlers.onBuyAscendancyNode(id));
+  }
+  q(root, '[data-role="asc-open"]').addEventListener('click', () => {
+    ascOverlay.hidden = false;
+  });
+  q(root, '[data-role="asc-close"]').addEventListener('click', () => {
+    ascOverlay.hidden = true;
   });
 
   const recapOverlay = q(root, '[data-role="recap"]');
@@ -656,8 +752,10 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
         refs.power.textContent = 'empty';
       }
     }
+    renderAscendancy(vm.ascendancy);
     repaintPixelText(panelRoot);
     repaintPixelText(hudRoot);
+    if (!ascOverlay.hidden) repaintPixelText(ascOverlay);
   }
 
   // Per-frame path: only touch the DOM when the rendered string/scale actually
@@ -729,6 +827,28 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
   function isRecapOpen(): boolean {
     return !recapOverlay.hidden;
+  }
+
+  function renderAscendancy(asc: AscendancyVM): void {
+    ascOpenBank.textContent = formatNumber(asc.banked);
+    ascBanked.textContent = formatNumber(asc.banked);
+    ascPending.textContent = formatNumber(asc.pending);
+    ascVictories.textContent = formatNumber(asc.victories);
+    ascEarnings.textContent = `${asc.earningsMult.toFixed(2)}x`;
+    for (const node of asc.nodes) {
+      const els = ascNodeEls.get(node.id);
+      if (!els) continue;
+      // Rank and the multiplier it already bought, so a node reads as a thing
+      // that did something rather than as a price with a name on it.
+      const effect = ASC_EFFECT_LABEL[node.effect] ?? node.effect;
+      els.detail.textContent =
+        node.rank > 0
+          ? `${effect} - rank ${node.rank}, ${node.multiplier.toFixed(2)}x`
+          : `${effect} - not yet`;
+      els.cost.textContent = `${formatNumber(node.cost)} a`;
+      els.btn.classList.toggle('affordable', node.canAfford);
+      els.btn.disabled = !node.canAfford;
+    }
   }
 
   function setSeed(seed: number): void {

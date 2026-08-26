@@ -6,7 +6,13 @@
 import {
   abandonBoss as coreAbandonBoss,
   advance,
+  ASC_NODES,
+  ASC_NODE_IDS,
+  ascMultiplier,
+  ascNodeCost,
+  earningsMultiplier,
   buyHeroLevel as coreBuyHeroLevel,
+  buyAscendancyNode as coreBuyAscendancyNode,
   buySkill as coreBuySkill,
   bossEtaSec,
   goldPerKill,
@@ -33,7 +39,15 @@ import { bossName, describeEvent, gearName, regionName, type LogEntry } from './
 import { clamp01, formatDuration } from './format';
 import { clearSave, readSave, writeSave } from './save';
 import type { SceneModel } from './scene/scene';
-import type { BossVM, GearVM, PortalVM, SkillVM, View, ViewModel } from './view';
+import type {
+  AscendancyVM,
+  BossVM,
+  GearVM,
+  PortalVM,
+  SkillVM,
+  View,
+  ViewModel,
+} from './view';
 
 /**
  * Engine tick. A strike reaches `state.momentum` only when `advance` ingests
@@ -262,6 +276,10 @@ export class Game {
 
   buySkill(id: string): void {
     if (coreBuySkill(this.state, id)) this.renderAll();
+  }
+
+  buyAscendancyNode(id: string): void {
+    if (coreBuyAscendancyNode(this.state, id)) this.renderAll();
   }
 
   /**
@@ -512,6 +530,29 @@ export class Game {
         canAfford: r.affordable,
       }));
 
+    // The tree prices and gates itself off core, exactly as the shop rows do.
+    const asc = s.ascendancy;
+    const ascendancy: AscendancyVM = {
+      banked: asc.banked,
+      pending: asc.pending,
+      victories: asc.victories,
+      earningsMult: earningsMultiplier(asc.victories),
+      nodes: ASC_NODE_IDS.map((id) => {
+        const def = ASC_NODES[id]!;
+        const rank = asc.nodes[id] ?? 0;
+        const cost = ascNodeCost(id, rank);
+        return {
+          id,
+          name: def.name,
+          effect: def.effect,
+          rank,
+          cost,
+          canAfford: asc.banked >= cost,
+          multiplier: ascMultiplier(asc, def.effect),
+        };
+      }),
+    };
+
     const heroRow = rows.find((r) => r.kind === 'hero')!;
     const heroLevelCost = heroRow.cost;
     // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
@@ -570,6 +611,7 @@ export class Game {
       purchaseGoal,
       purchaseReady,
       skills,
+      ascendancy,
       gear: {
         weapon: this.gearVM('weapon'),
         armor: this.gearVM('armor'),

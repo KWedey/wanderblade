@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { enemyGold, goldPerKill, type GameState, type Strike } from '@wanderblade/core';
+import {
+  ASC_NODES,
+  ASC_NODE_IDS,
+  ascNodeCost,
+  earningsMultiplier,
+  enemyGold,
+  goldPerKill,
+  type GameState,
+  type Strike,
+} from '@wanderblade/core';
 import type { View, ViewModel } from '../src/view';
 
 // Game reads two browser globals at construction (`window.matchMedia`) and one
@@ -168,5 +177,80 @@ describe('the client carries no economy of its own', () => {
     expect(inner.goldPerKill).toBe(goldPerKill(inner.state));
     // Strictly above the base, so re-deriving from enemyGold fails here.
     expect(inner.goldPerKill).toBeGreaterThan(enemyGold(inner.state.realm, inner.state.zone));
+  });
+});
+
+// buyAscendancyNode has been in core since the tree landed; the client never
+// mentioned it, so the whole persistent-progression system had no UI at all.
+describe('the Ascendancy tree the client now reaches', () => {
+  interface AscInternals {
+    tick: () => void;
+    state: GameState;
+    buyAscendancyNode: (id: string) => void;
+  }
+
+  function withBank(banked: number): { vm: () => ViewModel; inner: AscInternals } {
+    let latest: ViewModel | null = null;
+    const view: View = { ...stubView, renderPanels: (next) => (latest = next) };
+    const inner = new Game(view) as unknown as AscInternals;
+    inner.state.ascendancy.banked = banked;
+    inner.tick();
+    return {
+      vm: () => {
+        if (latest === null) throw new Error('no view model was rendered');
+        return latest;
+      },
+      inner,
+    };
+  }
+
+  beforeEach(() => {
+    nowMs = 1000;
+  });
+
+  it('prices every node off core rather than off a second table', () => {
+    const { vm } = withBank(0);
+    const nodes = vm().ascendancy.nodes;
+    expect(nodes.map((n) => n.id)).toEqual([...ASC_NODE_IDS]);
+    for (const node of nodes) {
+      expect(node.cost, node.id).toBe(ascNodeCost(node.id, node.rank));
+      expect(node.name, node.id).toBe(ASC_NODES[node.id]!.name);
+    }
+  });
+
+  it('calls a node affordable exactly when core would take the payment', () => {
+    const edgeCost = ascNodeCost('edge', 0);
+    expect(withBank(edgeCost - 1).vm().ascendancy.nodes[0]!.canAfford).toBe(false);
+    expect(withBank(edgeCost).vm().ascendancy.nodes[0]!.canAfford).toBe(true);
+  });
+
+  it('spends the bank and takes the rank when the node is bought', () => {
+    const cost = ascNodeCost('edge', 0);
+    const { vm, inner } = withBank(cost + 5);
+    inner.buyAscendancyNode('edge');
+    inner.tick();
+
+    const node = vm().ascendancy.nodes[0]!;
+    expect(vm().ascendancy.banked).toBe(5);
+    expect(node.rank).toBe(1);
+    expect(node.cost).toBe(ascNodeCost('edge', 1));
+    expect(node.multiplier).toBeGreaterThan(1);
+  });
+
+  it('leaves the bank alone when the node cannot be paid for', () => {
+    const { vm, inner } = withBank(ascNodeCost('edge', 0) - 1);
+    inner.buyAscendancyNode('edge');
+    inner.tick();
+    expect(vm().ascendancy.banked).toBe(ascNodeCost('edge', 0) - 1);
+    expect(vm().ascendancy.nodes[0]!.rank).toBe(0);
+  });
+
+  // Guardrail 8: the automatic realm bonus multiplies gold and never damage.
+  it('reports the realm-completion bonus as core computes it', () => {
+    const { vm, inner } = withBank(0);
+    inner.state.ascendancy.victories = 3;
+    inner.tick();
+    expect(vm().ascendancy.earningsMult).toBe(earningsMultiplier(3));
+    expect(vm().ascendancy.victories).toBe(3);
   });
 });

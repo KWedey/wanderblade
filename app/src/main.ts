@@ -18,6 +18,7 @@ const handlers: ViewHandlers = {
   onBuySkill: (id) => game.buySkill(id),
   onEnterPortal: () => game.enterPortal(),
   onAbandonBoss: () => game.abandonBoss(),
+  onBuyAscendancyNode: (id) => game.buyAscendancyNode(id),
   onCollectRecap: () => game.collectRecap(),
   onReset: () => game.reset(),
   onToggleMute: () => {
