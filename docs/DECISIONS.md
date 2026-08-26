@@ -721,7 +721,11 @@ The rise is a sample collapse, not skill. Catches by scatter: **398 / 343 / 315 
 |---|---|---|---|
 | before | 785 | 1.84% | 480 (4.44%) |
 | after silhouette fix only | 779 | 1.82% | 489 (4.53%) |
-| after both canopy fixes | **746** | **1.75%** | **463 (4.29%)** |
+| after both canopy fixes | 746 | 1.75% | 463 (4.29%) |
+
+⚠️ **Retracted as evidence — this table is inside its own instrument's noise.** Three captures taken back to back on one unchanged commit read **763 / 780 / 773**, and a fourth read 797: a spread of ~34 marks at fixed code. The claimed improvement is 39, and the silhouette-only row's 6 is not distinguishable from nothing. The scene animates, so each capture samples a different frame — the same reason raw pixel diffing was rejected two paragraphs below, applied one paragraph too late.
+
+**What is still evidence for the canopy:** the lobe geometry itself. `foliageNotchAt` is a pure function with tests pinning that adjacent rows cannot jump the way an independent roll did, and reverting it reds them. That the silhouette is smoother is proven; that the frame carries measurably fewer lone marks is not.
 
 **`qa:speckle` is the wrong instrument for the grass claim, and says so itself** — its help text disclaims discrete sprite instances as expected-lone. Confirmed: after the clump fix the count rose to 781 (1.83%), because each added blade is another sprite edge with no same-colour neighbour under the tool's own per-pixel metric. That is the tool's documented limitation, not a regression.
 
