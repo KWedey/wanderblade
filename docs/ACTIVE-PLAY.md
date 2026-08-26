@@ -65,6 +65,7 @@ This is the contract that keeps idle honest: active play multiplies, it never ga
 | Realm start → portal available | 2 – 4 h active, 8 – 16 h idle |
 | Portal boss duration (prepared build) | 20 – 90 min active |
 | Ascend promptly vs farm a ready realm 2× longer | prompt ascension wins |
+| Upgrade panel, any moment of Road play | ≥5 priced rows, ≥4 affordable at 95% of looks |
 
 ## Determinism
 

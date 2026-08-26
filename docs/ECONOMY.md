@@ -103,6 +103,7 @@ Required correctness validators:
 - Remaining offline time after victory advances the next realm Road.
 - Persistent earnings bonuses affect the documented income paths and never DPS.
 - The four player policies meet the approved pacing bands across multiple seeds and multi-realm runs.
+- The upgrade panel offers at least five priced rows at every look and four affordable at 95% of them (**P8**), so "the number and value of decisions within a 15–30 minute active session" is a measured quantity rather than an intention. Measured on the minimum for priced rows, which gold cannot move, and at 95% for affordable ones, because the greedy purchase policy empties the wallet the instant it can (`docs/DECISIONS.md` #26).
 
 ## Determinism and numerical safety
 
@@ -112,6 +113,34 @@ Required correctness validators:
 - Active actions are explicit timestamped inputs; frame rate and render timing are not game rules.
 - Ascension does not reset the global RNG/kill sequence.
 - Multi-realm simulations must detect non-finite HP, DPS, currency, duration, and multiplier values before they reach client state.
+
+## Current progression formulas
+
+These are the shipped values, each carrying a passing sim run (`docs/DECISIONS.md` #5).
+
+| Quantity | Formula |
+|---|---|
+| Realm scale | `REALM_STEP^realm`, `REALM_STEP` = 8 |
+| Enemy HP | `10 · realmScale · 1.55^z` |
+| Enemy gold | `1 · realmScale · 1.48^z` |
+| Hero base damage | `25 · 1.12^level · realmScale` |
+| Hero level cost | `10 · 1.15^level · realmScale` |
+| Skill rank cost | `50 · 1.15^rank · realmScale` |
+| Skill value | `skillRankMult(rank) = 1 + SKILL_MAX_BONUS · (1 − SKILL_RANK_DECAY^rank)`, 0.176 / 0.85 — **uncapped rank, bounded value** |
+| Guardian HP | `bossHpMult · enemyHp(realm, 49) · BOSS_REALM_GAIN^realm`, 30000 / 1.22 |
+| Ascendancy node cost | `costBase · (1 + ASC_COST_STEP · rank)`, `ASC_COST_STEP` = 0.5 — **linear, uncapped** |
+| Ascendancy damage / gear effect | `(1 + perRank)^rank`, perRank 0.037 — compounding, unbounded |
+| Ascendancy speed effect | `1 + ASC_SPEED_MAX_BONUS · (1 − ASC_SPEED_DECAY^rank)`, 0.6 / 0.9 — **bounded** |
+| Earnings bonus | `1.15^victories`, gold and passive earnings only, never DPS |
+
+Two of those shapes are load-bearing rather than tuning, and `docs/DECISIONS.md` #27 carries the argument:
+
+- The Ascendancy price is **linear** because income per realm grows linearly, so lifetime banked grows with realm squared. A linear price buys rank growth that is linear in the realm; a geometric one buys only logarithmic growth and saturates, which is what broke P6 at realm 45.
+- Persistent attack speed is the **one bounded** effect. Speed divides through the idle kill-time floor, so unbounded speed means unbounded event steps per simulated second and an offline gap that never finishes reconciling.
+
+### Numerical frontier
+
+Every client-facing scalar is finite and exact at realm 199. Finiteness ends at **realm 297**, where `bossHp` overflows and no build can fell a guardian, and the hero level ladder tops out at 2102 at realm 199 and 659 at realm 296. `packages/core/test/magnitude.test.ts` pins all three so a constant change cannot quietly move them.
 
 ## Implemented legacy baseline (historical reference)
 
