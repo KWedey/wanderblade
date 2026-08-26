@@ -153,9 +153,7 @@ export function describeEvent(e: GameEvent): LogEntry | null {
     case 'bossVictory':
       return {
         kind: 'bossWin',
-        text: `Slew ${bossName(e.realm)} — +${formatNumber(
-          e.payout + e.pendingBanked,
-        )} Ascendancy banked`,
+        text: `Slew ${bossName(e.realm)} — +${formatNumber(e.pendingBanked)} Ascendancy banked`,
       };
     case 'ascend':
       return {

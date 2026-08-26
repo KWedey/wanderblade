@@ -1,4 +1,4 @@
-import { REGION_NAME_COUNT, regionName } from '../src/flavor';
+import { REGION_NAME_COUNT, describeEvent, regionName } from '../src/flavor';
 import { REALM_SKIN_COUNT } from '../src/scene/palette';
 // Boundary tests for the odometer/rate formatters. These pin every display
 // band so a future toFixed/threshold tweak fails loudly instead of silently
@@ -222,5 +222,34 @@ describe('clamp01 keeps a meter inside its own track', () => {
   it('answers a non-finite ratio with an empty meter, not a NaN width', () => {
     expect(clamp01(NaN)).toBe(0);
     expect(clamp01(Infinity)).toBe(0);
+  });
+});
+
+// `ascend` adds the boss payout into `pending` before banking it, so the
+// event's `pendingBanked` already contains `payout`. Adding them printed the
+// payout twice: a victory that banked 58 announced 66.
+describe('the victory line banks what the bank banked', () => {
+  it('announces pendingBanked, not pendingBanked plus the payout again', () => {
+    const line = describeEvent({
+      type: 'bossVictory',
+      timeSec: 10,
+      realm: 0,
+      payout: 8,
+      pendingBanked: 58,
+    });
+    expect(line?.text).toContain('58');
+    expect(line?.text).not.toContain('66');
+  });
+
+  it('reads the same when the realm only ever paid the boss', () => {
+    const line = describeEvent({
+      type: 'bossVictory',
+      timeSec: 10,
+      realm: 2,
+      payout: 12,
+      pendingBanked: 12,
+    });
+    expect(line?.text).toContain('12');
+    expect(line?.text).not.toContain('24');
   });
 });
