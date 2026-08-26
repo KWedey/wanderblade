@@ -18,6 +18,7 @@ import type {
   DeadTime,
   HorizonPoint,
   PermanentUplift,
+  WitnessedBeats,
   RealmRecord,
   ShopSample,
   SimConfig,
@@ -399,6 +400,41 @@ export function deadTime(realms: RealmRecord[]): DeadTime {
     slowestRealmDays,
     slowestRealm,
     realms: counted,
+  };
+}
+
+/**
+ * A 20-minute session is 2.8% of a 12-hour cycle, so a beat that lands anywhere
+ * in wall-clock time is one the player almost never sees. This reports which
+ * milestones actually happen while someone is watching. Reported, never banded:
+ * the arc it argues for is not approved, and a metric that can go red becomes a
+ * thing to tune (#47).
+ */
+export function witnessedBeats(config: SimConfig, realms: RealmRecord[]): WitnessedBeats | null {
+  const sessionSec = config.sessionMin * 60;
+  const cycleSec = SEC_PER_DAY / config.sessionsPerDay;
+  if (sessionSec <= 0 || cycleSec <= sessionSec) return null;
+
+  const seen = (t: number): boolean => t % cycleSec < sessionSec;
+  const tally = (pick: (r: RealmRecord) => number | null): { inSession: number; total: number } => {
+    let inSession = 0;
+    let total = 0;
+    for (const r of realms) {
+      const t = pick(r);
+      if (t === null) continue;
+      total += 1;
+      if (seen(t)) inSession += 1;
+    }
+    return { inSession, total };
+  };
+
+  return {
+    baseline: sessionSec / cycleSec,
+    beats: [
+      { name: 'portal opens', ...tally((r) => r.portalReadySec) },
+      { name: 'portal entered', ...tally((r) => r.portalEnterSec) },
+      { name: 'guardian felled', ...tally((r) => r.victorySec) },
+    ],
   };
 }
 

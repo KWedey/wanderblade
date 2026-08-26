@@ -20,11 +20,19 @@ import {
   SPEND_TARGET,
   permanentUplift,
   twentyFourHourReturn,
+  witnessedBeats,
 } from '../src/probes';
 import { runPlayer } from '../src/simulate';
 import { runCorrectness, runPacing } from '../src/validators';
 import { PERMANENT_HORIZON_SEC } from '../src/probes';
-import type { BreachKind, HorizonPoint, SeedResult, ShopSample, SimConfig } from '../src/types';
+import type {
+  BreachKind,
+  HorizonPoint,
+  RealmRecord,
+  SeedResult,
+  ShopSample,
+  SimConfig,
+} from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
   days: 1,
@@ -247,6 +255,16 @@ describe('runPlayer determinism and contract watching', () => {
 /** One real run, reused by every stub — building it is the expensive part. */
 let cachedRun: ReturnType<typeof runPlayer> | null = null;
 
+/**
+ * A full-length run blocks the worker thread while it computes, and a worker
+ * that cannot answer the reporter's heartbeat fails the suite without failing a
+ * test. One week-long run is shared by every probe that needs real realms.
+ */
+const WEEK = { days: 7 } as const;
+let cachedWeek: ReturnType<typeof runPlayer> | null = null;
+const weekRun = (): ReturnType<typeof runPlayer> =>
+  (cachedWeek ??= runPlayer(1, cfg(WEEK), { policy: 'road-active', entry: 'prompt' }));
+
 function stubResult(over: Partial<SeedResult> = {}): SeedResult {
   const main = (cachedRun ??= runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' }));
   return {
@@ -266,6 +284,7 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     abandonProbe: null,
     frontierRealm: main.frontierRealm,
     frontierSec: main.frontierSec,
+    witnessed: null,
     spendDepth: spendDepth(main.shopSamples),
     deadTime: deadTime(main.realms),
     permanentUplift: null,
@@ -589,6 +608,69 @@ describe('P10 bands at a checkpoint, not at the run length', () => {
  * checkpoint past a run's end reports a frozen numerator over a growing
  * denominator and reads as a pacing collapse (docs/DECISIONS.md #48).
  */
+/**
+ * A 20-minute session is 2.8% of a 12-hour cycle, so a beat placed anywhere in
+ * wall-clock time is one the player misses. The probe has to tell "inside a
+ * session" from "while away" exactly, or it reports that share back as a finding.
+ */
+describe('witnessedBeats separates what the player saw from what happened while away', () => {
+  const cfgW = cfg({ sessionMin: 20, sessionsPerDay: 2 });
+  const CYCLE = 43_200;
+  const realm = (over: Partial<RealmRecord>): RealmRecord =>
+    ({
+      realm: 1,
+      startSec: 0,
+      portalReadySec: null,
+      portalEnterSec: null,
+      victorySec: null,
+      roadSec: null,
+      bossSec: 0,
+      activeSec: 0,
+      bossEtaAtEntrySec: null,
+      bossActiveEtaAtEntrySec: null,
+      gearPowerAtEntry: 0,
+      dpsAtEntry: 0,
+      goldPeak: 0,
+      ...over,
+    }) as RealmRecord;
+
+  const felled = (w: ReturnType<typeof witnessedBeats>) =>
+    w?.beats.find((b) => b.name === 'guardian felled');
+
+  it('counts a victory inside the session window and not one in the gap', () => {
+    const w = witnessedBeats(cfgW, [
+      realm({ victorySec: 60 }), // minute 1 of the first session
+      realm({ victorySec: 1_199 }), // last second of it
+      realm({ victorySec: 1_200 }), // first second of the gap
+      realm({ victorySec: CYCLE - 1 }), // still away
+      realm({ victorySec: CYCLE + 30 }), // minute 0.5 of the next session
+    ]);
+    expect(felled(w)).toEqual({ name: 'guardian felled', inSession: 3, total: 5 });
+  });
+
+  it('ignores realms that never reached a beat', () => {
+    const w = witnessedBeats(cfgW, [realm({}), realm({ victorySec: 60 })]);
+    expect(felled(w)).toEqual({ name: 'guardian felled', inSession: 1, total: 1 });
+  });
+
+  it('reports the chance rate a result has to beat to mean anything', () => {
+    const w = witnessedBeats(cfgW, [realm({ victorySec: 60 })]);
+    expect(w?.baseline).toBeCloseTo(1_200 / CYCLE, 6);
+  });
+
+  it('declines to measure a run with no gap to be absent during', () => {
+    expect(witnessedBeats(cfg({ sessionMin: 720, sessionsPerDay: 2 }), [])).toBeNull();
+  });
+
+  it('sees the real gap on a real run, not a constructed one', () => {
+    const w = witnessedBeats(cfg(WEEK), weekRun().realms);
+    const v = felled(w);
+    expect(v!.total).toBeGreaterThan(0);
+    // The finding this probe exists for: the guardian dies while nobody watches.
+    expect(v!.inSession / v!.total).toBeLessThan(0.5);
+  });
+});
+
 describe('the horizon sweep reports no data rather than a carried value', () => {
   const pt = (sec: number, ratio: number | null, blocked: HorizonPoint['blocked']) => ({
     sec,
@@ -638,9 +720,8 @@ describe('the horizon sweep reports no data rather than a carried value', () => 
   });
 
   it('offers only checkpoints inside the run, and measures every one it offers', () => {
-    const short = cfg({ days: 7 });
-    const main = runPlayer(1, short, { policy: 'road-active', entry: 'prompt' });
-    const pu = permanentUplift(1, short, main);
+    const short = cfg(WEEK);
+    const pu = permanentUplift(1, short, weekRun());
     expect(pu).not.toBeNull();
     // Clipped to the run: 14d and beyond are never offered at --days 7.
     expect(pu!.sweep.map((h) => h.sec / 86_400)).toEqual([3, 7]);
