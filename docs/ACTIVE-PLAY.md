@@ -87,16 +87,22 @@ session and eight hours of sleep are actually comparable.
 | Upgrade panel, any moment of Road play | ≥5 priced rows, ≥4 affordable at 95% of looks | P8 |
 | Portal-ready dead time / realm cadence | ≤ 24 h waiting, ≤ 3 days per realm | P9 |
 
-**The horizon is part of the band, not a detail.** Both players climb — and
-finish — the same realm ladder, so the ratio decays as they converge: **1.84× at
-14 days, 1.91× at 30, 1.17× at 90**, where 302 of the 301 winnable realms are
-behind both of them.
+**The horizon is part of the band, not a detail.** The ratio is **not monotonic
+in horizon** — measured on one set of constants it runs **1.99× at 3 days,
+1.69× at 10, 1.79× at 14, 2.07× at 30, 1.92× at 45, 1.17× at 90**. No single
+number is *the* ratio, so the band has to name its moment.
 
 It is a **fixed checkpoint**, not the run length, so every run reports the same
 comparable number. 14 days is the default run, so `npm run sim` evaluates the
 band it prints instead of judging a 14-day measurement against a 30-day bar. A
 shorter run reports the ratio and says it is unbanded; the sooner-clause is
 horizon-free and stays banded on every run.
+
+The shape is a **hump**: being N realms ahead is worth more the deeper both
+players are, so the active player's premium compounds while the lead widens —
+and collapses only when they run out of ladder at realm 301 and the idle player
+closes. 14 sits on the rising limb, so the band understates what a committed
+player eventually holds. `docs/DECISIONS.md` #39 carries the full curve.
 
 **Superseded.** The 1.8–2.2× gold band was the *headline* band; it is now a supporting
 one. The constants hit it exactly (2.07× in playtest, P1 passing on every seed) and the

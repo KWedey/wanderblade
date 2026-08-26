@@ -343,6 +343,19 @@ The band moves with its horizon: **1.4–2.3× at 14 days**, from six seeds meas
 
 **A validator that cannot pass at the default is worse than no validator.** A red line that means *"you used the wrong flags"* teaches people that red is noise, and the next red line — the real one — gets the same shrug. The fix belongs in the default, never in the band.
 
-**Why 14 and not a longer default:** the ratio is not monotonic in horizon — 1.84x at 14 days, 1.91x at 30, 1.17x at 90 — so no single number is *the* ratio and the band has to name its moment. 14 days is the default run, which makes `npm run sim` self-consistent, and it is a more useful product question than 30 — closer to the window retention is actually argued over.
+**Why 14 and not a longer default:** the ratio is not monotonic in horizon, so no single number is *the* ratio and the band has to name its moment. 14 days is the default run, which makes `npm run sim` self-consistent, and it is a more useful product question than 30 — closer to the window retention is actually argued over.
+
+**The shape, measured on one set of constants** — three seeds, both policies, ratios taken from the same pair of runs so nothing is confounded:
+
+| day | 3 | 7 | 10 | **14** | 21 | **30** | 38 | 45 | 90 |
+|---|---|---|---|---|---|---|---|---|---|
+| mean | 1.99 | 1.73 | 1.69 | **1.79** | 1.97 | **2.07** | 2.00 | 1.92 | 1.17 |
+| spread | .03 | .13 | .43 | .43 | .53 | .41 | .31 | .22 | — |
+
+It is a **hump**: a trough near day 10, a peak near day 30, then a slow decline into the collapse at the end of the ladder. The rise from 14 to 30 is not seed noise — every seed rises individually (1.87→2.14, 1.53→1.83, 1.96→2.24).
+
+**Why it humps.** Ascendancy per realm *grows* with realm depth, so being N realms ahead is worth more the deeper both players are. Early on the active player's lead is a few shallow realms and the ratio sags toward the per-realm payout both are earning. As the lead widens in realms that are each worth more — 165 realms against 121 by day 45 — the premium compounds and the ratio climbs. It falls again only when the leader runs out of ladder: both converge on realm 301, the active player stops earning first, and the idle player closes to 1.17 by day 90.
+
+**14 sits on the rising limb, which is the conservative side of the hump** — it understates the advantage a committed player eventually holds, and a floor that understates is the right kind of wrong. Day 10 is the one checkpoint to avoid: same spread as 14 with a lower mean, right in the trough.
 
 `sim/test/sim.test.ts` pins all four cases: in-band passes, out-of-band fails, a short run leaves the ratio unbanded and says so, and a short run still fails on a weak sooner-clause so it cannot pass vacuously.
