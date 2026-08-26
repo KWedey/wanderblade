@@ -8,7 +8,7 @@
 // pixels square and identical everywhere instead of resolution-dependent mush.
 
 import { formatNumber } from '../format';
-import { ditherAt, falloff, momentumLift, ringFalloff } from './light';
+import { ditherAt, falloff, momentumLift } from './light';
 import {
   arcApexHeight,
   arcSpaceFromScene,
@@ -1270,23 +1270,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  /** A dithered ring: the shockwave read of an impact, no blur needed. */
-  function glowRing(cx: number, cy: number, r: number, width: number, color: string, gain = 1): void {
-    if (r <= 0 || gain <= 0) return;
-    const outer = r + width;
-    const x0 = Math.max(0, Math.floor(cx - outer));
-    const x1 = Math.min(vw - 1, Math.ceil(cx + outer));
-    const y0 = Math.max(0, Math.floor(cy - outer));
-    const y1 = Math.min(sceneBottomY - 1, Math.ceil(cy + outer));
-    ctx.fillStyle = color;
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const d = Math.hypot(x - cx, y - cy);
-        if (!ditherAt(x, y, ringFalloff(d, r, width) * gain)) continue;
-        ctx.fillRect(x, y, 1, 1);
-      }
-    }
-  }
+
 
   /** A lit pool on the turf: flattened, so it sits on the ground plane. */
   function litPool(cx: number, r: number, color: string, gain: number): void {
@@ -1493,12 +1477,24 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  /** Expanding dithered shockwave at each kill. */
+  /**
+   * A tight solid ring on the creature that was struck. The old version was a
+   * dithered shockwave expanding to a 26px radius, which at that size stopped
+   * reading as light and started reading as scattered dots - "an unfinished
+   * particle or a broken alpha mask, not an attack" - draped across the exact
+   * 200 pixels the fight happens in. Small, solid and brief stages the hit
+   * instead of burying it.
+   */
   function drawImpacts(): void {
     for (const im of impacts) {
       const t = im.age / im.life;
-      glowRing(im.x, im.y, 4 + t * 22, 3, IMPACT_GLOW, (1 - t) * 0.85);
-      litPool(im.x, 16, IMPACT_GLOW, (1 - t) * 0.4);
+      const r = Math.round(3 + t * 6);
+      if (t > 0.7) continue;
+      ctx.fillStyle = t < 0.35 ? '#ffffff' : IMPACT_GLOW;
+      // Four arms, not a disc: it reads as an impact mark and leaves the
+      // silhouettes either side of it uncovered.
+      ctx.fillRect(Math.floor(im.x - r), Math.floor(im.y), r * 2, 1);
+      ctx.fillRect(Math.floor(im.x), Math.floor(im.y - r), 1, r * 2);
     }
   }
 
@@ -1564,6 +1560,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /** Segments, cells and label on one row: a widget, not a banner. */
+  const COMBO_GUTTER = 4;
   const COMBO_SEGS = 6;
   const COMBO_SEG_W = 2;
   const COMBO_GAP = 1;
@@ -1595,14 +1592,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function comboBox(): { x: number; w: number; top: number; height: number } {
     const w = textWidth(comboLabel(), 1, NUMERAL_FONT) + 3 + COMBO_METER_W;
     return {
-      // Carried by the hero, not floated over the scene. Centred it was "dead
-      // centre"; docked left it was "a black brick across the mid-left".
-      // Position was never the fault - a plated slab is not pixel art, so it
-      // reads as another app's UI wherever it sits. It rides above his head in
-      // the world's own idiom now, and it moves when he does.
-      x: Math.floor(heroX - w / 2),
+      // The upper-left gutter, out of the fight's airspace. Riding it on the
+      // hero fixed the idiom and broke the staging: "COMBO x1.74 is 4x his
+      // height directly above him", over the one part of the frame that has to
+      // read. The world idiom stays; the airspace goes back to the fight.
+      x: COMBO_GUTTER,
       w,
-      top: laneBaseline(COMBO_LANE, groundY) - 1,
+      top: COMBO_GUTTER,
       height: NUMERAL_FONT.h + 2,
     };
   }
