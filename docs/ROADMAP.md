@@ -50,6 +50,20 @@ The former Phase 3–5 sequence is superseded. The scene renderer remains useful
 
 **Exit:** active play is approved as a complete interaction and economy specification; no mechanics are invented during implementation.
 
+**Status — awaiting approval, not awaiting design.** The specification landed as `docs/ACTIVE-PLAY.md` plus ADRs #19–#48 rather than as one document, so the boxes above understate what exists. Every box stays open because each is phrased *design and approve*, and approval is the owner's word. What is left to decide, rather than to sign off:
+
+| Item | State | Where it lives |
+|---|---|---|
+| Road session arc + mechanic sets | **Mechanic set decided** — Momentum + Loot Arcs, one input. Alternatives are on record as supersession (Rally/Glints/Discoveries), not a side-by-side. **The session arc itself was never designed.** | `docs/ACTIVE-PLAY.md`; ADRs #19, #25, #30, #35, #44, #46, #47. Prior sets: #10 (Glints + Discoveries, Perfect Parry rejected), superseded by the #14 pivot |
+| Boss tapping, cap/decay, feedback, accessibility | **Input, cap, decay and accessibility decided** — same Strike, same momentum curve, hold-to-autostrike. **Feedback was never designed** and is client work. | `docs/ACTIVE-PLAY.md`; P2 passing |
+| Road/Boss × active/idle pacing bands | **Complete.** Ten validators, passing across seeds. Headline band is Ascendancy, not gold (#31), at a fixed 14-day checkpoint (#39). | `sim/src/validators.ts`; ADRs #31, #39, #48 |
+| Realm length, portal availability, boss duration, abandonment UX | **Bands complete** — P5 2–4 h active / 8–16 h idle, P6 15–90 min, P9 ≤3 days per realm. **Abandonment rules decided; its UX is undesigned** and is client work. | `sim/src/validators.ts`; `docs/DESIGN.md` §Abandonment |
+| Ascendancy accrual, boss payout, tree shape, earnings bonus | **Complete.** Three uncapped nodes on a linear price curve; P7 proves prompt ascension beats overfarming. | `packages/core/src/constants.ts`; ADRs #27, #28 |
+
+**Genuinely still open:** the **session arc** — what opens a 15–30-minute sitting, what marks its middle, what makes it a good place to stop. `P1` measures a flat 20-minute window, which is a rate, not an arc.
+
+**Miscategorised here:** boss-fight feedback and the protected abandonment flow are M3 client work, not M1R.2 design. They are listed under M3 in `docs/DESIGN.md` §Open design work.
+
 ### M1R.3 — Core contract + simulator rebaseline *(complete)*
 
 - [x] Replace gate/readiness/auto-challenge with the minimal Road/Boss/Ascension core state required by the simulator

@@ -98,8 +98,15 @@ session and eight hours of sleep are actually comparable.
 
 **The horizon is part of the band, not a detail.** The ratio is **not monotonic
 in horizon** — measured on one set of constants it runs **1.99× at 3 days,
-1.69× at 10, 1.79× at 14, 2.07× at 30, 1.92× at 45, 1.17× at 90**. No single
-number is *the* ratio, so the band has to name its moment.
+1.69× at 10, 1.79× at 14, 2.07× at 30, 1.92× at 45**. No single number is *the*
+ratio, so the band has to name its moment.
+
+**The curve stops at content end, and so does the band.** Past the realm-300
+ceiling the active player has stopped earning — around **day 76** — so a later
+figure divides a frozen total by a growing one. It is still a true statement
+about who holds more Ascendancy; it is no longer a statement about what active
+play buys per unit time, which is what the band measures. `npm run sim -- --days
+90` blanks those checkpoints rather than printing them (`docs/DECISIONS.md` #48).
 
 It is a **fixed checkpoint**, not the run length, so every run reports the same
 comparable number. 14 days is the default run, so `npm run sim` evaluates the
@@ -108,10 +115,11 @@ shorter run reports the ratio and says it is unbanded; the sooner-clause is
 horizon-free and stays banded on every run.
 
 The shape is a **hump**: being N realms ahead is worth more the deeper both
-players are, so the active player's premium compounds while the lead widens —
-and collapses only when they run out of ladder at realm 301 and the idle player
-closes. 14 sits on the rising limb, so the band understates what a committed
-player eventually holds. `docs/DECISIONS.md` #39 carries the full curve.
+players are, so the active player's premium compounds while the lead widens. It
+falls off only at the end of the ladder, where the measurement stops meaning
+what it did. 14 sits on the rising limb, so the band understates what a
+committed player eventually holds. `docs/DECISIONS.md` #39 carries the full
+curve and #48 carries where it stops being readable.
 
 **Superseded.** The 1.8–2.2× gold band was the *headline* band; it is now a supporting
 one. The constants hit it exactly (2.07× in playtest, P1 passing on every seed) and the
