@@ -14,7 +14,7 @@
     "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p sim && tsc --noEmit -p app",
     "lint": "eslint .",
     "verify": "npm run lint && npm run typecheck && npm test",
-    "test": "vitest run --exclude '**/node_modules/**' --exclude '**/.worktrees/**'",
+    "test": "vitest run --maxWorkers=50% --exclude '**/node_modules/**' --exclude '**/.worktrees/**'",
     "sim": "npm run -w sim start --",
     "thumb": "npm run -w sim thumb --",
     "dev": "npm run -w app dev",
