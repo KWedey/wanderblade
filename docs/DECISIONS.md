@@ -275,7 +275,9 @@ The gap was a **shape** problem, not a level one. It widened ~1.29× per realm, 
 
 **Why a horizon rather than a representation that survives.** `bossHp` overflows at realm 301, but `enemyHp` follows at 330, `gearPower` at 331, `enemyGold` at 333 and `levelCost` at 341. Carrying `bossHp` in a mantissa/exponent pair buys 30 realms and leaves the wall standing, so a real fix is a big-number representation through the whole economy — an M2+ project with its own determinism contract, not a guard. The guard is what makes the wall a defined edge instead of a hang.
 
-**It is reachable.** A 90-day run at 3 seeds reaches **realm 302**. This is a real endgame boundary at roughly three months of steady play, not a theoretical one. `packages/core/test/magnitude.test.ts` pins entry succeeding at realm 300 and refusing at 301, 302, 400 and 5000, with the Road left untouched by the refusal.
+**The frontier realm is not sampled as play.** A Road whose guardian can never be felled has no reward at the end of it, so the simulator stops on *arrival* at that realm rather than after walking it. Walking it cost P8 its margin at 90 days — 4,356 of 4,372 lean panel looks came from realm 301 alone, dragging the 95% clause to 94.8% while realms 0–300 sat at 100%.
+
+**It is reachable.** A 90-day run at 3 seeds reaches **realm 301**. This is a real endgame boundary at roughly three months of steady play, not a theoretical one. `packages/core/test/magnitude.test.ts` pins entry succeeding at realm 300 and refusing at 301, 302, 400 and 5000, with the Road left untouched by the refusal.
 
 ## 35. Creature colour belongs to the species; the realm identifies itself in the backdrop — 2026-08-25
 

@@ -8,6 +8,7 @@ import {
   ascSpent,
   attackSpeedMultiplier,
   bossEtaSec,
+  bossHp,
   deserialize,
   earningsMultiplier,
   enterPortal,
@@ -309,7 +310,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
       // Past the overflow frontier no guardian can be felled, so the run has
       // reached the end of the playable ladder rather than stalled in it.
       if (res.reason === 'unwinnable') {
-        frontierRealm = state.realm;
+        frontierRealm ??= state.realm;
         stop = true;
       }
       return;
@@ -345,6 +346,13 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
           if (r.portalEnterSec !== null) r.bossSec += e.timeSec - r.portalEnterSec;
           realms.push(blankRealm(e.toRealm, e.timeSec));
           overfarmUntilSec = null;
+          // A realm whose guardian can never be felled has no reward at the end
+          // of its Road, so walking it is not play and must not be sampled as
+          // if it were (docs/DECISIONS.md #34).
+          if (!Number.isFinite(bossHp(e.toRealm))) {
+            frontierRealm = e.toRealm;
+            stop = true;
+          }
           if (opts.maxVictories !== undefined && e.victories >= opts.maxVictories) stop = true;
         }
       }
