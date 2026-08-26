@@ -76,9 +76,10 @@ export function stageState(plan: StagePlan): GameState {
  * rather than the zero-gold frame a spend pass ends on. A share of the run and
  * not a fixed span, because the wait between a drained purse and the next
  * affordable rank scales with rank: one second at hero level 48, two and a half
- * hours at 205.
+ * hours at 205. Sized for headroom against a moving economy, not to the margin -
+ * a tight tail fails the gate on an income retune that broke nothing.
  */
-const SETTLE_FRACTION = 0.02;
+const SETTLE_FRACTION = 0.05;
 
 /**
  * Reads `?stage=late&seed=7` and returns staged state, or null. Dev builds
