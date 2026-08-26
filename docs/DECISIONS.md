@@ -173,7 +173,9 @@ Content from D&D books, settings, adventures, brands, or art that is not in the 
 
 A rank cap and a bounded value curve answer the same question twice, and the cap was the half putting `MAX` on screen. Removing it is what keeps a row buyable forever while `skillMult` stays finite. Five tracks at `SKILL_MAX_BONUS` 0.176 reach the same 2.25× ceiling the two capped tracks had, which is why the pacing bands did not move: P1 stayed at 1.85–1.91.
 
-**Measured:** 6 priced rows at the leanest look, ≥4 affordable at 99.8–99.9% of ~124,650 looks per seed, longest stretch under two affordable 60.0s (`npm run sim -- --seeds 3 --days 90`, ALL PASS).
+**Measured** (`npm run sim -- --seeds 3 --days 90`, 124,657 looks): 6 priced rows at the leanest look, ≥4 affordable at 99.8% of looks, under two affordable for 0.14% of looks, longest such stretch 2.5 min.
+
+**On the starvation clauses.** Their ceilings — 1% of looks, 5 minutes — were set from that first measurement, not chosen in advance, and the distribution is why: every long stretch sits at the same point in a realm, the deliberate spend-down just before committing to a guardian. Emptying your own wallet on purpose is not an empty shop. The bar passes that and still fails loudly on a real stall, which in the capped-tree game ran to hours. The first draft of this clause measured first-to-last starved *sample*, which reported 0.0s for a stretch seen once and hid the real 2.5 min entirely; it now brackets a stretch by the window it sits inside, so the figure errs long rather than short.
 
 The sampler is uncapped. It previously stopped at 20,000 samples, which fell around realm 11–14 of 85 and reported 19,985 looks with a 0.0s worst drought — four fifths of the run, including every late realm Decision #27 is about, went unmeasured while the report still printed a large `n`. The 60.0s drought the full run exposes is one idle sample interval and sits exactly on P8's ceiling.
 

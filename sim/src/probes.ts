@@ -207,6 +207,17 @@ const STARVED_BELOW = 2;
 export const SPEND_TARGET = 4;
 /** Priced rows the panel must carry at *every* look, gold irrelevant. */
 export const SPEND_PRICED_FLOOR = 5;
+/**
+ * Ceilings for the starvation clauses, set from first measurement rather than
+ * guessed: across a 30-day run the player is under two affordable rows for
+ * 0.12% of looks, p50 60s and p99 150s, and every long one sits at the same
+ * point — the deliberate spend-down just before committing to a guardian.
+ * Emptying your own wallet on purpose is not an empty shop, so the bar is set
+ * to pass that and still fail loudly on a real stall, which in the capped-tree
+ * game ran to hours rather than minutes.
+ */
+export const SPEND_MAX_STARVED_FRACTION = 0.01;
+export const SPEND_MAX_DROUGHT_SEC = 300;
 
 /** Summarise every look at the upgrade panel taken past the grace window. */
 export function spendDepth(samples: ShopSample[]): SpendDepth {
@@ -230,6 +241,7 @@ export function spendDepth(samples: ShopSample[]): SpendDepth {
   let rich = 0;
   let longestStarvedSec = 0;
   let runStartSec: number | null = null;
+  let prevSec: number | null = null;
 
   for (const x of counted) {
     if (x.affordable < minAffordable) {
@@ -239,14 +251,25 @@ export function spendDepth(samples: ShopSample[]): SpendDepth {
     if (x.priced < minPriced) minPriced = x.priced;
     if (x.affordable >= SPEND_TARGET) rich += 1;
 
+    // Bracket the drought rather than measure sample-to-sample: it began some
+    // time after the last healthy look and ended some time before the next, so
+    // the honest figure is the whole window it sits inside. Measuring first-to-
+    // last starved sample reads 0s for a drought seen once and understates
+    // every other by up to one sampling interval — the wrong direction for a
+    // number a validator leans on.
     if (x.affordable < STARVED_BELOW) {
       starved += 1;
-      if (runStartSec === null) runStartSec = x.timeSec;
+      if (runStartSec === null) runStartSec = prevSec ?? x.timeSec;
       const span = x.timeSec - runStartSec;
       if (span > longestStarvedSec) longestStarvedSec = span;
     } else {
+      if (runStartSec !== null) {
+        const span = x.timeSec - runStartSec;
+        if (span > longestStarvedSec) longestStarvedSec = span;
+      }
       runStartSec = null;
     }
+    prevSec = x.timeSec;
   }
 
   return {

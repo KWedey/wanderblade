@@ -2,7 +2,12 @@
 // docs/ECONOMY.md "Redesigned simulator contract"; P-validators are the pacing
 // bands in docs/ACTIVE-PLAY.md. Both are pure functions of a SeedResult.
 
-import { SPEND_PRICED_FLOOR, SPEND_TARGET } from './probes';
+import {
+  SPEND_MAX_DROUGHT_SEC,
+  SPEND_MAX_STARVED_FRACTION,
+  SPEND_PRICED_FLOOR,
+  SPEND_TARGET,
+} from './probes';
 import type { BreachKind, SeedResult, Uplift, ValidatorResult } from './types';
 
 const SEC_PER_HOUR = 3600;
@@ -221,7 +226,10 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
   const richPct = sd.richFraction * 100;
   const pricedOk = sd.counted > 0 && sd.minPriced >= SPEND_PRICED_FLOOR;
   const richOk = sd.counted > 0 && sd.richFraction >= 0.95;
-  const droughtOk = sd.counted > 0 && sd.longestStarvedSec <= 60;
+  const droughtOk =
+    sd.counted > 0 &&
+    sd.starvedFraction <= SPEND_MAX_STARVED_FRACTION &&
+    sd.longestStarvedSec <= SPEND_MAX_DROUGHT_SEC;
   out.push(
     ok(
       'P8',
@@ -232,7 +240,8 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
         : `${sd.minPriced} priced at the leanest look; ` +
           `≥${SPEND_TARGET} affordable at ${richPct.toFixed(1)}% of ${sd.counted} looks ` +
           `(min ${sd.minAffordable}, worst realm ${sd.worstRealm}); ` +
-          `longest stretch under 2 affordable ${fmtTime(sd.longestStarvedSec)}`,
+          `under 2 affordable for ${(sd.starvedFraction * 100).toFixed(2)}% of looks, ` +
+          `longest stretch ${fmtTime(sd.longestStarvedSec)}`,
     ),
   );
 

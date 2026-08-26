@@ -365,16 +365,36 @@ describe('spendDepth', () => {
     expect(d.worstRealm).toBe(2);
   });
 
-  it('measures the longest unbroken starved stretch in seconds', () => {
+  it('brackets a starved stretch by the window it sits inside', () => {
     const d = spendDepth([
-      sample({ timeSec: 0, affordable: 1 }),
+      sample({ timeSec: 0, affordable: 5 }),
       sample({ timeSec: 30, affordable: 1 }),
       sample({ timeSec: 60, affordable: 1 }),
       sample({ timeSec: 90, affordable: 5 }),
-      sample({ timeSec: 120, affordable: 1 }),
+    ]);
+    // Starved at 30 and 60, healthy at 0 and 90: the drought began after 0 and
+    // ended before 90, so 90 is the honest bound — not the 30 a first-to-last
+    // starved-sample measure would report.
+    expect(d.longestStarvedSec).toBe(90);
+    expect(d.starvedFraction).toBeCloseTo(2 / 4, 10);
+  });
+
+  it('gives a drought seen once the interval it hides in, not zero', () => {
+    const d = spendDepth([
+      sample({ timeSec: 0, affordable: 5 }),
+      sample({ timeSec: 30, affordable: 1 }),
+      sample({ timeSec: 60, affordable: 5 }),
     ]);
     expect(d.longestStarvedSec).toBe(60);
-    expect(d.starvedFraction).toBeCloseTo(4 / 5, 10);
+  });
+
+  it('closes an unbroken starved run that reaches the end of the samples', () => {
+    const d = spendDepth([
+      sample({ timeSec: 0, affordable: 5 }),
+      sample({ timeSec: 30, affordable: 1 }),
+      sample({ timeSec: 60, affordable: 1 }),
+    ]);
+    expect(d.longestStarvedSec).toBe(60);
   });
 
   it('counts the rich share against the target, not against the minimum', () => {
