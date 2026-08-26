@@ -173,72 +173,81 @@ export const MON_GOLEM: SpriteMap = {
   legend: MONSTER_LEGEND,
 };
 
-/** 18x30 - stilt-legged and folded forward, one shoulder blade standing proud. */
+/**
+ * 18x30 - stilt-legged and folded forward. The head is thrust clear of the
+ * shoulder blade with three rows of sky between them, which is what stops a
+ * gaunt biped reading as a blob with eyes near the top.
+ */
 export const MON_STALKER: SpriteMap = {
   rows: [
-    '.....bb...........',
-    '....bbbb..bb......',
-    '...bbbbbbbbbb.....',
-    '..bbbbbbbbbbbbb...',
-    '..bbbbbbbbbbbbbb..',
-    '.bbbbbbbbbbbbbbbb.',
-    '.bbbbbbbbEEbEEbbb.',
-    '.bbbbbbbbbbbbbbbb.',
-    'bbbbbbbbbbbtttttb.',
-    'bbbbbbbbbbbbttttb.',
-    'bbbbbbbbbbbbbbbb..',
-    'bbbbbbbbbbbbbbb...',
-    '.bbbbbbbbbbbbbb...',
-    '.bbbbbbbbbbbbbbb..',
-    '..bbbbbbbbbbbbbb..',
-    '..bbbbbbbbbbbbb...',
+    '...........bbbbb..',
+    '..........bbbbbbb.',
+    '..........bbbbbbbb',
+    '..........bbEEbEEb',
+    '.bbbbbb...bbbbbbbb',
+    'bbbbbbbb...bbtttt.',
+    'bbbbbbbbb.bbbb....',
+    '.bbbbbbbbbbbb.....',
+    '.bbbbbbbbbbbbb....',
     '..bbbbbbbbbbbb....',
-    '...bbbbbbbbbbb....',
-    '...bbbbbbbbbb.....',
-    '...bbbb..bbbbb....',
-    '..bbbb....bbbb....',
-    '..bbbb....bbbb....',
-    '..bbbb....bbbb....',
+    '..bbbbbbbbbbbbb...',
+    '..bbbbbbbbbbbbb...',
+    '..bbbbbb.bbbbbbb..',
+    '..bbbbbb..bbbbbb..',
+    '...bbbbb...bbbbb..',
+    '...bbbbbb...bbbb..',
+    '...bbbbbbb..bbbb..',
+    '....bbbbbbb..bbb..',
+    '....bbb.bbb..bbb..',
+    '....bbb.bbb.......',
+    '....bbb.bbbb......',
+    '...bbb...bbb......',
+    '...bbb...bbb......',
+    '...bbb...bbbb.....',
+    '..bbbb....bbb.....',
+    '..bbb.....bbb.....',
+    '..bbb.....bbbb....',
     '.bbbb.....bbbb....',
-    '.bbbb.....bbbbb...',
-    '.bbbb......bbbb...',
-    'bbbbb......bbbb...',
-    'bbbbb......bbbbb..',
-    'bbbbbb....bbbbbbb.',
-    'bbbbbb....bbbbbbb.',
+    '.bbbbb...bbbbb....',
+    '.bbbbbb..bbbbbb...',
   ],
   legend: MONSTER_LEGEND,
 };
 
-/** 30x22 - low and long, head carried down, hackles crested over the shoulders. */
+/**
+ * 30x26 - a quadruped read from its outline: brush tail, hackled withers, a
+ * neck dropped far enough below the shoulder to open sky above and below it,
+ * and a big low-carried head with ears standing into that gap. The neck is the
+ * whole trick - without it the head is just the right-hand end of the mass.
+ */
 export const MON_HOUND: SpriteMap = {
   rows: [
-    '..............bb..............',
-    '............bbbbbb............',
-    '.........bbbbbbbbbbb..........',
-    '.......bbbbbbbbbbbbbbb...b....',
-    '.....bbbbbbbbbbbbbbbbbbbbb....',
-    '...bbbbbbbbbbbbbbbbbbbbbbbbb..',
-    '..bbbbbbbbbbbbbbbbbbbbbbbbbbb.',
-    '.bbbbbbbbbbbbbbbbbbbbbbEEbEEb.',
-    '.bbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-    'bbbbbbbbbbbbbbbbbbbbbbbbtttttt',
-    '.bbbbbbbbbbbbbbbbbbbbbbbtttt..',
-    '.bbbbbbbbbbbbbbbbbbbbbbbb.....',
-    '..bbbbbbbbbbbbbbbbbbbbbb......',
-    '...bbbbbbbbbbbbbbbbbbbb.......',
-    '...bbbbbb....bbb..bbbbb.......',
-    '..bbbbbb.....bbb..bbbbb.......',
-    '..bbbbb......bbb...bbbb.......',
-    '..bbbbb......bbb...bbbb.......',
-    '..bbbbb......bbb...bbbb.......',
-    '..bbbbb......bbb...bbbb.......',
-    '.bbbbbb......bbb...bbbbb......',
-    '.bbbbbb......bbb...bbbbb......',
-    'bbbbbbb.....bbbbb..bbbbbb.....',
-    'bbbbbbb.....bbbbb..bbbbbb.....',
-    'bbbbbbb.....bbbbb..bbbbbb.....',
+    '.bb........b.b.b..............',
+    'bbbb........bbbb..............',
+    'bbbbb...bbbbbbbbb.............',
+    '.bbbbbbbbbbbbbbbbbbb..........',
+    '...bbbbbbbbbbbbbbbbbb..bb.b...',
+    '....bbbbbbbbbbbbbbbbb..bb.b...',
+    '.....bbbbbbbbbbbbbbbb..bbb....',
+    '.....bbbbbbbbbbbbbbbb..bbbb...',
+    '.....bbbbbbbbbbbbbbbb..EEbb...',
+    '.....bbbbbbbbbbbbbbbbbbbbbb...',
+    '.....bbbbbbbbbbbbbbbbbbbbbbbb.',
+    '.....bbbbbbbbbbbbbbbbbbbbbbbbb',
+    '.....bbbbbbbbbbbbbbbbbbbbbbbbb',
+    '.....bbbbbbbbbbbbbbbb..bbbbbbb',
+    '.....bbbbbbb...bbbbbb..bbbbbbt',
+    '.....bbbbb.....bbbbbb..bbbtttt',
+    '......bbbbbb...bbbbbb.........',
+    '......bbbbbb...bbbbbb.........',
+    '......bbbbbb...bbbbbb.........',
+    '......bbbbbb...bbbbbb.........',
+    '......bbbbbb...bbbbbb.........',
+    '......bbbbbb...bbbbbb.........',
+    '......bbbbbb...bbbbbb.........',
+    '......bbbbbbb..bbbbbbb........',
+    '.....bbbbbbbb.bbbbbbbb........',
+    '.....bbbb.....bbbb............',
   ],
   legend: MONSTER_LEGEND,
 };
@@ -376,6 +385,10 @@ export const MON_WARDEN: SpriteMap = {
  * light at upper-left in authored space, which the scene's horizontal flip
  * puts at upper-right, under the sun it actually draws.
  */
+/** Where the lit and mid tones give way, as a fraction of the form's thickness. */
+const LIT_BAND = 0.3;
+const MID_BAND = 0.7;
+
 export function sculpt(map: SpriteMap): SpriteMap {
   const grid = map.rows.map((r) => r.split(''));
   const h = grid.length;
@@ -391,15 +404,29 @@ export function sculpt(map: SpriteMap): SpriteMap {
   // its length, the way a cylinder does.
   const run = (x: number, y: number, dx: number, dy: number): number => {
     let n = 0;
-    while (n < 6 && solid(x + dx * (n + 1), y + dy * (n + 1))) n++;
+    while (solid(x + dx * (n + 1), y + dy * (n + 1))) n++;
     return n;
   };
   const out = grid.map((r) => [...r]);
+  // Banded against this creature's own thickness. Absolute pixel cutoffs meant
+  // a big body ran out of bands and fell to one flat value over most of its
+  // area - the Warden was 86% a single ink, which is what a judge reads as a
+  // formless mass. A fraction of the deepest point holds the spread at any size.
+  let deepest = 0;
+  const depth = grid.map((row, y) =>
+    [...row].map((cell, x) => {
+      if (cell !== 'b') return -1;
+      const d = run(x, y, 0, -1) + run(x, y, -1, 0);
+      if (d > deepest) deepest = d;
+      return d;
+    }),
+  );
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
-      if (grid[y]![x] !== 'b') continue;
-      const depth = run(x, y, 0, -1) + run(x, y, -1, 0);
-      out[y]![x] = depth === 0 ? 'S' : depth <= 2 ? 'h' : depth <= 6 ? 'b' : 'B';
+      const d = depth[y]![x]!;
+      if (d < 0) continue;
+      const into = deepest === 0 ? 0 : d / deepest;
+      out[y]![x] = d === 0 ? 'S' : into <= LIT_BAND ? 'h' : into <= MID_BAND ? 'b' : 'B';
     }
   }
 

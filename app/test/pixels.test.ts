@@ -236,6 +236,24 @@ describe('creatures read as dangerous', () => {
     }
   });
 
+  // "The thing being hit is a formless grey lump." Owning four inks is not the
+  // same as using them: banding by an absolute pixel depth ran every large body
+  // out of range and dropped 64-86% of its area into the single darkest one -
+  // the Warden was 86% one ink. A creature drawn in four inks has to spend them.
+  it('spends all four inks on every creature rather than one flat mass', () => {
+    for (const [i, map] of MONSTER_SHAPES.entries()) {
+      const flat = map.rows.join('');
+      const body = [...flat].filter((c) => 'SbhB'.includes(c)).length;
+      for (const ink of ['h', 'b', 'B']) {
+        const share = [...flat].filter((c) => c === ink).length / body;
+        expect(share, `shape ${i} spends ${(share * 100).toFixed(0)}% on ${ink}`)
+          .toBeGreaterThanOrEqual(0.1);
+        expect(share, `shape ${i} is ${(share * 100).toFixed(0)}% one ink`)
+          .toBeLessThanOrEqual(0.5);
+      }
+    }
+  });
+
   it('varies outline weight instead of ringing every creature uniformly', () => {
     for (const [i, map] of MONSTER_SHAPES.entries()) {
       const rows = map.rows;
