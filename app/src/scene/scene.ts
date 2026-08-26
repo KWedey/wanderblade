@@ -78,6 +78,7 @@ import {
   LANE_COUNT,
   LANE_BASE_OFFSET,
   LANE_STEP,
+  lanesTouching,
   placeRun,
   type LaneSpan,
 } from './textlane';
@@ -145,10 +146,14 @@ const WALK_SPEED = 34;
 const HERO_X_FRAC = 0.24;
 /** Gap between hero and monster once the monster has closed, as a share of the
  * scene width — a fixed pixel gap crowds a phone and wastes a desktop frame. */
-const ENGAGE_GAP_FRAC = 0.15;
-const MIN_ENGAGE_GAP = 26;
+/**
+ * Where the lead monster stops, in scene units. Deliberately not a fraction of
+ * the viewport: on a wide screen that put it 57px from a hero whose blade
+ * reaches 16, and the frame was judged "a man swinging at nothing".
+ */
+const ENGAGE_GAP = 24;
 /** Fraction of the kill spent closing the distance; the rest is the fight. */
-const APPROACH_FRAC = 0.45;
+const APPROACH_FRAC = 0.3;
 
 const SWINGS_PER_SEC = 1.7;
 const SWING_ANIM_SEC = 0.32;
@@ -390,7 +395,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    */
   let sceneBottomY = 100;
   let heroX = 24;
-  let engageGap = MIN_ENGAGE_GAP;
 
   let clockSec = 0;
   let scrollGround = 0;
@@ -475,7 +479,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     arcBaseY = groundY - 2;
     sceneBottomY = landscape ? vh : Math.floor(vh * 0.48);
     heroX = Math.floor(vw * (landscape ? HERO_X_FRAC : 0.3));
-    engageGap = Math.max(MIN_ENGAGE_GAP, Math.floor(vw * ENGAGE_GAP_FRAC));
     if (collectAnchorCss) setCollectAnchor(collectAnchorCss.x, collectAnchorCss.y);
     buildGroundTexture();
   }
@@ -517,13 +520,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const wish = Math.round((groundY - LANE_BASE_OFFSET - f.y) / LANE_STEP);
     const preferred = Math.max(0, Math.min(LANE_COUNT - 1, wish));
     const taken = floaters.map(floaterSpan);
+    const evictable = taken.length;
     if (model.momentum > 0.02) taken.push(comboSpan());
-    const { lane, evict } = placeRun(f.x - w / 2, w, taken, LANE_COUNT, 3, preferred);
-    // Descending, so each splice leaves the lower indices valid. The combo
-    // widget rides past the end of `floaters` and is never evictable.
-    for (const index of [...evict].sort((a, b) => b - a)) {
-      if (index < floaters.length) floaters.splice(index, 1);
-    }
+    taken.push(...barSpans);
+    const { lane, evict } = placeRun(f.x - w / 2, w, taken, LANE_COUNT, 3, preferred, evictable);
+    // Descending, so each splice leaves the lower indices valid.
+    for (const index of [...evict].sort((a, b) => b - a)) floaters.splice(index, 1);
     floaters.push({ ...f, lane });
   }
 
@@ -574,7 +576,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   function killMonster(skin: RealmSkin): void {
     const lead = queue[0];
-    const x = lead ? lead.x + lead.spread : heroX + engageGap;
+    const x = lead ? lead.x + lead.spread : heroX + ENGAGE_GAP;
     const y = groundY;
     burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, '#ffffff', skin.accent], 130);
     impacts.push({ x, y: y - 12, age: 0, life: 0.34 });
@@ -647,7 +649,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     swingAnim = SWING_ANIM_SEC;
     const skin = realmSkin(model.region);
     const lead = queue[0];
-    if (!lead || lead.x > heroX + engageGap + 14) return;
+    if (!lead || lead.x > heroX + ENGAGE_GAP + 16) return;
 
     const leadSprite = skinnedFor(model.region).monsters[lead.shape];
     const leadHeight = leadSprite ? leadSprite.height : 16;
@@ -753,7 +755,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // just walks to their slot in the line.
     const t = Math.min(1, model.killProgress / APPROACH_FRAC);
     const eased = 1 - (1 - t) * (1 - t);
-    const leadTarget = vw + 20 + (heroX + engageGap - (vw + 20)) * eased;
+    const leadTarget = vw + 20 + (heroX + ENGAGE_GAP - (vw + 20)) * eased;
     for (let i = 0; i < queue.length; i++) {
       const m = queue[i]!;
       const target = i === 0 ? leadTarget : leadTarget + i * QUEUE_GAP;
@@ -1328,7 +1330,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /** Lanes the engaged monster's health bar is sitting across this frame. */
+  let barSpans: LaneSpan[] = [];
+
   function drawMonsters(sprites: SkinnedSprites): void {
+    barSpans = [];
     // Back to front, so the one being fought overlaps the line behind it.
     for (let i = queue.length - 1; i >= 0; i--) {
       const m = queue[i]!;
@@ -1367,6 +1373,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const w = sprite.width;
       const bx = Math.floor(x - w / 2);
       const by = groundY - sprite.height - 2 + bob;
+      barSpans = lanesTouching(by - 1, by + 3, groundY, LANE_COUNT).map((lane) => ({
+        x: bx - 1,
+        w: w + 2,
+        lane,
+      }));
       ctx.fillStyle = OUTLINE_INK;
       ctx.fillRect(bx - 1, by - 1, w + 2, 4);
       ctx.fillStyle = '#45283c';

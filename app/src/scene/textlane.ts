@@ -57,6 +57,25 @@ export function spansCollide(a: LaneSpan, b: LaneSpan, pad: number): boolean {
   return a.x < b.x + b.w + pad && b.x < a.x + a.w + pad;
 }
 
+/**
+ * Lanes whose life-box overlaps `top`..`bottom`. A health bar hugs its monster
+ * rather than sitting on the grid, so it can straddle two lanes and has to
+ * reserve both.
+ */
+export function lanesTouching(
+  top: number,
+  bottom: number,
+  groundY: number,
+  laneCount: number,
+): number[] {
+  const out: number[] = [];
+  for (let lane = 0; lane < laneCount; lane++) {
+    const box = laneLifeBox(lane, groundY, 0, 1);
+    if (top < box.y + box.h && box.y < bottom) out.push(lane);
+  }
+  return out;
+}
+
 export interface Placement {
   lane: number;
   /** Indices into `taken` that must go, so the lane is the winner's alone. */
@@ -75,21 +94,28 @@ export function placeRun(
   laneCount: number,
   pad = 3,
   preferred = 0,
+  evictableBelow = taken.length,
 ): Placement {
   const incoming: LaneSpan = { x, w, lane: 0 };
   const hits: number[][] = Array.from({ length: laneCount }, () => []);
+  const pinned: number[] = new Array<number>(laneCount).fill(0);
   taken.forEach((span, index) => {
     if (span.lane < 0 || span.lane >= laneCount) return;
-    if (spansCollide(incoming, span, pad)) hits[span.lane]!.push(index);
+    if (!spansCollide(incoming, span, pad)) return;
+    if (index < evictableBelow) hits[span.lane]!.push(index);
+    else pinned[span.lane]! += 1;
   });
 
+  // A widget or a health bar cannot be evicted, so a lane holding one is the
+  // last resort however few runs are also in it.
+  const cost = (lane: number): number => pinned[lane]! * 64 + hits[lane]!.length;
   const start = Math.max(0, Math.min(laneCount - 1, Math.round(preferred)));
   let best = start;
   for (let radius = 0; radius < laneCount; radius++) {
     for (const lane of radius === 0 ? [start] : [start + radius, start - radius]) {
       if (lane < 0 || lane >= laneCount) continue;
-      if (hits[lane]!.length === 0) return { lane, evict: [] };
-      if (hits[lane]!.length < hits[best]!.length) best = lane;
+      if (cost(lane) === 0) return { lane, evict: [] };
+      if (cost(lane) < cost(best)) best = lane;
     }
   }
   return { lane: best, evict: hits[best]! };

@@ -7,6 +7,7 @@ import {
   FLOATER_RISE,
   laneBaseline,
   laneLifeBox,
+  lanesTouching,
   LANE_COUNT,
   LANE_STEP,
   placeRun,
@@ -143,5 +144,35 @@ describe('lane geometry makes overlap impossible', () => {
     const placed = placeRun(105, 40, [combo], LANE_COUNT, 3, COMBO_LANE);
     expect(placed.lane).not.toBe(COMBO_LANE);
     expect(placed.evict).toEqual([]);
+  });
+});
+
+describe('reservations the scene cannot evict', () => {
+  it('lists the lanes a health bar straddles', () => {
+    const lane0 = laneBaseline(0, GROUND_Y);
+    expect(lanesTouching(lane0, lane0 + 3, GROUND_Y, LANE_COUNT)).toContain(0);
+    expect(lanesTouching(-9999, 9999, GROUND_Y, LANE_COUNT).length).toBe(LANE_COUNT);
+  });
+
+  it('takes a lane it can clear over one holding a widget', () => {
+    // index 0 is an evictable floater, index 1 a pinned widget.
+    const taken: LaneSpan[] = [
+      { x: 0, w: 60, lane: 0 },
+      { x: 0, w: 60, lane: 1 },
+    ];
+    const placed = placeRun(0, 60, taken, 2, 3, 1, 1);
+    expect(placed.lane).toBe(0);
+    expect(placed.evict).toEqual([0]);
+  });
+
+  it('never returns an index the caller cannot splice', () => {
+    const taken: LaneSpan[] = [
+      { x: 0, w: 60, lane: 0 },
+      { x: 0, w: 60, lane: 1 },
+      { x: 0, w: 60, lane: 2 },
+    ];
+    // Only the first is a floater; the rest are pinned reservations.
+    const placed = placeRun(0, 60, taken, LANE_COUNT, 3, 2, 1);
+    for (const i of placed.evict) expect(i).toBeLessThan(1);
   });
 });

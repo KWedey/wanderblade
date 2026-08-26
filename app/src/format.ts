@@ -93,10 +93,15 @@ export function formatPercent(ratio: number): string {
  * Human duration for cooldowns and recap spans:
  * 45 → "45s", 130 → "2m 10s", 7400 → "2h 3m", 90000 → "1d 1h".
  */
+/**
+ * Shown when the duration is not a number the game can represent. Deep realms
+ * overflow boss HP past a double, so no estimate exists to print; a bare dash
+ * read as an empty field.
+ */
+export const NO_ESTIMATE = 'beyond reckoning';
+
 export function formatDuration(totalSec: number): string {
-  // A staged late run divides an overflowed boss HP by an overflowed DPS and
-  // hands this NaN, which rendered as "Infinityd NaNh" on the portal panel.
-  if (!Number.isFinite(totalSec)) return '—';
+  if (!Number.isFinite(totalSec)) return NO_ESTIMATE;
   const s = Math.max(0, Math.floor(totalSec));
   if (s < 60) return `${s}s`;
 
