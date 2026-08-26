@@ -110,6 +110,52 @@ describe('bitmap font', () => {
       }
     });
 
+    /** Marks in a glyph, counting a diagonal touch as joined. */
+    const marks = (rows: readonly string[]): number => {
+      const seen = rows.map((r) => [...r].map(() => false));
+      let found = 0;
+      for (let y = 0; y < rows.length; y++) {
+        for (let x = 0; x < rows[y]!.length; x++) {
+          if (rows[y]![x] !== '#' || seen[y]![x]) continue;
+          found++;
+          const stack: number[][] = [[y, x]];
+          while (stack.length > 0) {
+            const [cy, cx] = stack.pop()!;
+            if (rows[cy!]?.[cx!] !== '#' || seen[cy!]![cx!]) continue;
+            seen[cy!]![cx!] = true;
+            for (let dy = -1; dy <= 1; dy++) {
+              for (let dx = -1; dx <= 1; dx++) stack.push([cy! + dy, cx! + dx]);
+            }
+          }
+        }
+      }
+      return found;
+    };
+
+    /** Characters drawn as more than one mark on purpose, and how many. */
+    const DOTTED: Record<string, number> = { i: 2, j: 2, '!': 2, ':': 2, '%': 3, '=': 2, '"': 2 };
+
+    // The shipped defect that "does it exist", "is it unique" and "is it short
+    // enough" all waved through: g's tail sat two columns clear of its own
+    // stem. The stem then read as a 9's and the tail as a stray dash. A
+    // floating piece is the structural difference, not the shape.
+    it('draws every glyph as one connected mark', () => {
+      for (const [ch, rows] of Object.entries(FONT)) {
+        if (ch === ' ') continue;
+        expect(marks(rows), `'${ch}' is drawn as several disconnected pieces`).toBe(DOTTED[ch] ?? 1);
+      }
+    });
+
+    // The two it was actually read as on screen. The pairwise sweep above
+    // covers them, but a reader confuses this pair specifically, so it fails
+    // by name instead of as one row of a loop.
+    it('keeps g clear of the s and the 9 it has been read as', () => {
+      expect(FONT['g']!.join('/'), 'g is drawn as s').not.toBe(FONT['s']!.join('/'));
+      expect(FONT['g']!.join('/'), 'g is drawn as 9').not.toBe(FONT['9']!.join('/'));
+      expect(FONT['g']!.at(-1)!.startsWith('#'), 'g has no leftward tail').toBe(true);
+      expect(FONT['9']!.at(-1)!.startsWith('#'), '9 grew a leftward tail').toBe(false);
+    });
+
     // "Armor" read as "Arnor": m's middle stem stopped two rows above the
     // baseline, so the glyph fell apart into r + n at panel scale.
     it('carries all three of m\'s stems down to the baseline', () => {
