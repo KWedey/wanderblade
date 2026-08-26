@@ -8,6 +8,7 @@ import {
   MAX_PORTAL_WAIT_FRACTION,
   MAX_PORTAL_WAIT_SEC,
   MAX_REALM_DAYS,
+  PERMANENT_HORIZON_SEC,
   PERMANENT_RATIO_MAX,
   PERMANENT_RATIO_MIN,
   PERMANENT_SOONER_MIN,
@@ -289,18 +290,32 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
     idle !== null && active !== null && active > 0 ? idle / active : null;
   const ascendSooner = pu ? sooner(pu.idleFirstAscensionSec, pu.activeFirstAscensionSec) : null;
   const rankSooner = pu ? sooner(pu.idleRankSec, pu.activeRankSec) : null;
-  const ratioOk = pu !== null && pu.ratio >= PERMANENT_RATIO_MIN && pu.ratio <= PERMANENT_RATIO_MAX;
+  // The sooner-clause is horizon-free, so it is banded on every run however
+  // short. The ratio decays with run length, so it is banded only once both
+  // runs reach the checkpoint it was measured at — reported, never silently
+  // judged against a bar it was not taken at (docs/DECISIONS.md #39).
   const soonerOk = ascendSooner !== null && ascendSooner >= PERMANENT_SOONER_MIN;
+  const ratioOk =
+    pu !== null &&
+    (!pu.reachedHorizon ||
+      (pu.ratio >= PERMANENT_RATIO_MIN && pu.ratio <= PERMANENT_RATIO_MAX));
+  const ratioNote =
+    pu === null
+      ? ''
+      : pu.reachedHorizon
+        ? `${pu.ratio.toFixed(2)}x Ascendancy at ${fmtTime(pu.horizonSec)} ` +
+          `(${pu.activeEarned.toFixed(0)} vs ${pu.idleEarned.toFixed(0)})`
+        : `Ascendancy ratio not banded — run reached ${fmtTime(pu.measuredAtSec)}, ` +
+          `band is stated at ${fmtTime(pu.horizonSec)} (${pu.ratio.toFixed(2)}x so far)`;
   out.push(
     ok(
       'P10',
-      `Permanent power: ${PERMANENT_RATIO_MIN}–${PERMANENT_RATIO_MAX}x Ascendancy, ` +
-        `first ascension ≥${PERMANENT_SOONER_MIN}x sooner`,
+      `Permanent power: ${PERMANENT_RATIO_MIN}–${PERMANENT_RATIO_MAX}x Ascendancy at ` +
+        `${PERMANENT_HORIZON_SEC / SEC_PER_DAY}d, first ascension ≥${PERMANENT_SOONER_MIN}x sooner`,
       ratioOk && soonerOk,
       pu === null
         ? 'not measured'
-        : `${pu.ratio.toFixed(2)}x Ascendancy at ${fmtTime(pu.horizonSec)} ` +
-          `(${pu.activeEarned.toFixed(0)} vs ${pu.idleEarned.toFixed(0)}); ` +
+        : `${ratioNote}; ` +
           `first ascension ${fmtTime(pu.activeFirstAscensionSec)} vs ${fmtTime(pu.idleFirstAscensionSec)}` +
           `${ascendSooner === null ? '' : ` (${ascendSooner.toFixed(2)}x sooner)`}; ` +
           `${pu.rankTarget} tree ranks ${fmtTime(pu.activeRankSec)} vs ${fmtTime(pu.idleRankSec)}` +

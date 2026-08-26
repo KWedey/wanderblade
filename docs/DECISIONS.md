@@ -221,6 +221,8 @@ The cost curve is the shape that matters. Ascendancy income per realm grows line
 
 ## 31. Active play is banded in Ascendancy, not gold — 2026-08-25
 
+> Superseded in part by #39: the band is 1.4–2.3x, stated at a fixed 14-day checkpoint.
+
 > Superseded in part by #33: the shipped band is **1.6–2.4×** with first ascension **≥1.20× sooner** (`PERMANENT_RATIO_MIN` / `PERMANENT_RATIO_MAX` / `PERMANENT_SOONER_MIN` in `sim/src/probes.ts`), re-derived from six seeds — 2.16 / 1.96 / 1.81 / 1.63 / 1.93 / 1.97, mean 1.91. The 1.8–2.4× and ≥1.25× below were measured on three seeds before #33 gave the five skills five price curves.
 
 **Decision:** The headline pacing band is **1.8–2.4× lifetime Ascendancy** over a 30-day horizon plus **first ascension ≥1.25× sooner** (validator P10). The 1.8–2.2× Road gold band survives as P1, a supporting band, not the claim that active play matters. `docs/ACTIVE-PLAY.md` carries the superseded note.
@@ -331,3 +333,16 @@ And in play with several coins up, at a 250 ms human reach: apex **36.0%** vs la
 **Realm floors are untouched.** `MIN_VALUE_SPREAD` 0.42, `MIN_SKY_LIGHTNESS` 0.58 and `MIN_ACCENT_LIGHTNESS` 0.55 are backdrop rules and still run over 500 realms. `RealmSkin.monBody` / `monBodyDark` now feed only the kill burst.
 
 **Tests:** `app/test/species.test.ts` — one species is byte-identical across every realm it appears in; hue holds from a 0.1 ground to a 0.9 one; every creature clears its own turf by `MIN_BODY_CONTRAST`; no realm fields two creatures of one colour. Each was proved to fail against the behaviour it replaces.
+## 39. A pacing band is measured at the checkpoint it was set at — 2026-08-25
+
+**Decision:** `PERMANENT_HORIZON_SEC` is a **fixed checkpoint**, 14 days, not `min(horizon, run length)`. Every run reports the ratio taken at the same moment, so the numbers are comparable across runs. A run that stops short reports the ratio and marks it **not banded**, naming both the horizon it reached and the one the band is stated at. P10's sooner-clause is horizon-free and stays banded on every run, so a short run still asserts something real.
+
+The band moves with its horizon: **1.4–2.3× at 14 days**, from six seeds measuring 1.87 / 1.53 / 1.96 / 1.78 / 1.78 / 2.11, mean 1.84. This supersedes the 1.6–2.4× stated at 30 days in #31, which was the same claim taken at a different moment.
+
+**Why:** Bare `npm run sim` — 3 seeds × 14 days, the command everyone types — printed `FAIL P10` on 2 of 3 seeds. Nothing was wrong with the economy. The band was derived from 30-day runs while `min()` quietly took the measurement at 14, so the validator judged a 14-day number against a 30-day bar.
+
+**A validator that cannot pass at the default is worse than no validator.** A red line that means *"you used the wrong flags"* teaches people that red is noise, and the next red line — the real one — gets the same shrug. The fix belongs in the default, never in the band.
+
+**Why 14 and not a longer default:** the ratio is not monotonic in horizon — 1.84x at 14 days, 1.91x at 30, 1.17x at 90 — so no single number is *the* ratio and the band has to name its moment. 14 days is the default run, which makes `npm run sim` self-consistent, and it is a more useful product question than 30 — closer to the window retention is actually argued over.
+
+`sim/test/sim.test.ts` pins all four cases: in-band passes, out-of-band fails, a short run leaves the ratio unbanded and says so, and a short run still fails on a weak sooner-clause so it cannot pass vacuously.
