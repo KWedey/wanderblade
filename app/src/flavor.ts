@@ -1,10 +1,11 @@
-// Presentational flavor: region names, enemy/boss/gear names, and the mapping
-// from a core GameEvent to a human log line. The core stays flavor-free; all of
-// this is UI-only and never feeds back into game math.
+// Presentational flavor: region names, boss/gear names, and the mapping from a
+// core GameEvent to a human log line. Road creature names come from species.ts,
+// which the scene reads too, so the log never names what the art is not drawing.
+// The core stays flavor-free; none of this feeds back into game math.
 
 import type { GameEvent, GearSlot, Rarity } from '@wanderblade/core';
-import { zonesPerRealm } from '@wanderblade/core';
 import { formatNumber } from './format';
+import { speciesAt } from './species';
 
 /** One rendered log line. `kind` drives its CSS accent. */
 export interface LogEntry {
@@ -53,35 +54,6 @@ export function regionName(region: number): string {
 
 /** The scene skins and these names must stay index-aligned. */
 export const REGION_NAME_COUNT = REGION_NAMES.length;
-
-/** Region index that a global zone belongs to. */
-export function regionOfZone(zone: number): number {
-  return Math.floor(zone / zonesPerRealm);
-}
-
-/** 1-based zone number within its realm (1..zonesPerRealm). */
-export function zoneInRegion(zone: number): number {
-  return (zone % zonesPerRealm) + 1;
-}
-
-const ENEMY_NAMES: string[][] = [
-  ['Ashen Wolf', 'Bramble Boar', 'Thornback Lynx', 'Green Sprite', 'Moss Troll'],
-  ['Rubble Golem', 'Tomb Wight', 'Cracked Sentinel', 'Dust Jackal', 'Fallen Squire'],
-  ['Bog Lurker', 'Fen Serpent', 'Mire Hag', "Will-o'-Wisp", 'Marsh Drake'],
-  ['Iron Kobold', 'Anvil Ogre', 'Rock Wyrm', 'Cragfang Bat', 'Forge Golem'],
-  ['Cinder Imp', 'Ash Revenant', 'Magma Hound', 'Ember Wraith', 'Scorched Basilisk'],
-  ['Wyvern', 'Frost Drake', 'Peak Roc', 'Storm Serpent', 'Ridge Dragon'],
-  ['Void Sentinel', 'Edge Reaver', 'Star Wraith', 'Riftling', 'Astral Behemoth'],
-];
-
-const ENEMY_FALLBACK = ['Echo of the Void', 'Nameless Horror', 'Wandering Shade', 'Rift Beast'];
-
-/** Deterministic-looking enemy name; presentational only, keyed off kill index. */
-function enemyName(zone: number, killIndex: number): string {
-  const pool = ENEMY_NAMES[regionOfZone(zone)] ?? ENEMY_FALLBACK;
-  const idx = ((killIndex % pool.length) + pool.length) % pool.length;
-  return pool[idx] ?? ENEMY_FALLBACK[0]!;
-}
 
 const BOSS_NAMES = [
   'the Greenwood Warden',
@@ -138,7 +110,7 @@ function article(word: string): string {
 export function describeEvent(e: GameEvent): LogEntry | null {
   switch (e.type) {
     case 'kill': {
-      const name = enemyName(e.zone, e.killIndex);
+      const name = speciesAt(e.realm, e.killIndex).name;
       return {
         kind: 'kill',
         text: `Felled ${article(name)} ${name} — +${formatNumber(e.gold)} gold`,

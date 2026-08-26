@@ -8,6 +8,7 @@
 // pixels square and identical everywhere instead of resolution-dependent mush.
 
 import { formatNumber } from '../format';
+import { speciesAt } from '../species';
 import { ditherAt, falloff, momentumLift } from './light';
 import {
   arcApexHeight,
@@ -58,7 +59,6 @@ import {
   HERO_WALK_B,
   MONSTER_SHAPES,
   ROCK,
-  SWARM_SHAPE,
   SWORD,
   TREE,
   TREE_TALL,
@@ -599,31 +599,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  /** Append one monster (or a swarm of three) to the back of the queue. */
-  function enqueueMonster(seed: number): void {
-    // r^0.6 biases the roll up the roster, so a big silhouette is usually on
-    // screen — the thing the scene was judged hardest on.
-    const roll = Math.pow(hash01(seed * 1.37 + model.region), 0.6);
-    let shape = Math.min(MONSTER_SHAPES.length - 1, Math.floor(roll * MONSTER_SHAPES.length));
-    // Three of one species queued reads as a spawner, not a road. Step off a
-    // shape already standing in line rather than re-rolling, which would only
-    // collide again at the same rate.
-    let guard = 0;
-    while (queue.some((q) => q.shape === shape) && guard < MONSTER_SHAPES.length) {
-      shape = (shape + 1) % MONSTER_SHAPES.length;
-      guard++;
-    }
-    const count = shape === SWARM_SHAPE ? 3 : 1;
-    for (let i = 0; i < count; i++) {
-      queue.push({
-        shape,
-        x: vw + 30 + i * 12,
-        flash: 0,
-        recoil: 0,
-        bob: hash01(seed + i) * Math.PI * 2,
-        spread: count === 1 ? 0 : (i - 1) * 11,
-      });
-    }
+  /**
+   * Append the creature for `killIndex` to the back of the queue. The species
+   * is species.ts's answer, the same one the log line names — the scene draws
+   * what the road says is there rather than rolling its own monster.
+   */
+  function enqueueMonster(killIndex: number): void {
+    queue.push({
+      shape: speciesAt(model.region, killIndex).shape,
+      x: vw + 30,
+      flash: 0,
+      recoil: 0,
+      bob: hash01(killIndex) * Math.PI * 2,
+      spread: 0,
+    });
   }
 
   /** Half the lead's sprite, plus whatever its group spread pulls forward. */
