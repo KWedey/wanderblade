@@ -637,6 +637,8 @@ body {
 
 .upgrade-cost {
   grid-area: cost;
+  /* "163 g" is one token to a reader; wrapping it put the unit on its own line. */
+  white-space: nowrap;
   font-size: 20px;
   color: var(--gold);
   white-space: nowrap;
@@ -897,14 +899,19 @@ body {
   display: none;
 }
 
+/* Wears the realm the same way the panel does. A cream-and-orange card in a
+   rounded webfont read as a different product from the world behind it. */
 .recap-card {
   width: 100%;
   max-width: 360px;
   padding: 24px 22px;
-  border: 3px solid var(--wood);
-  background: var(--parchment);
-  color: var(--ink-dark);
-  box-shadow: var(--drop);
+  border: 4px solid var(--panel-edge);
+  background: var(--panel);
+  color: var(--ink-light);
+  box-shadow:
+    inset 0 4px 0 var(--bevel-lit),
+    inset 0 -4px 0 var(--bevel-dark),
+    var(--drop);
   text-align: center;
   animation: riseIn 0.3s ease;
 }
@@ -913,13 +920,13 @@ body {
   font-size: 16px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--wood-light);
+  color: var(--ink-dim);
 }
 
 .recap-sub {
   margin-top: 6px;
   font-size: 16px;
-  color: var(--wood-light);
+  color: var(--ink-faint);
 }
 
 .recap-stats {
@@ -932,28 +939,44 @@ body {
 }
 
 .recap-stats li {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: baseline;
-  justify-content: space-between;
   gap: 12px;
   padding-bottom: 8px;
-  border-bottom: 2px solid rgba(69, 40, 60, 0.18);
+  border-bottom: 2px solid var(--panel-sunk);
   font-size: 16px;
-  color: var(--ink-dark);
+  color: var(--ink-light);
 }
 
 .recap-num {
-  font-size: 26px;
-  color: var(--wood-shadow);
+  /* The number is first in the DOM but belongs on the right. Both cells are
+     pinned to row 1, or auto-placement refuses to go backwards and starts a
+     second row instead. */
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  white-space: nowrap;
+  /* Sized so the widest recap figure and its label still share one row on a
+     390px phone; 26px pushed every label onto a line of its own. */
+  font-size: 21px;
+  color: var(--ink-dim);
+}
+
+.recap-stats li span:not(.recap-num) {
+  grid-column: 1;
+  grid-row: 1;
+  text-align: left;
+  font-size: 15px;
 }
 
 .recap-btn {
   letter-spacing: 0.05em;
   width: 100%;
   min-height: var(--touch);
-  border: 3px solid var(--wood-shadow);
-  background: var(--torch);
-  color: #fff;
+  border: 4px solid var(--panel-edge);
+  background: var(--panel-inner);
+  color: var(--ink-light);
   font-family: var(--font-ui);
   font-size: 19px;
   cursor: pointer;

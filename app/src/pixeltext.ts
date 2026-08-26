@@ -207,7 +207,11 @@ function fallBack(el: HTMLElement, holder: HTMLElement | null): void {
  * a container too narrow for even 1× glyphs, or a box with no measurable
  * width. A legible webfont beats a hole or a clipped word.
  */
-export function paintElement(el: HTMLElement, dpr = window.devicePixelRatio || 1): boolean {
+export function paintElement(
+  el: HTMLElement,
+  dpr = window.devicePixelRatio || 1,
+  remeasured = false,
+): boolean {
   let holder = el.querySelector<HTMLElement>(`.${SR_CLASS}`);
   const text = (holder ? holder.textContent : el.textContent) ?? '';
   const trimmed = text.trim();
@@ -239,12 +243,21 @@ export function paintElement(el: HTMLElement, dpr = window.devicePixelRatio || 1
   // Honour the author's own white-space: a HUD stat marked nowrap wants the
   // largest type that fits on one line, not the largest that fits at all.
   const nowrap = style.whiteSpace === 'nowrap' || style.whiteSpace === 'pre';
-  const layout = layoutPixelText(
-    trimmed,
-    pixelScaleFor(parseFloat(style.fontSize) || GLYPH_H),
-    boxWidth,
-    nowrap,
-  );
+  const preferred = pixelScaleFor(parseFloat(style.fontSize) || GLYPH_H);
+  // nowrap is the author saying "this is one token". A content-sized flex or
+  // grid item is only as wide as the webfont needed, which would silently drop
+  // the bitmap a scale step or two; claim the room instead, bounded by the
+  // parent so a phone column cannot overflow.
+  if (nowrap) {
+    const natural = textWidth(trimmed, preferred) + padLeft + (parseFloat(style.paddingRight) || 0);
+    const parentWidth = el.parentElement?.clientWidth ?? natural;
+    const want = Math.min(natural, parentWidth);
+    if (!remeasured && want > outer + 0.5) {
+      el.style.minWidth = `${Math.ceil(want)}px`;
+      return paintElement(el, dpr, true);
+    }
+  }
+  const layout = layoutPixelText(trimmed, preferred, boxWidth, nowrap);
   if (!layout) {
     fallBack(el, holder);
     return false;

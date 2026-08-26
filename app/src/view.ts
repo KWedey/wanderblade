@@ -636,6 +636,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     recapDrops.textContent = formatNumber(recap.drops);
     recapBosses.textContent = formatNumber(recap.victories);
     recapOverlay.hidden = false;
+    // Outside .screen, so it needs its own repaint or it keeps the webfont the
+    // rest of the product no longer uses.
+    repaintPixelText(recapOverlay);
   }
 
   let dressedRegion = -1;
