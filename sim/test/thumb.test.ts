@@ -52,15 +52,25 @@ describe('what the thumb costs', () => {
   // it is highest. DECISIONS.md #35 made the window constant in time instead,
   // so the mercy is the same number of milliseconds everywhere on the arc.
   // Subsumed by packages/core/test/thumb.test.ts, which holds both tables.
+  // Averaged over seeds, because one seed cannot measure this. Per-seed landing
+  // rate spans 0.387 to 0.800 across seeds 1-8 and the ratio spans 0.76 to 2.47
+  // on one constant set — seed 7 alone sits near the bottom of both. Reading a
+  // single draw of that spread is the same instrument fault as #39's horizon.
   it('forgives lag near landing as readily as at the apex', () => {
-    const warm = warmState(OPTS.seed);
-    const at = (pick: 'landing' | 'apex'): number =>
-      runThumb(thumb({ latencyMs: 250, pick }), OPTS, warm).catchRate;
-    const apex = at('apex');
-    const landing = at('landing');
-    expect(apex).toBeGreaterThan(0.5);
-    expect(landing).toBeGreaterThan(0.5);
-    // Measured 1.65 here. The assertion this replaces required apex > 0.5 and
+    const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
+    const mean = (pick: 'landing' | 'apex'): number =>
+      SEEDS.reduce(
+        (t, seed) =>
+          t +
+          runThumb(thumb({ latencyMs: 250, pick }), { ...OPTS, seed }, warmState(seed))
+            .catchRate,
+        0,
+      ) / SEEDS.length;
+    const apex = mean('apex');
+    const landing = mean('landing');
+    expect(apex, `apex ${apex.toFixed(3)}`).toBeGreaterThan(0.5);
+    expect(landing, `landing ${landing.toFixed(3)}`).toBeGreaterThan(0.5);
+    // Measured 1.61 here. The assertion this replaces required apex > 0.5 and
     // landing < 0.2, so the fixed radius could not do better than 2.5x. The bar
     // sits between the two: it cannot pass if the cliff returns.
     expect(apex / landing).toBeLessThan(2);

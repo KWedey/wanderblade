@@ -30,20 +30,18 @@ function steadyRoad(seed: number): GameState {
 const ARC_MAX_LIFE_SEC = ARC_FLIGHT_SEC + (ARC_SPLIT_MAX - 1) * ARC_STAGGER_SEC;
 
 /**
- * The structural bound on the arc list: every arc was launched at or before
- * now, so none can expire more than one window out, and pruning runs per kill,
- * so the list holds the kills of one window plus the partial period since the
- * last one. Coins that landed inside that partial period are still listed —
- * they are uncatchable and `arcPositionAt` reports them as down — so the bound
- * is two-sided on expiry only above, and on count for the rest.
+ * The structural bound on the arc list: every arc launched at or before now, so
+ * none can expire more than one window out, and `advance` prunes at its own
+ * absolute clock, so none has already landed either. The list is one window of
+ * kills — neither the gap's length nor the strike rate can reach that.
  */
 function expectArcsWithinOneWindow(s: GameState): void {
-  const killsPerSec = s.lifetime.kills / s.timeSec;
   for (const arc of s.arcs) {
+    expect(arc.expiresAtSec).toBeGreaterThan(s.timeSec);
     expect(arc.expiresAtSec - s.timeSec).toBeLessThanOrEqual(ARC_MAX_LIFE_SEC);
   }
-  const windowSec = ARC_MAX_LIFE_SEC + 1 / killsPerSec;
-  const cap = (Math.ceil(killsPerSec * windowSec) + 1) * ARC_SPLIT_MAX;
+  const killsPerSec = s.lifetime.kills / s.timeSec;
+  const cap = (Math.ceil(killsPerSec * ARC_MAX_LIFE_SEC) + 1) * ARC_SPLIT_MAX;
   expect(s.arcs.length).toBeLessThanOrEqual(cap);
 }
 

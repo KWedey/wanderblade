@@ -375,3 +375,41 @@ It is a **hump**: a trough near day 10, a peak near day 30, then a slow decline 
 **The collision rate is measured after, not asserted.** Re-running the same harness: `BEFORE weights 1/1/1 snaps 542 anyPairIdentical 43.2%` → `AFTER weights 1.15/1/0.85 snaps 545 anyPairIdentical 0.0%`.
 
 **Cost:** `gearPower`'s overflow frontier moves 331 → **330**, because weapon's 1.15× tips one realm earlier. Still well past the realm-300 horizon of #34, so it changes nothing reachable. `packages/core/test/magnitude.test.ts` is repinned; `packages/core/test/slots.test.ts` holds the mean-1 proof, the no-collision proof and split-invariance.
+
+## 41. `state.arcs` holds only coins still in the air — 2026-08-26
+
+**Decision:** `advance` prunes the arc list once more at its own **absolute** `target` clock, after the kill/strike loop. Every arc in `state.arcs` is now guaranteed un-landed: `arc.expiresAtSec > state.timeSec`.
+
+**Why:** kills and strikes each pruned at their own clock, so an advance that ended between two kills left the coins that landed in the gap sitting in the list, reporting no position. Under the client's real 250 ms tick that was a steady 2–3 dead coins, permanently. Bounded, so never a leak — but a field whose contents are *partly* meaningless is an invitation to write a second reader that filters it, and then the two readers disagree. `app/` has already grown four duplicate economies that way, one of them live and paying the wrong rate.
+
+**Why an absolute clock and not an elapsed carry.** Pruning mutates state, so it has to survive #6. Removing everything expired by an absolute clock is monotone and idempotent in that clock, so the extra prune a split performs at its own boundary removes a subset of what the final prune removes and both runs end with an identical list. An elapsed carry does not have that property — it is the same trap as the relative "time remaining" the kill schedule refuses. Pruning cannot change a payout either way: gold is credited at the kill and catching adds `ARC_CATCH_MULT` on top, so an uncaught coin costs nothing, and `arcHitIndex` already skips arcs with no current position.
+
+**The probe is proven to fire.** `packages/core/test/arcprune.test.ts`, three deliberate breakages:
+
+| Breakage | Result |
+|---|---|
+| Prune removed | 3 behaviour tests red |
+| Prune against a relative carry (`target - seconds`) | split-invariance red, plus the 3 |
+| Prune one flight too eager (`target + ARC_FLIGHT_SEC`) | all 6 red, including the over-prune guard |
+
+**One test was rewritten because it could not fail.** The first draft asserted landed coins *accumulate* across many short advances. They do not — the per-kill prune bounds the residue at one kill period's worth, so the test passed with the fix disabled. Measured before rewriting: 2–3 dead coins at every slice size from 0.25 s to 2.5 s, flat rather than growing. It now runs the client's own 250 ms tick and asserts the residue is zero.
+
+**`performance.test.ts` tightens with it.** Its window helper asserted the bound only above, because landed coins made the lower side untrue. It is now two-sided.
+
+**Two things the prune exposed, both pre-existing.**
+
+*The `busyRoad()` fixture in `packages/core/test/thumb.test.ts` is not busy.* It sets `hero.level` and `zone` by hand without recomputing the kill schedule, so it lands **one** kill and then idles 27 seconds. The three arcs it left behind were all already down — #35's geometry assertions were reading real numbers off dead coins, which is why they never noticed. `liveArcRoad()` (`roadAt(17, 20, 0.3)`, ~13 coins genuinely airborne) is the honest fixture, and the two tests this prune broke now use it. **The other four are left on the old fixture deliberately**: swapping them strengthens five tests and turns `degrades with aim error` red on a true measurement, which is a re-calibration of what a test asserts rather than a fixture fix.
+
+*Aim stops mattering once the Road is busy.* Measured on `roadAt(17, 20, killSec)`, catch rate against aim scatter, 250 ms latency, 400 taps:
+
+| Coins airborne | Perfect aim | ±0.12 | ±0.25 | ±0.50 | ±1.00 |
+|---|---|---|---|---|---|
+| 2.7 | 0.261 | 0.405 | 0.379 | 0.270 | 0.131 |
+| 5.8 | 0.500 | 0.520 | 0.552 | 0.468 | 0.268 |
+| 13.4 | 0.830 | 0.868 | 0.853 | 0.730 | 0.385 |
+| 18.2 | 0.932 | 0.917 | 0.915 | 0.818 | 0.405 |
+
+Scatter of ±0.5 — half the whole reach range — costs **12%** of catches at 18 coins. The mechanism is #35's own: the window is `ARC_CATCH_SEC · speed`, and near landing speed is ≈2.75, so the radius is **0.385** against a reach range of 1.0. Two landing coins blanket the play area. This is the price #35 paid for equal forgiveness in time, it deepens as kills speed up, and it is what P1's 1.8–2.2× active multiplier is currently buying in late zones. Open for a ruling; no constant changed here.
+
+*The sim-side acceptance test now averages 8 seeds.* Landing catch rate spans 0.387–0.800 across seeds 1–8 and the apex/landing ratio spans 0.76–2.47, so the single-seed read was an instrument fault of the same shape as #39's horizon. Mean landing 0.542, mean ratio 1.61. Pinning the radius back to a flat 0.12 drops mean landing to **0.019**, so the averaged form has far more margin than the single-seed one it replaces.
+

@@ -532,6 +532,12 @@ export function advance(
     scheduleNext(state, clock);
   }
 
+  // Kills and strikes prune at their own clocks, so coins that landed after the
+  // last one would outlive their flight and sit in `arcs` as already-down. The
+  // clock is `target` rather than an elapsed carry: pruning is monotone in an
+  // absolute clock, so a split sees the identical list a whole advance does.
+  pruneArcs(state, target);
+
   state.timeSec = target;
   state.rngState = rng.getState();
   events.recap = recap;
