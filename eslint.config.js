@@ -51,6 +51,11 @@ export default tseslint.config(
       '.omx/**',
       '.playwright-mcp/**',
       'sim/out/**',
+      // Scratch probes at the repo root. One agent's throwaway file must not
+      // fail another agent's gate, and it did: an untracked wb_probe2.ts made
+      // `npm run verify` a parsing error for everyone in the worktree.
+      'wb_probe*.ts',
+      '*.probe.ts',
       'app/public/**',
     ],
   },

@@ -12,7 +12,14 @@ import {
   type Recap,
 } from '@wanderblade/core';
 import { HOLD_STRIKE_INTERVAL_SEC } from './active';
-import { formatDuration, formatGold, formatNumber, formatPercent, formatRate } from './format';
+import {
+  clamp01,
+  formatDuration,
+  formatGold,
+  formatNumber,
+  formatPercent,
+  formatRate,
+} from './format';
 import type { LogEntry } from './flavor';
 import { panelVars, realmSkin } from './scene/palette';
 import { paintElement, repaintPixelText } from './pixeltext';
@@ -74,6 +81,8 @@ export interface ViewModel {
   levelCost: number;
   canAffordLevel: boolean;
   goldPerSec: number;
+  /** Gold on hand, so an unaffordable row can show how close it is. */
+  gold: number;
   /** Goal-gradient chips: the nearest road waypoint and the cheapest power buy. */
   marchGoal: string;
   /** 0..1 along the leg the march goal names, for the chip's fill. */
@@ -123,6 +132,7 @@ function skillMarkup(): string {
     const name = SKILLS[id]?.name ?? id;
     return `
       <button class="upgrade-btn skill-btn" type="button" data-skill="${id}">
+        <i class="upgrade-fill" data-role="fill" aria-hidden="true"></i>
         <span class="upgrade-name">${name}</span>
         <span class="upgrade-detail" data-role="detail"></span>
         <span class="upgrade-cost" data-role="cost"></span>
@@ -214,8 +224,9 @@ function template(): string {
     <section class="panel upgrades">
       <h2 class="panel-title">Upgrades</h2>
       <button class="upgrade-btn hero-btn" type="button" data-role="hero-btn">
+        <i class="upgrade-fill" data-role="hero-fill" aria-hidden="true"></i>
         <span class="upgrade-name" data-role="hero-level">Hero Lv 1</span>
-        <span class="upgrade-detail">Level up your blade</span>
+        <span class="upgrade-detail" data-role="hero-detail">Level up your blade</span>
         <span class="upgrade-cost" data-role="hero-cost"></span>
       </button>
       ${skillMarkup()}
@@ -316,13 +327,15 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const heroBtn = q<HTMLButtonElement>(root, '[data-role="hero-btn"]');
   const heroLevelEl = q(root, '[data-role="hero-level"]');
   const heroCostEl = q(root, '[data-role="hero-cost"]');
+  const heroFillEl = q(root, '[data-role="hero-fill"]');
+  const heroDetailEl = q(root, '.hero-btn .upgrade-detail');
   const logEl = q<HTMLUListElement>(root, '[data-role="log"]');
   const seedEl = q(root, '[data-role="seed"]');
 
   // Per-skill refs.
   const skillRefs = new Map<
     string,
-    { btn: HTMLButtonElement; detail: HTMLElement; cost: HTMLElement }
+    { btn: HTMLButtonElement; detail: HTMLElement; cost: HTMLElement; fill: HTMLElement }
   >();
   for (const btn of root.querySelectorAll<HTMLButtonElement>('.skill-btn')) {
     const id = btn.dataset.skill;
@@ -331,6 +344,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
       btn,
       detail: q(btn, '[data-role="detail"]'),
       cost: q(btn, '[data-role="cost"]'),
+      fill: q(btn, '[data-role="fill"]'),
     });
     btn.addEventListener('click', () => handlers.onBuySkill(id));
   }
@@ -495,6 +509,29 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   // webfont put soft glyphs under a 2px shadow next to crisp panel bitmap.
   const hudRoot = q(root, '.hud');
 
+  /**
+   * An unaffordable row has to read as "not yet", not as "off". Those are
+   * different messages: disabled says never, too-expensive says keep playing,
+   * and in an idle game the second is the hook. The row carries a fill showing
+   * how near the price is and says how long the wait is.
+   */
+  function showReach(
+    fill: HTMLElement,
+    detail: HTMLElement,
+    base: string,
+    cost: number,
+    vm: ViewModel,
+  ): void {
+    if (vm.gold >= cost) {
+      fill.style.width = '100%';
+      detail.textContent = base;
+      return;
+    }
+    fill.style.width = `${(clamp01(vm.gold / cost) * 100).toFixed(1)}%`;
+    const wait = vm.goldPerSec > 0 ? formatDuration((cost - vm.gold) / vm.goldPerSec) : null;
+    detail.textContent = wait ? `${base} \u00b7 in ~${wait}` : base;
+  }
+
   function renderPanels(vm: ViewModel): void {
     queueMicrotask(syncSceneBand);
     regionEl.textContent = vm.regionName;
@@ -565,6 +602,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     heroCostEl.textContent = `${formatNumber(vm.levelCost)} g`;
     heroBtn.disabled = !vm.canAffordLevel;
     heroBtn.classList.toggle('affordable', vm.canAffordLevel);
+    showReach(heroFillEl, heroDetailEl, 'Level up your blade', vm.levelCost, vm);
 
     // Skills.
     for (const skill of vm.skills) {
@@ -576,6 +614,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
         refs.btn.disabled = true;
         refs.btn.classList.remove('affordable', 'maxed');
         refs.btn.classList.add('locked');
+        refs.fill.style.width = '0';
       } else if (skill.atMax) {
         // Bounded multiplier reached its cap: show MAX, hide the cost, no buy.
         refs.detail.textContent = `Level ${skill.level} · MAX`;
@@ -583,12 +622,13 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
         refs.btn.disabled = true;
         refs.btn.classList.remove('affordable', 'locked');
         refs.btn.classList.add('maxed');
+        refs.fill.style.width = '0';
       } else {
-        refs.detail.textContent = `Level ${skill.level}`;
         refs.cost.textContent = `${formatNumber(skill.cost)} g`;
         refs.btn.disabled = !skill.canAfford;
         refs.btn.classList.toggle('affordable', skill.canAfford);
         refs.btn.classList.remove('locked', 'maxed');
+        showReach(refs.fill, refs.detail, `Level ${skill.level}`, skill.cost, vm);
       }
     }
 

@@ -565,6 +565,7 @@ export class Game {
       levelCost: heroLevelCost,
       canAffordLevel: s.gold >= heroLevelCost,
       goldPerSec,
+      gold: s.gold,
       marchGoal,
       marchProgress,
       purchaseGoal,

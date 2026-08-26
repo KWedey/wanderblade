@@ -53,8 +53,6 @@ import {
   FERN,
   FLOWER,
   GEM,
-  BODY_FONT,
-  GLYPH_H,
   NUMERAL_FONT,
   HERO_WALK_A,
   HERO_WALK_B,
@@ -1567,7 +1565,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   /** Segments, cells and label on one row: a widget, not a banner. */
   const COMBO_SEGS = 6;
-  const COMBO_SEG_W = 3;
+  const COMBO_SEG_W = 2;
   const COMBO_GAP = 1;
   const COMBO_METER_W = COMBO_SEGS * (COMBO_SEG_W + COMBO_GAP) - COMBO_GAP;
 
@@ -1595,7 +1593,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    * has to reserve every lane it covers rather than claiming just its own.
    */
   function comboBox(): { x: number; w: number; top: number; height: number } {
-    const w = textWidth(comboLabel(), 1, BODY_FONT) + 3 + COMBO_METER_W;
+    const w = textWidth(comboLabel(), 1, NUMERAL_FONT) + 3 + COMBO_METER_W;
     return {
       // Carried by the hero, not floated over the scene. Centred it was "dead
       // centre"; docked left it was "a black brick across the mid-left".
@@ -1605,7 +1603,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       x: Math.floor(heroX - w / 2),
       w,
       top: laneBaseline(COMBO_LANE, groundY) - 1,
-      height: GLYPH_H + 2,
+      height: NUMERAL_FONT.h + 2,
     };
   }
 
@@ -1624,7 +1622,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // announcing that nothing is happening.
     if (heldMomentum.value <= 0.02) return;
     const label = comboLabel();
-    const labelW = textWidth(label, 1, BODY_FONT);
+    const labelW = textWidth(label, 1, NUMERAL_FONT);
     const box = comboBox();
     const y = laneY(COMBO_LANE);
     const hot = heldMomentum.value > 0.7;
@@ -1637,6 +1635,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       fill: hot ? '#ffffff' : skin.accent,
       outline: OUTLINE_INK,
       align: 'left',
+      font: NUMERAL_FONT,
     });
 
     const meterX = box.x + labelW + 3;
@@ -1644,7 +1643,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // The pip track is built the way the creature health bar is built: a dark
     // frame with cells inside it, so the two read as the same world's meters.
     ctx.fillStyle = OUTLINE_INK;
-    ctx.fillRect(meterX - 1, meterY - 1, COMBO_METER_W + 2, GLYPH_H);
+    ctx.fillRect(meterX - 1, meterY - 1, COMBO_METER_W + 2, NUMERAL_FONT.h + 2);
     const filled = Math.min(COMBO_SEGS, Math.round(heldMomentum.value * COMBO_SEGS));
     // At rest a row of dark cells reads as broken, not idle. A slow chase
     // light across the empty cells reads as armed and waiting.
@@ -1659,7 +1658,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         : idle
           ? mixHex('#3d3846', skin.accent, 0.55)
           : '#3d3846';
-      ctx.fillRect(meterX + i * (COMBO_SEG_W + COMBO_GAP), meterY, COMBO_SEG_W, GLYPH_H - 2);
+      ctx.fillRect(meterX + i * (COMBO_SEG_W + COMBO_GAP), meterY, COMBO_SEG_W, NUMERAL_FONT.h);
     }
   }
 

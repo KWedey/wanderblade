@@ -734,7 +734,41 @@ body {
 }
 
 .upgrade-btn:disabled:not(.locked):not(.maxed) .upgrade-detail {
-  color: #b4826a;
+  color: #d9a066;
+}
+
+/* How near the price is, drawn behind the row. "Disabled" says never;
+   a filling track says not yet, which is the whole hook of an idle game. */
+.upgrade-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.upgrade-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--gold);
+  opacity: 0.16;
+  transition: width 220ms steps(12);
+}
+
+.upgrade-btn.affordable .upgrade-fill,
+.upgrade-btn.locked .upgrade-fill,
+.upgrade-btn.maxed .upgrade-fill {
+  display: none;
+}
+
+.upgrade-name,
+.upgrade-detail,
+.upgrade-cost {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upgrade-fill {
+    transition: none;
+  }
 }
 
 .upgrade-btn.locked {

@@ -24,3 +24,7 @@ sim/out/
 
 # gauntlet-loop scratch (bar screenshots, progress page)
 .gauntlet/
+
+# Scratch probes; see eslint.config.js
+wb_probe*.ts
+*.probe.ts
