@@ -253,7 +253,7 @@ function template(): string {
       </div>
 
       <dl class="portal-stats">
-        <div><dt>Estimated</dt><dd data-role="portal-eta">—</dd></div>
+        <div><dt data-role="portal-eta-label">Estimated</dt><dd data-role="portal-eta">—</dd></div>
         <div><dt data-role="portal-note-label">On victory</dt><dd data-role="portal-note">Realm ascends</dd></div>
       </dl>
 
@@ -382,6 +382,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const portalEyebrowEl = q(root, '[data-role="portal-eyebrow"]');
   const portalNameEl = q(root, '[data-role="portal-name"]');
   const portalEtaEl = q(root, '[data-role="portal-eta"]');
+  const portalEtaLabelEl = q(root, '[data-role="portal-eta-label"]');
   const portalNoteLabelEl = q(root, '[data-role="portal-note-label"]');
   const portalNoteEl = q(root, '[data-role="portal-note"]');
   const enterPortalBtn = q<HTMLButtonElement>(root, '[data-role="enter-portal"]');
@@ -675,6 +676,11 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
     if (vm.boss) {
       portalEyebrowEl.textContent = 'Guardian';
+      // The preview is priced at sustained momentum and the fight at the
+      // hero's actual pace, so the same guardian quotes a longer time the
+      // instant you commit. Label both: the jump is the tapping, and a number
+      // that worsens on an irreversible step has to say why on its own.
+      portalEtaLabelEl.textContent = 'At this pace';
       portalNoteLabelEl.textContent = 'Remaining';
       portalNoteEl.textContent = formatNumber(vm.boss.hpRemaining);
       const frac = vm.boss.hpMax > 0 ? vm.boss.hpRemaining / vm.boss.hpMax : 0;
@@ -682,6 +688,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
       bossHpLabelEl.textContent = formatPercent(frac);
     } else if (vm.portal) {
       portalEyebrowEl.textContent = 'The Portal Stands Open';
+      portalEtaLabelEl.textContent = 'Blade in hand';
       portalNoteLabelEl.textContent = 'On victory';
       portalNoteEl.textContent = 'The realm ascends';
     }
