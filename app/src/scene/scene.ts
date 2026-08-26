@@ -20,10 +20,12 @@ import {
   stepParticle,
   wrap,
   heroPocket,
+  peakFollow,
   inPocket,
   nudgeFromPocket,
   type Floater,
   type HeroPocket,
+  type PeakState,
   type FloaterTier,
   type Particle,
 } from './fx';
@@ -408,6 +410,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    * sit above it rather than at the canvas edge.
    */
   let sceneBottomY = 100;
+  /** Peak-held momentum and multiplier, so the readout never sags below the cap. */
+  let heldMomentum: PeakState = { value: 0, holdLeftSec: 0 };
+  let heldMult: PeakState = { value: 1, holdLeftSec: 0 };
+
   let heroX = 24;
 
   let clockSec = 0;
@@ -560,7 +566,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const preferred = Math.max(0, Math.min(LANE_COUNT - 1, wish));
     const taken = floaters.map(floaterSpan);
     const evictable = taken.length;
-    if (model.momentum > 0.02) taken.push(...comboSpans());
+    if (heldMomentum.value > 0.02) taken.push(...comboSpans());
     taken.push(...barSpans);
     const { lane, evict } = placeRun(f.x - w / 2, w, taken, LANE_COUNT, 3, preferred, evictable);
     // Descending, so each splice leaves the lower indices valid.
@@ -766,6 +772,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function step(dtSec: number): void {
     const skin = realmSkin(model.region);
     clockSec += dtSec;
+    heldMomentum = peakFollow(heldMomentum, model.momentum, dtSec);
+    heldMult = peakFollow(heldMult, model.momentumMult, dtSec);
 
     const speed = WALK_SPEED * model.momentumMult;
     scrollGround = wrap(scrollGround + speed * dtSec, PROP_SPAN);
@@ -1566,8 +1574,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let comboTeachUntilSec = -1;
 
   function comboLabel(): string {
-    const value = `\u00d7${model.momentumMult.toFixed(1)}`;
-    if (comboTeachUntilSec < 0 && model.momentum > 0.02) {
+    // Two decimals, not one: the cap is x1.75 and one decimal rounds it to
+    // x1.8, printing a multiplier the game cannot actually reach.
+    const value = `\u00d7${heldMult.value.toFixed(2)}`;
+    if (comboTeachUntilSec < 0 && heldMomentum.value > 0.02) {
       comboTeachUntilSec = clockSec + COMBO_TEACH_SEC;
     }
     return clockSec < comboTeachUntilSec ? `COMBO ${value}` : value;
@@ -1604,12 +1614,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function drawMomentumMeter(skin: RealmSkin): void {
     // Hidden at rest: a full-width empty bar labelled x1.0 is the frame
     // announcing that nothing is happening.
-    if (model.momentum <= 0.02) return;
+    if (heldMomentum.value <= 0.02) return;
     const label = comboLabel();
     const labelW = textWidth(label, 1, BODY_FONT);
     const box = comboBox();
     const y = laneY(COMBO_LANE);
-    const hot = model.momentum > 0.7;
+    const hot = heldMomentum.value > 0.7;
 
     // Opaque plate: anything that does reach this band reads as behind a
     // widget rather than as garbled type.
@@ -1625,7 +1635,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     const meterX = box.x + 2 + labelW + 3;
     const meterY = y + 1;
-    const filled = Math.round(model.momentum * COMBO_SEGS);
+    const filled = Math.min(COMBO_SEGS, Math.round(heldMomentum.value * COMBO_SEGS));
     // At rest a row of dark cells reads as broken, not idle. A slow chase
     // light across the empty cells reads as armed and waiting.
     const chase = model.reduceMotion ? -1 : Math.floor(clockSec * 6) % COMBO_SEGS;

@@ -296,3 +296,26 @@ export function nudgeFromPocket(
   if (best === up) return { x, y: pocket.y - 1 };
   return { x: best === left ? pocket.x - 1 : pocket.x + pocket.w + 1, y };
 }
+
+/**
+ * Peak-hold for the momentum meter. Momentum decays continuously between
+ * strikes, so a sample taken mid-gap reads below the cap even when the player
+ * is pinned at it: at 25 taps/sec the gap is 40ms, which reads 0.9862 and used
+ * to floor to 5 of 6 pips and truncate to x1.7. The meter told a player at the
+ * ceiling they had not reached it. A VU meter solves this by holding the peak.
+ */
+export const PEAK_HOLD_SEC = 0.4;
+/** How fast the held peak falls once the hold expires, in units per second. */
+export const PEAK_FALL_PER_SEC = 1.2;
+
+export interface PeakState {
+  value: number;
+  holdLeftSec: number;
+}
+
+export function peakFollow(held: PeakState, live: number, dtSec: number): PeakState {
+  if (live >= held.value) return { value: live, holdLeftSec: PEAK_HOLD_SEC };
+  const left = held.holdLeftSec - dtSec;
+  if (left > 0) return { value: held.value, holdLeftSec: left };
+  return { value: Math.max(live, held.value - PEAK_FALL_PER_SEC * dtSec), holdLeftSec: 0 };
+}

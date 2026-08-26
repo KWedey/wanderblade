@@ -1,3 +1,5 @@
+import { sustainStrikeRate } from '@wanderblade/core';
+import { HOLD_STRIKE_INTERVAL_SEC } from '../src/active';
 import { describe, expect, it } from 'vitest';
 import {
   ARC_GRAVITY,
@@ -18,6 +20,8 @@ import {
   type Particle,
   wrap,
   heroPocket,
+  peakFollow,
+  PEAK_HOLD_SEC,
   inPocket,
   nudgeFromPocket,
 } from '../src/scene/fx';
@@ -294,5 +298,54 @@ describe('the hero keeps a protected pocket', () => {
       const out = nudgeFromPocket(p, x, y);
       expect(inPocket(p, out.x, out.y), `${x},${y} -> ${out.x},${out.y}`).toBe(false);
     }
+  });
+});
+
+describe('the momentum meter holds its peak', () => {
+  const at = (v: number) => ({ value: v, holdLeftSec: 0 });
+
+  // The playtest saw x1.7 and 5 of 6 pips at 25Hz against a true cap of x1.75.
+  // Momentum decays between strikes, so a mid-gap sample of a player pinned at
+  // the ceiling reads 0.9862 - which floors to 5 pips and truncates to x1.7.
+  it('takes a new peak the instant it arrives', () => {
+    expect(peakFollow(at(0.5), 0.99, 0.016).value).toBe(0.99);
+    expect(peakFollow(at(0.5), 0.99, 0.016).holdLeftSec).toBe(PEAK_HOLD_SEC);
+  });
+
+  it('does not sag through the gap between two strikes at the cap', () => {
+    let held = peakFollow(at(0), 1, 0.016);
+    // 40ms apart is 25 taps a second; sustain only needs about 3.3.
+    for (let i = 0; i < 6; i++) held = peakFollow(held, 0.9862, 0.04);
+    expect(held.value).toBe(1);
+    expect(Math.round(held.value * 6)).toBe(6);
+  });
+
+  it('falls once the hold expires, so the meter still reads the truth at rest', () => {
+    let held = peakFollow(at(0), 1, 0.016);
+    for (let i = 0; i < 60; i++) held = peakFollow(held, 0, 0.05);
+    expect(held.value).toBe(0);
+  });
+
+  it('never rounds a sustained cap down out of its own last pip', () => {
+    let held = peakFollow(at(0), 1, 0.016);
+    for (let i = 0; i < 40; i++) {
+      held = peakFollow(held, 0.9862, 0.04);
+      expect(Math.min(6, Math.round(held.value * 6)), `sample ${i}`).toBe(6);
+    }
+  });
+});
+
+describe('the held-strike cadence comes from core, not a local copy', () => {
+  // app/src/active.ts declared MOMENTUM_SUSTAIN_RATE = 4 and
+  // MOMENTUM_MAX_BONUS = 1.2 against core's 3.29 and 0.75. A second economy
+  // living beside the real one is how a hold that should pin momentum at the
+  // cap instead settled below it.
+  it('fires exactly at the rate that sustains momentum', () => {
+    expect(HOLD_STRIKE_INTERVAL_SEC).toBeCloseTo(1 / sustainStrikeRate(), 12);
+  });
+
+  it('is a real cadence, not a placeholder', () => {
+    expect(HOLD_STRIKE_INTERVAL_SEC).toBeGreaterThan(0.05);
+    expect(HOLD_STRIKE_INTERVAL_SEC).toBeLessThan(2);
   });
 });
