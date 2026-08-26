@@ -44,6 +44,12 @@ const HERO_LEGEND: Record<string, string> = {
 // size where none of the colour is legible yet. The blue was a four-column
 // patch inside a red torso, which is a bib: it now runs the full chest, so the
 // red is hood, collar and pauldrons and the blue is the gambeson under them.
+// He was 20 tall against a 22-tall swarmling, a 30-tall golem and a 30-tall
+// stalker: the shortest figure on his own road, which a judge read as "a child
+// next to it". Guardrail 1 is that the player IS the hero. 26 tall now, and the
+// height is spent on torso and legs, never the head - 8/20 head was chibi
+// proportion, and 8/26 is a person. The big bruisers still out-top him, so the
+// road stays dangerous; only the mobs he outclasses now look it.
 const HERO_UPPER = [
   '.....oooo.....',
   '....oKKKKo....',
@@ -56,6 +62,8 @@ const HERO_UPPER = [
   '..occcccccco..',
   'oKKottttttoHHo',
   'oKKottTTTtoHHo',
+  'oKKottTTTtoHHo',
+  'oKKottttttoHHo',
   '.oKottttttoHo.',
   '..KottttBtoH..',
   '..oBBBBBBBBo..',
@@ -68,6 +76,10 @@ export const HERO_WALK_A: SpriteMap = {
     ...HERO_UPPER,
     '..opppoopppo..',
     '..opppoopppo..',
+    '..opppoopppo..',
+    '..opppoopppo..',
+    '..opppoopppo..',
+    '..okkkookkko..',
     '..okkkookkko..',
     '..oooooooooo..',
   ],
@@ -78,7 +90,11 @@ export const HERO_WALK_B: SpriteMap = {
   rows: [
     ...HERO_UPPER,
     '..opppoopppo..',
+    '..opppoopppo..',
+    '..opppoopppo..',
     '.opppppoopppo.',
+    '.opppppoopppo.',
+    '.okkkkkookkko.',
     '.okkkkkookkko.',
     '.oooooooooooo.',
   ],
@@ -216,7 +232,11 @@ export const MON_HOUND: SpriteMap = {
     '..bbbbbb.....bbb..bbbbb.......',
     '..bbbbb......bbb...bbbb.......',
     '..bbbbb......bbb...bbbb.......',
+    '..bbbbb......bbb...bbbb.......',
+    '..bbbbb......bbb...bbbb.......',
     '.bbbbbb......bbb...bbbbb......',
+    '.bbbbbb......bbb...bbbbb......',
+    'bbbbbbb.....bbbbb..bbbbbb.....',
     'bbbbbbb.....bbbbb..bbbbbb.....',
     'bbbbbbb.....bbbbb..bbbbbb.....',
   ],
@@ -280,6 +300,10 @@ export const MON_SWARMLING: SpriteMap = {
     '..bbb...bbbb..',
     '.bbbb....bbb..',
     '.bbb.....bbb..',
+    '.bbb.....bbb..',
+    '.bbbb....bbb..',
+    '.bbbb...bbbb..',
+    '.bbbb...bbbb..',
     '.bbbb...bbbb..',
     '.bbbb...bbbb..',
   ],

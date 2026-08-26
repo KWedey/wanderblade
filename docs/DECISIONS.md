@@ -413,3 +413,26 @@ Scatter of ±0.5 — half the whole reach range — costs **12%** of catches at 
 
 *The sim-side acceptance test now averages 8 seeds.* Landing catch rate spans 0.387–0.800 across seeds 1–8 and the apex/landing ratio spans 0.76–2.47, so the single-seed read was an instrument fault of the same shape as #39's horizon. Mean landing 0.542, mean ratio 1.61. Pinning the radius back to a flat 0.12 drops mean landing to **0.019**, so the averaged form has far more margin than the single-seed one it replaces.
 
+## 42. A bitmap glyph needs a bigger box, never a smaller face — 2026-08-26
+
+**Decision:** when panel or HUD text renders in the webfont instead of the bitmap face, the fix is to widen the box, never to step the glyphs down. `paintElement` falls back to the webfont whenever the bitmap cannot fit at `MIN_UI_SCALE`, and the box it is measured against was sized by the browser from *the webfont*, which is narrower. So the failure reports itself as "the type is too big" when the truth is "the box is too small".
+
+**Why:** three consecutive blind critics named "two type systems in one frame" and none of us could find more than one instance at a time. Nine elements were falling back. Measured, box against what the bitmap actually needs:
+
+| element | text | box | bitmap needs |
+|---|---|---|---|
+| `.zone` | `Zone 49/50` | 56px | 118px |
+| `.leagues` | `48.8 leagues` | 67px | 142px |
+| `.gold-rate` | `+425M/s` | 67px | 123px |
+| `.asc-open-label` | `Ascendancy` | 93px | 118px |
+| `.hud-label` | `DPS` | 28px | 34px |
+
+The webfont measured every one of those boxes at **47–82%** of what the bitmap face needs to draw the same string.
+
+**Three ways a box gets mis-sized, all of them fixed at the box:**
+
+- **Content-sized parents.** A shrink-wrapped flex or grid item is exactly as wide as the webfont needed. A `nowrap` leaf claims the room instead, bounded by the nearest *positioned* ancestor — a fence someone drew on purpose — not by its immediate parent, which is usually shrink-wrapped to the same webfont measurement.
+- **`text-transform`.** The browser measures the transformed string; `textContent` is untransformed. Nine uppercased labels were drawn mixed-case in boxes sized for caps. That width mismatch is what a judge read as `ASOCNDANOY`.
+- **Generated content.** `::before`/`::after` never appears in `textContent`, so the bitmap layer cannot see it. The mark stays webfont and prints *over* the bitmap beside it. Banned outright, and `app/test/typegrid.test.ts` fails on any non-empty `content:` rule.
+
+**Cost:** claiming width can push a sibling. The claim is opt-in via `white-space: nowrap`, and `qa:mobile` reports `webfontFallbacks`, `hudOverPanel` and `overflowingX` on every viewport so an over-claim is visible in the same run that proves the fallback is gone.
