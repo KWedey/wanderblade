@@ -7,6 +7,7 @@ of an opinion. Each takes `--help`; this file only says which one to reach for.
 | --- | --- |
 | `npm run qa:capture -- --label <name>` | What does the game look like right now, at desktop size, mid-swing? |
 | `npm run qa:mobile` | Does the layout hold on a phone, is the type on the world's pixel grid, and does anything load-bearing sit under the notch? |
+| `npm run qa:wiring` | Does the live page register the listeners a held strike depends on? Unit tests cover the rule; only this covers the wiring. |
 | `npm run qa:mobile -- --selftest` | Plants a decoy button under each inset and exits non-zero if the notch check misses them. Run it whenever that check reports clean. |
 | `npm run qa:pixels -- <png> <x> <y> <w> <h>` | What colour is that region, so a claim about the art can be settled? |
 

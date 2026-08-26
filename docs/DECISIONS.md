@@ -337,7 +337,7 @@ And in play with several coins up, at a 250 ms human reach: apex **36.0%** vs la
 
 **Decision:** `PERMANENT_HORIZON_SEC` is a **fixed checkpoint**, 14 days, not `min(horizon, run length)`. Every run reports the ratio taken at the same moment, so the numbers are comparable across runs. A run that stops short reports the ratio and marks it **not banded**, naming both the horizon it reached and the one the band is stated at. P10's sooner-clause is horizon-free and stays banded on every run, so a short run still asserts something real.
 
-The band moves with its horizon: **1.4–2.3× at 14 days**, from six seeds measuring 1.87 / 1.53 / 1.96 / 1.78 / 1.78 / 2.11, mean 1.84. This supersedes the 1.6–2.4× stated at 30 days in #31, which was the same claim taken at a different moment.
+The band moves with its horizon: **1.4–2.3× at 14 days**, from six seeds measuring 1.87 / 1.53 / 1.96 / 1.78 / 1.78 / 2.11, mean 1.84. This supersedes the 1.6–2.4× stated at 30 days in #31, which was the same claim taken at a different moment. It also supersedes commit `91b03d9`, which fixed the same bug the other way — probe always reaching 30 days, CLI default raised to 30. That commit's message still describes a default that is no longer in force; this decision is what is live.
 
 **Why:** Bare `npm run sim` — 3 seeds × 14 days, the command everyone types — printed `FAIL P10` on 2 of 3 seeds. Nothing was wrong with the economy. The band was derived from 30-day runs while `min()` quietly took the measurement at 14, so the validator judged a 14-day number against a 30-day bar.
 
