@@ -1027,21 +1027,24 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     band(midY, hazeY - midY, skin.skyMid);
     band(hazeY, skyH - hazeY, skin.skyHaze);
 
-    // Sun: stacked rects, never a radial gradient. Kept left of the docked
-    // panel so it is never a half-disc cut off by chrome.
     sunX = Math.floor(vw * 0.6);
-    sunY = Math.floor(skyH * 0.13);
     sunR = Math.max(5, Math.floor(vw / 26));
-    const sx = sunX;
-    const sy = sunY;
-    // Halo first. A bare disc clipped by a canopy read as a crescent moon in a
-    // bright blue sky; light spilling past the leaves reads as sun.
-    glowDisc(sx, sy, Math.round(sunR * 1.45), skin.sun, 0.34);
+    // Far enough down that the halo clears the top edge.
+    sunY = Math.max(Math.ceil(sunR * 1.6), Math.floor(skyH * 0.13));
+  }
+
+  /**
+   * Stacked rects, never a radial gradient, and drawn over the treeline
+   * rather than behind it: behind, the canopy tore the disc into two yellow
+   * fragments with sky between them, which a critic read as a rendering
+   * artifact. The soft halo over the leaves reads as glare instead.
+   */
+  function drawSun(skin: RealmSkin): void {
+    glowDisc(sunX, sunY, Math.round(sunR * 1.45), skin.sun, 0.34);
     ctx.fillStyle = skin.sun;
-    const r = sunR;
-    for (let dy = -r; dy <= r; dy++) {
-      const half = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
-      ctx.fillRect(sx - half, sy + dy, half * 2 + 1, 1);
+    for (let dy = -sunR; dy <= sunR; dy++) {
+      const half = Math.floor(Math.sqrt(Math.max(0, sunR * sunR - dy * dy)));
+      ctx.fillRect(sunX - half, sunY + dy, half * 2 + 1, 1);
     }
   }
 
@@ -1890,6 +1893,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawGrove(far);
     drawDrift(far);
     drawTreeline(sprites);
+    drawSun(skin);
 
     const jolt = model.reduceMotion ? { x: 0, y: 0 } : shakeOffset(shake, clockSec);
     ctx.save();
