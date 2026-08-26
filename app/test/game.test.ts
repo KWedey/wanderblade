@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Strike } from '@wanderblade/core';
+import { enemyGold, goldPerKill, type GameState, type Strike } from '@wanderblade/core';
 import type { View, ViewModel } from '../src/view';
 
 // Game reads two browser globals at construction (`window.matchMedia`) and one
@@ -144,5 +144,29 @@ describe('the march goal is a gradient, not a countdown', () => {
     }
     expect(seen[seen.length - 1]!).toBeGreaterThan(seen[0]!);
     for (let i = 1; i < seen.length; i++) expect(seen[i]!).toBeGreaterThanOrEqual(seen[i - 1]!);
+  });
+});
+
+describe('the client carries no economy of its own', () => {
+  interface PayoutInternals {
+    tick: () => void;
+    goldPerKill: number;
+    state: GameState;
+  }
+
+  // `enemyGold` is the *base* payout; the engine credits it times the
+  // per-victory earnings bonus. Caching the base understated every payout the
+  // client showed - the count-up target, the per-second rate, and the "in ~X"
+  // wait on every upgrade row - by 50% at five realm victories.
+  it('caches the payout the engine credits, bonus and all', () => {
+    nowMs = 1000;
+    const inner = new Game(stubView) as unknown as PayoutInternals;
+    inner.state.ascendancy.victories = 5;
+    nowMs += 1000;
+    inner.tick();
+
+    expect(inner.goldPerKill).toBe(goldPerKill(inner.state));
+    // Strictly above the base, so re-deriving from enemyGold fails here.
+    expect(inner.goldPerKill).toBeGreaterThan(enemyGold(inner.state.realm, inner.state.zone));
   });
 });

@@ -9,7 +9,7 @@ import {
   buyHeroLevel as coreBuyHeroLevel,
   buySkill as coreBuySkill,
   bossEtaSec,
-  enemyGold,
+  goldPerKill,
   enterPortal as coreEnterPortal,
   heroDps,
   initialState,
@@ -198,7 +198,7 @@ export class Game {
 
     // The counter chases confirmed gold *plus* the current enemy's accruing
     // share, so the low digits climb continuously and glide into the exact
-    // payout on the kill (enemyGold is deterministic — no snap-back). Under
+    // payout on the kill (the payout is deterministic — no snap-back). Under
     // prefers-reduced-motion the decorative glide is suppressed: the counter
     // and zone bar step once per kill instead of animating continuously.
     const reduce = this.reduceMotion.matches;
@@ -466,8 +466,10 @@ export class Game {
     // fresh without recomputing engine math 60× a second.
     this.groundKillSchedule();
     this.dps = heroDps(this.state);
-    const g = enemyGold(this.state.realm, this.state.zone);
-    // Finite guard: enemyGold overflows to Infinity in the deep endless tail;
+    // The engine's own payout, not bare enemyGold: that drops the per-victory
+    // earnings bonus, so the counter chased a target 50% low after five realms.
+    const g = goldPerKill(this.state);
+    // Finite guard: it overflows to Infinity in the deep endless tail;
     // Infinity * 0 would poison displayGold with NaN.
     this.goldPerKill = Number.isFinite(g) ? g : 0;
     this.view.renderPanels(this.buildViewModel());
