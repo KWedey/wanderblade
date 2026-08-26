@@ -844,6 +844,7 @@ body {
 .gear-slot {
   display: grid;
   grid-template-columns: auto 1fr auto;
+  grid-template-areas: 'label name power';
   align-items: center;
   gap: 8px;
   padding: 5px 8px;
@@ -853,6 +854,7 @@ body {
 }
 
 .gear-slot-label {
+  grid-area: label;
   font-size: var(--ui-1);
   text-transform: uppercase;
   color: var(--ink-faint);
@@ -860,12 +862,14 @@ body {
 }
 
 .gear-name {
+  grid-area: name;
   font-size: var(--ui-1);
   color: var(--ink-dim);
   line-height: 1.15;
 }
 
 .gear-power {
+  grid-area: power;
   font-size: var(--ui-1);
   color: var(--ink-faint);
   white-space: nowrap;
@@ -984,8 +988,9 @@ body {
   right: 12px;
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
   z-index: 50;
-  width: 42px;
-  height: 42px;
+  /* iOS asks 44pt of any target. */
+  width: 44px;
+  height: 44px;
   border: 2px solid var(--wood);
   background: var(--wood-shadow);
   color: var(--ink-faint);
@@ -1139,6 +1144,8 @@ body {
   letter-spacing: 0.05em;
   width: 100%;
   min-height: var(--touch);
+  /* A flex parent shrinks a min-height away without this. */
+  flex-shrink: 0;
   border: 4px solid var(--panel-edge);
   background: var(--panel-inner);
   color: var(--ink-light);
@@ -1275,6 +1282,7 @@ body {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
+  min-height: var(--touch);
   padding: 3px 12px;
   font-family: var(--font-ui);
   font-size: var(--ui-1);
@@ -1322,4 +1330,44 @@ body {
 .asc-node:disabled {
   cursor: default;
   opacity: 0.72;
+}
+
+/* Narrow panels. Placed last: an @media of equal specificity only wins over the
+   base rule it overrides if it comes after it. */
+@media (max-width: 900px) {
+  /* The price gives up its column. Beside it the name column was 106px on a
+     landscape phone and "Level up your blade" needs 226, so every row wrapped
+     to three lines and the shop showed one and a half of its six. */
+  .upgrade-btn {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'name'
+      'detail'
+      'cost';
+  }
+
+  .upgrade-cost {
+    text-align: right;
+  }
+
+  /* Power drops to its own row. Three columns left the name 31px on a 263px
+     panel and pushed the power reading off the panel's right edge. */
+  .gear-slot {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      'label name'
+      'power power';
+  }
+}
+
+/* A landscape phone puts 59px of camera housing beside the screen, and the
+   panel is docked into it. */
+@media (min-aspect-ratio: 1/1) {
+  .screen {
+    padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+
+  .hud {
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
+  }
 }

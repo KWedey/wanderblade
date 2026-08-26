@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import { GLYPH_H, textWidth } from '../src/scene/pixels';
-import { pixelScaleFor } from '../src/pixeltext';
+import { lineHeight, pixelScaleFor, wrapPixelText } from '../src/pixeltext';
 
 /** Comments stripped: a rule's selector is whatever precedes its brace, and a
  *  comment sitting in front of one made it stop matching. */
@@ -33,6 +33,14 @@ const PANEL_PAD = 24;
 const WIDEST_NUMBER = '344.652B';
 /** The upgrade row that wrapped to five lines on a landscape phone. */
 const WIDEST_ROW_LABEL = 'Level up your blade';
+/** The price beside it, and the gap the grid puts between the two. */
+const WIDEST_PRICE = '29.4B g';
+const ROW_GAP = 10;
+const ROW_PAD = 24;
+/** A road-log entry at its longest, and the three the panel promises to show. */
+const LOG_LINE = 'Felled a Thornback Lynx - +220M gold';
+const LOG_ENTRIES = 3;
+const LOG_GAP = 4;
 
 // --- Enough of a CSS engine to answer "what applies at this size" ----------
 
@@ -157,6 +165,37 @@ describe('the panel type grid', () => {
         textWidth(WIDEST_ROW_LABEL, pixelScaleFor(ramp.get('--ui-1')!)),
         `"${WIDEST_ROW_LABEL}" wraps in a ${box}px panel`,
       ).toBeLessThanOrEqual(box);
+    });
+  }
+
+  // The bar the panel was ranked #1 on, and the one a type change regressed
+  // once already: the Hero Lv row must not wrap and the log must show three
+  // whole entries. Held at every width rather than at the one it was tuned on.
+  for (const vp of VIEWPORTS) {
+    it(`keeps the Hero Lv row on one line at ${vp.name}`, () => {
+      const ramp = rampAt(vp);
+      const areas = declared('.upgrade-btn', 'grid-template-areas', vp) ?? '';
+      const sharesRow = /name\s+cost/.test(areas);
+      const price = sharesRow
+        ? textWidth(WIDEST_PRICE, pixelScaleFor(ramp.get('--num-1')!)) + ROW_GAP
+        : 0;
+      const nameBox = panelWidth(vp) - ROW_PAD - price;
+      expect(
+        textWidth(WIDEST_ROW_LABEL, pixelScaleFor(ramp.get('--ui-1')!)),
+        `"${WIDEST_ROW_LABEL}" wraps in a ${nameBox}px name column`,
+      ).toBeLessThanOrEqual(nameBox);
+    });
+
+    it(`shows three whole road-log entries at ${vp.name}`, () => {
+      const scale = pixelScaleFor(rampAt(vp).get('--ui-1')!);
+      const cap = Number(/max-height:\s*(\d+)px;/.exec(blocksFor('.log-list', vp).join(''))?.[1]);
+      expect(cap, 'the log has no height cap to check').toBeGreaterThan(0);
+      const lines = wrapPixelText(LOG_LINE, scale, panelWidth(vp) - ROW_PAD).length;
+      const needed = LOG_ENTRIES * lines * lineHeight(scale) + (LOG_ENTRIES - 1) * LOG_GAP;
+      expect(
+        needed,
+        `three ${lines}-line entries need ${needed}px and the cap is ${cap}px`,
+      ).toBeLessThanOrEqual(cap);
     });
   }
 
