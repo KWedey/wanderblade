@@ -627,3 +627,21 @@ The hump survives, and day 14 sits in band on both. **This is not a controlled c
 
 **The ceiling was already pinned, and that is what makes this safe.** `packages/core/test/magnitude.test.ts:136` asserts the first non-finite realm is exactly 301, and `:192` asserts realm 300 opens while 301, 302, 400 and 5000 refuse with `'unwinnable'` and leave the Road untouched. A growth constant that drags the frontier toward reachable realms fails there. This ADR adds the player-time reading those tests do not carry; it does not add a second copy of them.
 
+
+## 49. Provenance recorded, not renamed — the 18 folklore-adjacent names stay — 2026-08-26
+
+**Decision:** `docs/SRD-CONTENT.md` now records provenance for the 18 shipped creature names (`app/src/species.ts`) whose base word also names, or resembles, an SRD 5.2.1 monster — option A of `.omc/blockers/srd-monster-name-provenance.md`, approved by Kyle. No name changes, no code changes, no player-visible strings touched.
+
+**Why keep them.** SRD 5.2.1 is CC-BY-4.0; using its monster names with attribution is licensed, and the attribution `docs/SRD-CONTENT.md` already carries satisfies it. The gap rule 2 flagged was process, not licence — the names were adopted without recording where they came from. Renaming would touch customer-facing strings, Bestiary collection records, and any save that stores a name, to buy nothing the licence already grants.
+
+**What was actually verified.** Every SRD entry and page was checked against the official artifact (`https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf`) by full-text search, not memory or a third-party wiki:
+
+| Bucket | Count | Names |
+|---|---|---|
+| Matching SRD 5.2.1 stat block | 10 | Wyvern, Iron Kobold, Anvil Ogre, Tomb Wight, Will-o'-Wisp, Cinder Imp, Moss Troll, Green Sprite, Star Wraith, Ember Wraith |
+| Generic folklore, predates D&D, no SRD entry | 8 | Mire Hag, Rock Wyrm, Frost Drake, Marsh Drake, Forge Golem, Rubble Golem, Ash Revenant, Astral Behemoth |
+| Neither (would need a rename) | 0 | — |
+
+Four base words — Wyrm, Drake, Revenant, Behemoth — do not appear anywhere in the SRD 5.2.1 text at all (confirmed by full-document search, not just its index), and each is a documented pre-D&D word (Old English/Norse "wyrm," archaic English "drake," gothic-literature "revenant," biblical "behemoth"). Compounds where only the base word is the SRD or folklore term ("Iron Kobold" → kobold) record the base word only; the modifier is original Wanderblade and is never claimed as adapted.
+
+**Count correction.** The task named "17 names"; the list it enumerated, and the actual matching set in `species.ts`, is 18 — Star Wraith and Ember Wraith are two names sharing one SRD base word. All 18 are in the roster, not 17.

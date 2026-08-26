@@ -39,6 +39,48 @@ This initial roster records the three monster families explicitly selected durin
 | Gnoll family | Gnoll Warrior, p. 289 | Name and recognizable gnoll archetype | Art, animation, stats, abilities, drops, groups, lore |
 | Dragon portal guardians | Dragon stat blocks, pp. 263–341; exact color/age entry must be recorded when selected | Dragon names and recognizable dragon archetype | Art, animation, boss mechanics, HP/DPS tuning, rewards, portal and realm lore |
 
+## Provenance roster — shipped creature names using an SRD/folklore base word
+
+The shipped roster (`app/src/species.ts`) carries 18 names beyond the three families above whose base word also names, or resembles, an SRD 5.2.1 monster. This section records provenance for each, per rule 2. `docs/DECISIONS.md` #49 records the review that produced this table; `.omc/blockers/srd-monster-name-provenance.md` records the licensing analysis behind it (SRD 5.2.1 is CC-BY-4.0 — using its names with attribution is permitted, so this is a provenance-recording exercise, not a rename).
+
+Every SRD entry and page below was verified against the official artifact — `https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf` — by text search, not by memory or a third-party index.
+
+Several names are compounds where only the base word is the SRD or folklore term; the modifier is original Wanderblade and is never claimed as adapted.
+
+**Group 1 — base word has a matching SRD 5.2.1 stat block.**
+
+| Wanderblade use | SRD 5.2.1 source | Adapted elements | Original Wanderblade elements required |
+|---|---|---|---|
+| Wyvern | Wyvern, p. 343 | Name and recognizable wyvern archetype | Art, animation, stats, abilities, drops, lore |
+| Iron Kobold | Kobold Warrior, p. 302 — SRD's only kobold stat block; there is no generic "Kobold" entry | Base word ("Kobold") and recognizable kobold archetype | "Iron" modifier, art, animation, stats, abilities, drops, lore |
+| Anvil Ogre | Ogre, p. 312 | Base word and recognizable ogre archetype | "Anvil" modifier, art, animation, stats, abilities, drops, lore |
+| Tomb Wight | Wight, p. 341 | Base word and recognizable wight archetype | "Tomb" modifier, art, animation, stats, abilities, drops, lore |
+| Will-o'-Wisp | Will-o'-Wisp, p. 341 | Name and recognizable will-o'-wisp archetype | Art, animation, stats, abilities, drops, lore |
+| Cinder Imp | Imp, p. 300 | Base word and recognizable imp archetype | "Cinder" modifier, art, animation, stats, abilities, drops, lore |
+| Moss Troll | Troll, p. 333 | Base word and recognizable troll archetype | "Moss" modifier, art, animation, stats, abilities, drops, lore |
+| Green Sprite | Sprite, p. 329 | Base word and recognizable sprite archetype | "Green" modifier, art, animation, stats, abilities, drops, lore |
+| Star Wraith | Wraith, p. 342 | Base word and recognizable wraith archetype | "Star" modifier, art, animation, stats, abilities, drops, lore |
+| Ember Wraith | Wraith, p. 342 | Base word and recognizable wraith archetype | "Ember" modifier, art, animation, stats, abilities, drops, lore |
+
+Several of these base words (ogre, troll, imp, sprite, wraith, wight, will-o'-wisp) are also generic folklore predating D&D. Where an exact SRD stat block exists, it is recorded above as the source rather than relying on the folklore claim alone.
+
+**Group 2 — generic folklore, no SRD entry adopted or needed.** The base word predates D&D and is owned by nobody; no citation is claimed.
+
+| Wanderblade use | SRD 5.2.1 status | Adapted elements | Original Wanderblade elements required |
+|---|---|---|---|
+| Mire Hag | Not adopted. SRD has only *specific* hag types — Green Hag p. 295, Night Hag p. 311, Sea Hag p. 322 — and none of those qualifiers is used here. "Hag" alone is generic witch/hag folklore predating D&D | Base word only, as folklore | "Mire" modifier, art, animation, stats, abilities, drops, lore |
+| Rock Wyrm | Not adopted. SRD has no generic "Wyrm" stat block — only "Wyrmling" attached to dragon-color entries (e.g. Black Dragon Wyrmling, p. 263). "Wyrm" is an Old English/Norse word for dragon or serpent, predating D&D | Base word only, as folklore | "Rock" modifier, art, animation, stats, abilities, drops, lore |
+| Frost Drake | Not adopted. "Drake" does not appear anywhere in SRD 5.2.1 (verified by full-text search). It is an archaic English word for dragon, predating D&D | Base word only, as folklore | "Frost" modifier, art, animation, stats, abilities, drops, lore |
+| Marsh Drake | Same as Frost Drake | Base word only, as folklore | "Marsh" modifier, art, animation, stats, abilities, drops, lore |
+| Forge Golem | Not adopted. SRD has only material-specific golems — Clay p. 274, Flesh p. 285, Iron p. 302, Stone p. 330 — and none of those qualifiers is used here. "Golem" is Jewish/Prague folklore (16th c.), predating D&D | Base word only, as folklore | "Forge" modifier, art, animation, stats, abilities, drops, lore |
+| Rubble Golem | Same as Forge Golem | Base word only, as folklore | "Rubble" modifier, art, animation, stats, abilities, drops, lore |
+| Ash Revenant | Not adopted. "Revenant" does not appear anywhere in SRD 5.2.1 (verified by full-text search, and absent from the 5.1 SRD indexes too). It is an established English/French folklore and gothic-literature term for a returning undead spirit, predating D&D | Base word only, as folklore | "Ash" modifier, art, animation, stats, abilities, drops, lore |
+| Astral Behemoth | Not adopted. "Behemoth" does not appear anywhere in SRD 5.2.1 (verified by full-text search). It is a biblical term (Book of Job) for a giant beast, predating D&D by millennia | Base word only, as folklore | "Astral" modifier, art, animation, stats, abilities, drops, lore |
+
+**Group 3 — neither SRD entry nor established pre-D&D folklore.** None of the 18 names fall here. Every base word above either has a matching SRD 5.2.1 stat block (Group 1) or is a generic word predating D&D by decades to millennia (Group 2).
+
+**Note on count.** The task that produced this table named "17 names"; the actual list it enumerated, and the actual set of matching names in `app/src/species.ts`, is 18 (Star Wraith and Ember Wraith are two separate names sharing one base word). All 18 are recorded above.
+
 ## Provenance review checklist
 
 - [ ] The exact name appears in SRD 5.2.1.
