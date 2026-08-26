@@ -1,0 +1,76 @@
+#!/usr/bin/env node
+// Capture a judged frame from a live dev server.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { chromium } from './playwright.mjs';
+import { DEFAULT_PORT, requireServer, resolvePort } from './port.mjs';
+
+const HELP = `npm run qa:capture -- --label <name> [options]
+
+Answers: what does the game look like right now, at desktop size, mid-swing?
+
+  --label <name>    output basename, required
+  --stage <id>      staging preset: fresh | mid | late   (default mid)
+  --seed <n>        run seed                             (default 7)
+  --taps <n>        strikes before the shot, 90ms apart  (default 24)
+  --width <px>      viewport width                       (default 1920)
+  --height <px>     viewport height                      (default 1080)
+  --port <n>        dev server port          (default ${DEFAULT_PORT}, or $WB_QA_PORT)
+
+Writes <repo>/.gauntlet/ours/<label>.png, relative to the worktree it runs in.`;
+
+const argv = process.argv.slice(2);
+if (argv.includes('--help') || argv.includes('-h') || argv.length === 0) {
+  console.log(HELP);
+  process.exit(0);
+}
+const flag = (name, fallback) => {
+  const i = argv.indexOf(`--${name}`);
+  return i === -1 ? fallback : argv[i + 1];
+};
+
+const label = flag('label', argv[0]?.startsWith('--') ? undefined : argv[0]);
+if (!label) {
+  console.error('--label is required. See --help.');
+  process.exit(1);
+}
+const stage = flag('stage', 'mid');
+const seed = flag('seed', '7');
+const taps = Number(flag('taps', '24'));
+const width = Number(flag('width', '1920'));
+const height = Number(flag('height', '1080'));
+const port = resolvePort(argv);
+
+const repo = fileURLToPath(new URL('../..', import.meta.url));
+const out = join(repo, '.gauntlet', 'ours', `${label}.png`);
+mkdirSync(join(repo, '.gauntlet', 'ours'), { recursive: true });
+
+await requireServer(port);
+const url = `http://localhost:${port}/?stage=${stage}&seed=${seed}`;
+console.log(`capturing ${url} at ${width}x${height}`);
+
+const browser = await chromium.launch({ headless: true });
+const page = await (await browser.newContext({ viewport: { width, height } })).newPage();
+await page.goto(url, { waitUntil: 'networkidle' });
+
+// Staging replays hours of engine time and hundreds of purchases, which outruns
+// any fixed sleep on a loaded machine and lands the shot on a fresh run.
+if (stage !== 'fresh') {
+  await page.waitForFunction(() => {
+    const t = document.body.innerText || '';
+    return !/Zone 1\/\d/.test(t) && /DPS/.test(t);
+  }, { timeout: 60000 });
+}
+await page.waitForTimeout(400);
+
+// Tap fast enough to hold momentum near the ceiling; a judged frame is a hot one.
+for (let i = 0; i < taps; i++) {
+  await page.keyboard.press('Space');
+  await page.waitForTimeout(90);
+}
+await page.waitForTimeout(60); // land mid-swing rather than on the settle
+writeFileSync(out, await page.screenshot());
+await browser.close();
+console.log(`wrote ${out}`);

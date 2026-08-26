@@ -18,7 +18,10 @@
     "sim": "npm run -w sim start --",
     "thumb": "npm run -w sim thumb --",
     "dev": "npm run -w app dev",
-    "build": "npm run -w app build"
+    "build": "npm run -w app build",
+    "qa:capture": "node tools/qa/capture.mjs",
+    "qa:pixels": "node tools/qa/pixels.mjs",
+    "qa:mobile": "node tools/qa/mobile.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

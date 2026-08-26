@@ -123,4 +123,17 @@ export default tseslint.config(
     files: ['**/*.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },
+
+  // QA scripts under tools/ are Node programs that drive a browser against the
+  // built app. Neither invariant this file guards can reach them, and they carry
+  // no types, so the type-checked ruleset only reports the absence of types.
+  {
+    files: ['tools/**/*.mjs'],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      globals: { console: 'readonly', process: 'readonly', fetch: 'readonly' },
+      parserOptions: { projectService: false, project: false },
+    },
+    rules: { 'no-undef': 'off' },
+  },
 );
