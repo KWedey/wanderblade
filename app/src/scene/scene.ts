@@ -149,9 +149,11 @@ const MIN_BAND_H = 60;
  * How much air is left between the blade and the lead monster's near edge.
  * Deliberately not a fraction of the viewport: on a wide screen that put the
  * creature 57 units from a hero whose blade reaches 16, and the frame was
- * judged "a man swinging at nothing".
+ * judged "a man swinging at nothing". Held just past the blade's 19-unit tip
+ * so the lunge closes the last of it -- at 15 the two bodies touched at rest
+ * and the frame collided its fight instead of staging it.
  */
-const BLADE_REACH = 15;
+const BLADE_REACH = 23;
 /** Fraction of the kill spent closing the distance; the rest is the fight. */
 const APPROACH_FRAC = 0.3;
 
@@ -1063,65 +1065,107 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // The hero's column stays clear. A trunk sharing his width and vertical
       // made him half-read as part of the tree.
       if (x + trunkW > heroX - 12 && x < heroX + 12) continue;
-      const fade = 0.58 - depth * 0.4;
+      // Distance sets value and height together. The far rank used to tower
+      // over the near one at nearly its saturation, so thirty trees crossed
+      // the ridgeline as one flat sheet with no depth in it at all.
+      const fade = 0.56 - depth * 0.44;
+      const leafFade = fade * 0.72;
       const bark = mixHex(skin.bark, haze, fade);
+      const barkLit = mixHex(lighten(skin.bark, 0.4), haze, fade);
       const barkDark = mixHex(mixHex(skin.bark, '#000000', 0.4), haze, fade);
-      const leafDark = mixHex(skin.leafDark, haze, fade * 0.9);
-      const leaf = mixHex(skin.leaf, haze, fade * 0.9);
-      const leafLite = mixHex(lighten(skin.leaf, 0.3), haze, fade * 0.9);
-      const crownY = Math.floor(groundY * (0.2 + depth * 0.3));
+      const leafDark = mixHex(skin.leafDark, haze, leafFade);
+      const leaf = mixHex(skin.leaf, haze, leafFade);
+      const leafLite = mixHex(lighten(skin.leaf, 0.34), haze, leafFade);
+      // Near crowns run off the top edge; far ones close well inside it. A
+      // canopy nobody can see is a pole, and the poles were named by name.
+      const crownY = Math.floor(groundY * (0.66 - depth * 0.5));
 
       // Cast shadow. A trunk meeting turf on a clean line reads as a decal.
       ctx.fillStyle = mixHex(skin.turf, '#000000', 0.3);
       ctx.fillRect(x - trunkW, footY - 1, trunkW * 3, 2);
 
-      // Tapered trunk with a root flare and vertical bark streaks. Uniform
-      // grey-mauve columns with dead-straight sides were named outright.
+      // Tapered trunk with a root flare, a sunward lit edge and bark streaks.
+      // Uniform grey-mauve columns with dead-straight sides were named outright.
       for (let y = crownY; y < footY; y++) {
         const f = (y - crownY) / Math.max(1, footY - crownY);
         const flare = f > 0.9 ? Math.round((f - 0.9) * 10 * 2) : 0;
         const w = trunkW + flare;
         ctx.fillStyle = bark;
         ctx.fillRect(x - flare, y, w, 1);
+        ctx.fillStyle = barkLit;
+        ctx.fillRect(x + w - flare - 1, y, 1, 1);
         if (hash01(i * 3.1 + y * 0.37) > 0.62) {
           ctx.fillStyle = barkDark;
           ctx.fillRect(x + 1 + Math.floor(hash01(y * 1.7 + i) * Math.max(1, w - 2)), y, 1, 1);
         }
       }
 
-      // Canopy as broken clumps, not centred slabs. Each row is one to three
-      // sub-rects at hashed offsets so the silhouette notches instead of
-      // stepping in clean 90-degree corners.
+      // One short bough into the crown it holds up. Long thin limbs across
+      // open sky read as cabling, so this stays inside the foliage.
+      const boughSide = hash01(i * 8.3) > 0.5 ? 1 : -1;
+      const boughLen = trunkW + 2;
+      ctx.fillStyle = barkDark;
+      for (let n = 0; n < boughLen; n++) {
+        const bx = boughSide > 0 ? x + trunkW + n : x - 1 - n;
+        ctx.fillRect(bx, crownY + 4 - Math.round(n * 0.8), 2, 2);
+      }
+
+      // A crown with a profile, not a stack of slabs. Width follows a lobed
+      // sine up the mass and every row is notched, so the silhouette breaks
+      // instead of stepping in clean 90-degree corners.
       const cx = x + Math.floor(trunkW / 2);
-      const cw = trunkW * 3 + 10;
-      for (let k = 0; k < 8; k++) {
-        const y = crownY - k * 6;
-        if (y + 7 < 0) break;
-        const rowW = Math.max(5, Math.floor(cw * (1 - k * 0.06)));
-        const lobes = 1 + Math.floor(hash01(i * 4.3 + k * 2.9) * 3);
-        for (let n = 0; n < lobes; n++) {
-          const t = lobes === 1 ? 0.5 : n / (lobes - 1);
-          const lw = Math.max(4, Math.floor(rowW * (0.42 + hash01(i * 7.7 + k + n) * 0.5)));
-          const lx = Math.round(cx - rowW / 2 + t * (rowW - lw) + (hash01(i + k * 5.1 + n) - 0.5) * 5);
-          ctx.fillStyle = k === 0 ? leafDark : k > 5 ? leafLite : leaf;
-          ctx.fillRect(lx, y - 7, lw, 8);
-          // Shadowed underside on the lowest clump of each lobe.
-          if (k < 2) {
-            ctx.fillStyle = leafDark;
-            ctx.fillRect(lx, y, lw, 1);
-          }
+      const crownW = trunkW * 4 + 14;
+      const crownH = Math.round(crownW * 0.95);
+      for (let k = 0; k < crownH; k++) {
+        const y = crownY - k;
+        if (y < -4) break;
+        const t = k / crownH;
+        const prof = Math.sin(Math.PI * (0.16 + t * 0.8));
+        const notch = Math.round((hash01(i * 9.4 + k * 1.7) - 0.5) * 4);
+        const half = Math.max(1, Math.round((crownW / 2) * prof) + notch);
+        const lx = cx - half;
+        const w = half * 2;
+        ctx.fillStyle = leaf;
+        ctx.fillRect(lx, y, w, 1);
+        // Sun is upper right: the lit face is the far side of the upper mass,
+        // and the underside of the crown carries the whole shadow.
+        if (t > 0.35) {
+          ctx.fillStyle = leafLite;
+          ctx.fillRect(lx + Math.round(w * 0.58), y, Math.max(1, Math.round(w * 0.42)), 1);
+        }
+        if (t < 0.22 || hash01(i * 3.7 + k * 5.3) > 0.86) {
+          ctx.fillStyle = leafDark;
+          ctx.fillRect(lx, y, Math.max(1, Math.round(w * 0.34)), 1);
         }
       }
     }
   }
 
+  /**
+   * The strip the fight is staged in, from the hero's back foot to the far
+   * edge of the creature he is swinging at. Nothing on the ground plane may
+   * stand in it: a pine between the two bodies is exactly the clutter that
+   * made the frame read as a collision rather than a duel.
+   */
+  function fightBand(): { x0: number; x1: number } {
+    const lead = queue[0];
+    const sprite = lead ? skinnedFor(model.region).monsters[lead.shape] : undefined;
+    const w = sprite ? sprite.width : 20;
+    const cx = lead ? lead.x + lead.spread : heroX + BLADE_REACH;
+    return { x0: heroX - 12, x1: cx + w / 2 + 6 };
+  }
+
   function drawTreeline(sprites: SkinnedSprites): void {
     const y = groundY + 1;
+    const band = fightBand();
     for (const prop of props) {
       if (prop.kind !== 'tree') continue;
       const x = Math.floor(wrap(prop.at - scrollTrees, PROP_SPAN));
       if (x < -24 || x > vw + 24) continue;
-      drawSprite(ctx, sprites.trees[prop.variant] ?? sprites.trees[0]!, x, y);
+      const sprite = sprites.trees[prop.variant] ?? sprites.trees[0]!;
+      const half = sprite.width / 2;
+      if (x + half > band.x0 && x - half < band.x1) continue;
+      drawSprite(ctx, sprite, x, y);
     }
   }
 
@@ -1228,10 +1272,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function drawProps(sprites: SkinnedSprites): void {
+    const band = fightBand();
     for (const prop of props) {
       if (prop.kind === 'tree') continue;
       const x = Math.floor(wrap(prop.at - scrollGround, PROP_SPAN));
       if (x < -30 || x > vw + 30) continue;
+      // Grass and flowers are ground texture; a boulder is a third silhouette.
+      if (prop.kind === 'rock' && x > band.x0 - 8 && x < band.x1 + 8) continue;
       switch (prop.kind) {
         case 'rock':
           drawShadow(x, sprites.rock.width);
