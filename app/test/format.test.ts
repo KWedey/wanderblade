@@ -148,3 +148,28 @@ describe('region naming', () => {
     }
   });
 });
+
+// An arc catch pays 15% of one kill, which at realm 0 is a fraction of a gold.
+// Flooring that to "0" is what made catching a coin look like it paid nothing.
+describe('formatNumber keeps small payouts visible', () => {
+  it('never prints a positive value as zero', () => {
+    for (const n of [0.001, 0.015, 0.15, 0.3, 0.9, 2.6, 9.94]) {
+      expect(formatNumber(n), `${n}`).not.toBe('0');
+      expect(parseFloat(formatNumber(n)), `${n}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('keeps two significant digits under 10 without a trailing zero', () => {
+    expect(formatNumber(0.15)).toBe('0.15');
+    expect(formatNumber(2.6)).toBe('2.6');
+    expect(formatNumber(1)).toBe('1');
+    expect(formatNumber(9.94)).toBe('9.9');
+  });
+
+  it('leaves the integer and suffix ranges alone', () => {
+    expect(formatNumber(0)).toBe('0');
+    expect(formatNumber(34)).toBe('34');
+    expect(formatNumber(999)).toBe('999');
+    expect(formatNumber(1234)).toBe('1.23K');
+  });
+});

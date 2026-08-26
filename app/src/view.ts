@@ -91,6 +91,8 @@ export interface ViewHandlers {
   onAbandonBoss: () => void;
   onCollectRecap: () => void;
   onReset: () => void;
+  /** Returns the new muted state, so the button can label itself. */
+  onToggleMute: () => boolean;
   onTimeWarp: (seconds: number) => void;
 }
 
@@ -235,6 +237,7 @@ function template(): string {
     <div class="debug-actions">
       <button class="debug-btn" type="button" data-role="warp-1h">Time-warp +1h</button>
       <button class="debug-btn" type="button" data-role="warp-8h">Time-warp +8h</button>
+      <button class="debug-btn" type="button" data-role="mute" aria-pressed="false">Sound: on</button>
       <button class="debug-btn danger" type="button" data-role="reset">Reset save</button>
     </div>
   </div>
@@ -375,6 +378,13 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   q(root, '[data-role="warp-1h"]').addEventListener('click', () => handlers.onTimeWarp(3600));
   q(root, '[data-role="warp-8h"]').addEventListener('click', () => handlers.onTimeWarp(8 * 3600));
   q(root, '[data-role="reset"]').addEventListener('click', handlers.onReset);
+  const muteBtn = q(root, '[data-role="mute"]');
+  muteBtn.addEventListener('click', () => {
+    const muted = handlers.onToggleMute();
+    muteBtn.textContent = muted ? 'Sound: off' : 'Sound: on';
+    muteBtn.setAttribute('aria-pressed', String(muted));
+    repaintPixelText(muteBtn.parentElement ?? muteBtn);
+  });
 
   // Loot streaks home on the gold readout, so the scene needs its live position.
   const hudGoldEl = q(root, '[data-role="hud-gold"]');

@@ -29,9 +29,20 @@ export function suffixFor(tier: number): string | null {
  * suffix table fall back to exponential ("1.23e45"). Small values are floored so
  * counters read as clean integers ("+12 gold", not "+12.3 gold").
  */
+/** Drops a trailing decimal point and any zeros behind it. */
+function trimZeros(s: string): string {
+  return s.includes('.') ? s.replace(/\.?0+$/, '') : s;
+}
+
 export function formatNumber(n: number): string {
   if (!Number.isFinite(n)) return '∞';
   if (n < 0) return '-' + formatNumber(-n);
+  // Two significant digits under 10, so a real payout never prints as "0".
+  // An arc catch pays 15% of a kill, which at realm 0 is a fraction of a gold.
+  if (n > 0 && n < 10) {
+    const digits = Math.max(0, 1 - Math.floor(Math.log10(n)));
+    return trimZeros(n.toFixed(Math.min(6, digits)));
+  }
   if (n < 1000) return Math.floor(n).toString();
 
   const tier = Math.floor(Math.log10(n) / 3);

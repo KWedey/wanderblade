@@ -20,6 +20,10 @@ const handlers: ViewHandlers = {
   onAbandonBoss: () => game.abandonBoss(),
   onCollectRecap: () => game.collectRecap(),
   onReset: () => game.reset(),
+  onToggleMute: () => {
+    game.setMuted(!game.isMuted());
+    return game.isMuted();
+  },
   onTimeWarp: (seconds) => game.timeWarp(seconds),
 };
 

@@ -28,6 +28,7 @@ import {
   type Strike,
 } from '@wanderblade/core';
 import { stageFromQuery } from './devstage';
+import { createFeel, type Cue } from './feel';
 import { killProgress, smoothStep, zoneSweep } from './anim';
 import { bossName, describeEvent, gearName, regionName, type LogEntry } from './flavor';
 import { formatDuration } from './format';
@@ -80,6 +81,9 @@ export class Game {
   private bossResultUntilMs = 0;
   private refusal: string | null = null;
   private refusalUntilMs = 0;
+  private readonly feel = createFeel();
+  /** Scene sim is frozen until this instant — the hit-stop that gives a hit weight. */
+  private hitStopUntilMs = 0;
 /** Strikes made since the last engine advance, stamped on the engine clock. */
   private readonly pendingStrikes: Strike[] = [];
 
@@ -233,7 +237,7 @@ export class Game {
       momentumMult: momentumMultiplier(momentum),
       arcs: this.state.arcs,
       timeSec: this.state.timeSec + this.sinceTickSec(),
-      paused: this.view.isRecapOpen(),
+      paused: this.view.isRecapOpen() || performance.now() < this.hitStopUntilMs,
       reduceMotion: this.reduceMotion.matches,
     };
   }
@@ -263,6 +267,7 @@ export class Game {
    * share a wall clock, so each is nudged past the one before it.
    */
   strike(aim: ArcPoint | null): void {
+    this.cue('strike');
     const sinceTickSec = Math.min(
       (performance.now() - this.lastTickMs) / 1000,
       MAX_EXTRAPOLATE_SEC,
@@ -383,14 +388,37 @@ export class Game {
 
   private ingestEvents(events: GameEvent[]): void {
     const lines: LogEntry[] = [];
+    let kills = 0;
     for (const e of events) {
-      if (e.type === 'bossVictory') this.setBossResult('win');
-      else if (e.type === 'abandon') this.setBossResult('fail');
-      else if (e.type === 'arcCatch') this.view.catchArc(e.bonusGold, e.upgraded);
+      if (e.type === 'bossVictory') {
+        this.setBossResult('win');
+        this.cue('victory');
+      } else if (e.type === 'abandon') this.setBossResult('fail');
+      else if (e.type === 'arcCatch') {
+        this.view.catchArc(e.bonusGold, e.upgraded);
+        this.cue('catch');
+      } else if (e.type === 'kill') kills++;
       const line = describeEvent(e);
       if (line) lines.push(line);
     }
+    // One cue for the whole batch: an offline return resolves thousands.
+    if (kills > 0) this.cue('kill');
     this.view.pushLog(lines);
+  }
+
+  /** Sound, haptics and hit-stop for one beat of feedback. */
+  private cue(cue: Cue): void {
+    this.feel.play(cue);
+    const stop = this.feel.hitStopSec(cue);
+    if (stop > 0) this.hitStopUntilMs = performance.now() + stop * 1000;
+  }
+
+  setMuted(muted: boolean): void {
+    this.feel.setMuted(muted);
+  }
+
+  isMuted(): boolean {
+    return this.feel.muted();
   }
 
   private setBossResult(result: 'win' | 'fail'): void {
