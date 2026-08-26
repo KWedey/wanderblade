@@ -76,6 +76,8 @@ export interface ViewModel {
   goldPerSec: number;
   /** Goal-gradient chips: the nearest road waypoint and the cheapest power buy. */
   marchGoal: string;
+  /** 0..1 along the leg the march goal names, for the chip's fill. */
+  marchProgress: number;
   purchaseGoal: string;
   purchaseReady: boolean;
   skills: SkillVM[];
@@ -174,7 +176,10 @@ function template(): string {
 
   <div class="screen">
     <section class="goal-strip">
-      <span class="goal-chip" data-role="goal-march"></span>
+      <span class="goal-chip goal-chip--meter" data-role="goal-march">
+        <i class="goal-fill" data-role="goal-fill" aria-hidden="true"></i>
+        <span class="goal-text" data-role="goal-march-text"></span>
+      </span>
       <span class="goal-chip" data-role="goal-purchase"></span>
     </section>
 
@@ -285,6 +290,8 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const goldRateEl = q(root, '[data-role="gold-rate"]');
   const dpsEl = q(root, '[data-role="dps"]');
   const goalMarchEl = q(root, '[data-role="goal-march"]');
+  const goalMarchTextEl = q(root, '[data-role="goal-march-text"]');
+  const goalFillEl = q(root, '[data-role="goal-fill"]');
   const goalPurchaseEl = q(root, '[data-role="goal-purchase"]');
 
   const portalPanelEl = q(root, '[data-role="portal-panel"]');
@@ -493,7 +500,10 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     lastDps = vm.dps;
 
     goldRateEl.textContent = formatRate(vm.goldPerSec);
-    goalMarchEl.textContent = vm.marchGoal;
+    goalMarchTextEl.textContent = vm.marchGoal;
+    goalFillEl.style.width = `${(vm.marchProgress * 100).toFixed(1)}%`;
+    // The bar is decoration; the chip carries the reading for a screen reader.
+    goalMarchEl.setAttribute('aria-label', `${vm.marchGoal}, ${formatPercent(vm.marchProgress)}`);
     goalPurchaseEl.textContent = vm.purchaseGoal;
     goalPurchaseEl.classList.toggle('ready', vm.purchaseReady);
 

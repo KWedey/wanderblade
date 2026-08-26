@@ -1466,8 +1466,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const COMBO_GAP = 1;
   const COMBO_METER_W = COMBO_SEGS * (COMBO_SEG_W + COMBO_GAP) - COMBO_GAP;
 
+  /**
+   * Seconds the widget spells out what it is, the first time a combo appears
+   * in a session. A permanent word costs width on every frame forever to teach
+   * something once; this costs it twice, then collapses.
+   */
+  const COMBO_TEACH_SEC = 2;
+  let comboTeachUntilSec = -1;
+
   function comboLabel(): string {
-    return `\u00d7${model.momentumMult.toFixed(1)}`;
+    const value = `\u00d7${model.momentumMult.toFixed(1)}`;
+    if (comboTeachUntilSec < 0 && model.momentum > 0.02) {
+      comboTeachUntilSec = clockSec + COMBO_TEACH_SEC;
+    }
+    return clockSec < comboTeachUntilSec ? `COMBO ${value}` : value;
   }
 
   /**

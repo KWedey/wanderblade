@@ -6,6 +6,8 @@ import { REALM_SKIN_COUNT } from '../src/scene/palette';
 
 import { describe, expect, it } from 'vitest';
 import {
+  clamp01,
+  NO_TIME,
   formatDuration,
   NO_ESTIMATE,
   formatGold,
@@ -191,5 +193,34 @@ describe('formatNumber rounding never widens the mantissa', () => {
         expect(digits.length, `${m}e${e} -> ${out}`).toBeLessThanOrEqual(3);
       }
     }
+  });
+});
+
+describe('a duration under a second says so in words', () => {
+  // "Estimated 0s" against a guardian reads as a broken readout, not as a
+  // fight that is already over. Same treatment as NO_ESTIMATE.
+  it('never prints 0s', () => {
+    for (const t of [0, 0.001, 0.4, 0.999]) expect(formatDuration(t), `${t}`).toBe(NO_TIME);
+    expect(formatDuration(1)).toBe('1s');
+  });
+
+  it('leaves every duration of a second or more alone', () => {
+    expect(formatDuration(45)).toBe('45s');
+    expect(formatDuration(130)).toBe('2m 10s');
+    expect(formatDuration(7400)).toBe('2h 3m');
+    expect(formatDuration(90000)).toBe('1d 1h');
+  });
+});
+
+describe('clamp01 keeps a meter inside its own track', () => {
+  it('clamps both ends and passes the middle through', () => {
+    expect(clamp01(-1)).toBe(0);
+    expect(clamp01(0.42)).toBe(0.42);
+    expect(clamp01(2)).toBe(1);
+  });
+
+  it('answers a non-finite ratio with an empty meter, not a NaN width', () => {
+    expect(clamp01(NaN)).toBe(0);
+    expect(clamp01(Infinity)).toBe(0);
   });
 });

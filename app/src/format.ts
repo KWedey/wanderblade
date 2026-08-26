@@ -105,6 +105,12 @@ export function formatRate(perSec: number): string {
   return `+${body}/s`;
 }
 
+/** Clamps a ratio into 0..1, so a meter can never overdraw its own track. */
+export function clamp01(ratio: number): number {
+  if (!Number.isFinite(ratio)) return 0;
+  return Math.min(1, Math.max(0, ratio));
+}
+
 /** Whole-number percent for meters/readouts: 0.78 → "78%". */
 export function formatPercent(ratio: number): string {
   if (!Number.isFinite(ratio)) return '∞';
@@ -122,8 +128,15 @@ export function formatPercent(ratio: number): string {
  */
 export const NO_ESTIMATE = 'beyond reckoning';
 
+/**
+ * Shown for anything under a second. "0s" against a guardian reads as a broken
+ * readout rather than as a fight that is already over.
+ */
+export const NO_TIME = 'moments';
+
 export function formatDuration(totalSec: number): string {
   if (!Number.isFinite(totalSec)) return NO_ESTIMATE;
+  if (totalSec < 1) return NO_TIME;
   const s = Math.max(0, Math.floor(totalSec));
   if (s < 60) return `${s}s`;
 

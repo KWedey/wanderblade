@@ -31,7 +31,7 @@ import { stageFromQuery } from './devstage';
 import { createFeel, type Cue } from './feel';
 import { killProgress, smoothStep, zoneSweep } from './anim';
 import { bossName, describeEvent, gearName, regionName, type LogEntry } from './flavor';
-import { formatDuration } from './format';
+import { clamp01, formatDuration } from './format';
 import { clearSave, readSave, writeSave } from './save';
 import type { SceneModel } from './scene/scene';
 import type { BossVM, GearVM, PortalVM, SkillVM, View, ViewModel } from './view';
@@ -507,18 +507,23 @@ export class Game {
     // reflect a purchase immediately instead of lagging one kill behind.
     const goldPerSec = this.goldPerKill / killTime(s, momentum);
 
-    // Goal gradient: the nearest waypoint on the road…
+    // Goal gradient (DECISIONS.md #12): how far along, and how long from here.
+    // A raw remaining-kill count is the opposite of a gradient - 946 of them
+    // only ever ticks down, and reads as a wall rather than as progress.
     let marchGoal: string;
+    let marchProgress: number;
     if (boss) {
       marchGoal = `${guardian} stands before you`;
+      marchProgress = 1 - clamp01(s.boss.hpRemaining / Math.max(1, s.boss.hpMax));
     } else if (portal) {
       marchGoal = `${guardian} awaits`;
+      marchProgress = 1;
     } else {
       const killsLeft = killsPerZone - s.killsInZone;
       const lastZone = s.zone >= zonesPerRealm - 1;
-      marchGoal = `${killsLeft} kill${killsLeft === 1 ? '' : 's'} to ${
-        lastZone ? 'the portal' : `Zone ${s.zone + 2}`
-      }`;
+      const where = lastZone ? 'the Portal' : `Zone ${s.zone + 2}`;
+      marchProgress = clamp01(s.killsInZone / killsPerZone);
+      marchGoal = `${where} in ~${formatDuration(killsLeft * killTime(s, momentum))}`;
     }
 
     // …and the cheapest buyable power bump, with a live ETA.
@@ -549,6 +554,7 @@ export class Game {
       canAffordLevel: s.gold >= heroLevelCost,
       goldPerSec,
       marchGoal,
+      marchProgress,
       purchaseGoal,
       purchaseReady,
       skills,

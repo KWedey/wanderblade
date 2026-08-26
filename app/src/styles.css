@@ -435,6 +435,32 @@ body {
   line-height: 1.15;
 }
 
+/* The march chip is its own progress track: the leg fills behind the reading
+   rather than counting a remainder down beside it. */
+.goal-chip--meter {
+  position: relative;
+  overflow: hidden;
+}
+
+.goal-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--gold);
+  opacity: 0.28;
+  transition: width 220ms steps(12);
+}
+
+.goal-text {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-fill {
+    transition: none;
+  }
+}
+
 .goal-chip.ready {
   background: #6abe30;
   border-color: #99e550;

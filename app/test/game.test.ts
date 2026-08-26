@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Strike } from '@wanderblade/core';
-import type { View } from '../src/view';
+import type { View, ViewModel } from '../src/view';
 
 // Game reads two browser globals at construction (`window.matchMedia`) and one
 // clock (`performance.now`). Both are stubbed here so the controller can be
@@ -80,5 +80,69 @@ describe('queued strikes satisfy what advance() requires of them', () => {
     game.timeWarp(600);
     expect(inner.state.timeSec).toBe(600);
     expect(inner.pendingStrikes).toEqual([]);
+  });
+});
+
+describe('the march goal is a gradient, not a countdown', () => {
+  interface GoalInternals {
+    tick: () => void;
+    state: { killsInZone: number };
+  }
+
+  /** Latest view model the controller painted, or a thrown error if it painted none. */
+  function capture(): { view: View; latest: () => ViewModel } {
+    let vm: ViewModel | null = null;
+    const view: View = {
+      ...stubView,
+      renderPanels: (next: ViewModel) => {
+        vm = next;
+      },
+    };
+    return {
+      view,
+      latest: () => {
+        if (vm === null) throw new Error('no view model was rendered');
+        return vm;
+      },
+    };
+  }
+
+  function runToVM(advanceMs: number): ViewModel {
+    const { view, latest } = capture();
+    const inner = new Game(view) as unknown as GoalInternals;
+    nowMs += advanceMs;
+    inner.tick();
+    return latest();
+  }
+
+  beforeEach(() => {
+    nowMs = 1000;
+  });
+
+  // "946 kills to Zone 4" is arithmetically honest and reads as a wall: it is
+  // a remainder, and a remainder only ever ticks down.
+  it('names where and when, never how many kills are left', () => {
+    const goal = runToVM(1000).marchGoal;
+    expect(goal).toMatch(/^(Zone \d+|the Portal) in ~/);
+    expect(goal).not.toMatch(/kills? to/);
+  });
+
+  it('reports a fraction of the leg travelled, inside its own track', () => {
+    const progress = runToVM(1000).marchProgress;
+    expect(progress).toBeGreaterThanOrEqual(0);
+    expect(progress).toBeLessThanOrEqual(1);
+  });
+
+  it('fills as the zone is walked rather than emptying', () => {
+    const { view, latest } = capture();
+    const inner = new Game(view) as unknown as GoalInternals;
+    const seen: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      nowMs += 4000;
+      inner.tick();
+      seen.push(latest().marchProgress);
+    }
+    expect(seen[seen.length - 1]!).toBeGreaterThan(seen[0]!);
+    for (let i = 1; i < seen.length; i++) expect(seen[i]!).toBeGreaterThanOrEqual(seen[i - 1]!);
   });
 });
