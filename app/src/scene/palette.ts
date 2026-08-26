@@ -758,11 +758,19 @@ export interface FoliageLobe {
   depth: number;
 }
 
+/** Whether a row falls within a `{from, len}` run — bark streaks and foliage lobes both reduce to this test. */
+export function inRun(row: number, from: number, len: number): boolean {
+  return row >= from && row < from + len;
+}
+
+/** A lobe's total swing stays bounded even where several lobes overlap the same row. */
+const MAX_FOLIAGE_NOTCH = 8;
+
 /**
- * A pine crown's silhouette offset at one row, summed from lobes that hold a
- * start row and a run rather than a fresh value every row. A per-row
- * independent roll jumped the edge up to 7px between adjacent rows and read
- * as dithering; a lobe tapers to zero at both ends of its own run instead.
+ * A pine crown's silhouette offset at one row, summed from lobes that each
+ * hold a start row and a run and taper linearly to zero at both ends of it.
+ * The sum is clamped: several lobes stacking on the same row must not swing
+ * the edge further than the taper shape itself is meant to allow.
  */
 export function foliageNotchAt(row: number, lobes: readonly FoliageLobe[]): number {
   let notch = 0;
@@ -773,16 +781,12 @@ export function foliageNotchAt(row: number, lobes: readonly FoliageLobe[]): numb
     const mid = (lobe.len - 1) / 2;
     notch += lobe.depth * (1 - Math.abs(into - mid) / mid);
   }
-  return notch;
+  return Math.max(-MAX_FOLIAGE_NOTCH, Math.min(MAX_FOLIAGE_NOTCH, notch));
 }
 
-/**
- * Whether a row falls inside any shade lobe's run. Same idiom as
- * `foliageNotchAt`: a contiguous patch instead of an independent per-row
- * dice roll, which read as fleck noise rather than a shadow mass.
- */
+/** Whether a row falls inside any lobe's run — same run test as `inRun`, for a list of lobes. */
 export function inFoliageLobe(row: number, lobes: readonly Pick<FoliageLobe, 'from' | 'len'>[]): boolean {
-  return lobes.some((lobe) => row >= lobe.from && row < lobe.from + lobe.len);
+  return lobes.some((lobe) => inRun(row, lobe.from, lobe.len));
 }
 
 export interface GrassBlade {
@@ -791,10 +795,10 @@ export interface GrassBlade {
 }
 
 /**
- * A tuft's neighbours within its own clump, so one stamped sprite overlaps
- * the next instead of standing alone in a gap of bare turf. Takes three
- * already-rolled [0,1) values rather than a seed, keeping the hash itself
- * (and its determinism guarantee) owned by the caller.
+ * A tuft's neighbours within its own clump, each offset to overlap the
+ * stamped sprite so the group reads as one patch. Takes three already-rolled
+ * [0,1) values rather than a seed, keeping the hash itself (and its
+ * determinism guarantee) owned by the caller.
  */
 export function grassClumpBlades(r1: number, r2: number, r3: number): GrassBlade[] {
   const blades: GrassBlade[] = [

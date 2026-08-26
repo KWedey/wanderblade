@@ -43,6 +43,7 @@ import {
   grassClumpBlades,
   groundBladeOf,
   inFoliageLobe,
+  inRun,
   lighten,
   mixHex,
   glowRingRadii,
@@ -319,6 +320,14 @@ interface Prop {
 function hash01(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
+}
+
+/** A `{from, len}` run over `[0, span)`, sized as a fraction of `span` between `lenBase` and `lenBase + lenRange`. */
+function lobeRun(seed: number, span: number, minLen: number, lenBase: number, lenRange: number, lenOffset: number) {
+  return {
+    from: Math.floor(hash01(seed) * span),
+    len: Math.max(minLen, Math.round(span * (lenBase + hash01(seed + lenOffset) * lenRange))),
+  };
 }
 
 const PROP_SPAN = 1400;
@@ -1237,8 +1246,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         ctx.fillRect(x + w - flare - 1, y, 1, 1);
         ctx.fillStyle = barkDark;
         for (const st of streaks) {
-          const into = y - crownY - st.from;
-          if (into >= 0 && into < st.len) ctx.fillRect(x + st.dx, y, 1, 1);
+          if (inRun(y - crownY, st.from, st.len)) ctx.fillRect(x + st.dx, y, 1, 1);
         }
       }
 
@@ -1260,25 +1268,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const cx = x + Math.floor(trunkW / 2);
       const crownW = trunkW * 4 + 14;
       const crownH = Math.round(crownW * 0.95);
-      // Needle clumps: each lobe holds a start row and a run, the same fix as
-      // the bark streaks above. A fresh notch every row read as static.
+      // Needle clumps: 4 silhouette lobes.
       const crownLobes: FoliageLobe[] = [0, 1, 2, 3].map((li) => {
         const seed = i * 9.4 + li * 3.7;
-        return {
-          from: Math.floor(hash01(seed) * crownH),
-          len: Math.max(3, Math.round(crownH * (0.18 + hash01(seed + 1.3) * 0.2))),
-          depth: (hash01(seed + 2.6) - 0.5) * 8,
-        };
+        return { ...lobeRun(seed, crownH, 3, 0.18, 0.2, 1.3), depth: (hash01(seed + 2.6) - 0.5) * 8 };
       });
-      // Shadow patches, same fix: a per-row 14% dice roll for the dark fleck
-      // read as speckle. Two runs per tree read as bough shadow instead.
-      const shadeLobes = [0, 1].map((li) => {
-        const seed = i * 6.1 + li * 4.9;
-        return {
-          from: Math.floor(hash01(seed) * crownH),
-          len: Math.max(2, Math.round(crownH * (0.1 + hash01(seed + 1.1) * 0.12))),
-        };
-      });
+      // Shadow patches: two runs per tree read as bough shadow.
+      const shadeLobes = [0, 1].map((li) => lobeRun(i * 6.1 + li * 4.9, crownH, 2, 0.1, 0.12, 1.1));
       for (let k = 0; k < crownH; k++) {
         const y = crownY - k;
         if (y < -4) break;
@@ -1455,8 +1451,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           drawSprite(ctx, sprites.rock, x, groundY + 1);
           break;
         case 'tuft': {
-          // A lone stamped sprite in bare turf reads as pasted-on; a small
-          // clump with its own y jitter reads as a patch of ground cover.
+          // A small clump, with its own y jitter, reads as a patch of cover.
           const jitter = Math.floor(hash01(prop.at * 3.3 + 50) * 3);
           const blades = grassClumpBlades(
             hash01(prop.at * 1.9 + 5),

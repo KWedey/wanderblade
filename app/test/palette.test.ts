@@ -12,6 +12,7 @@ import {
   grassClumpBlades,
   groundBladeOf,
   inFoliageLobe,
+  inRun,
   lightnessOf,
   glowRingRadii,
   momentumLift,
@@ -163,6 +164,12 @@ describe('a pine crown carries its silhouette as lobes, not a per-row roll', () 
     expect(foliageNotchAt(5, [a, b])).toBeCloseTo(5);
   });
 
+  it('clamps the total when several lobes stack on the same row', () => {
+    const lobes = [0, 1, 2, 3].map(() => ({ from: 5, len: 11, depth: 4 }));
+    expect(foliageNotchAt(10, lobes)).toBe(8);
+    expect(foliageNotchAt(10, lobes.map((l) => ({ ...l, depth: -4 })))).toBe(-8);
+  });
+
   it('never jumps between adjacent rows the way an independent roll did', () => {
     // Four lobes across a 50-row crown, the shape drawGrove actually builds.
     const lobes = [0, 1, 2, 3].map((li) => ({
@@ -177,8 +184,16 @@ describe('a pine crown carries its silhouette as lobes, not a per-row roll', () 
       maxDelta = Math.max(maxDelta, Math.abs(cur - prev));
       prev = cur;
     }
-    // The old per-row roll could swing (hash01 - 0.5) * 7, a 7px jump.
     expect(maxDelta).toBeLessThan(3.5);
+  });
+});
+
+describe('inRun', () => {
+  it('is true only inside a run, false right at and past its end', () => {
+    expect(inRun(3, 4, 3)).toBe(false);
+    expect(inRun(4, 4, 3)).toBe(true);
+    expect(inRun(6, 4, 3)).toBe(true);
+    expect(inRun(7, 4, 3)).toBe(false);
   });
 });
 
