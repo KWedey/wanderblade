@@ -96,6 +96,35 @@ export interface SpendDepth {
   longestStarvedSec: number;
 }
 
+/** What active play buys in permanent currency, against the same span idle. */
+export interface PermanentUplift {
+  horizonSec: number;
+  idleEarned: number;
+  activeEarned: number;
+  /** Active Ascendancy earned over idle. */
+  ratio: number;
+  idleFirstAscensionSec: number | null;
+  activeFirstAscensionSec: number | null;
+  /** Tree depth both runs are compared at. */
+  rankTarget: number;
+  idleRankSec: number | null;
+  activeRankSec: number | null;
+}
+
+/** Time spent on a realm whose portal is open but not yet entered. */
+export interface DeadTime {
+  /** Longest single portal-ready wait, in seconds. */
+  longestSec: number;
+  /** Realm holding it. */
+  worstRealm: number;
+  /** Share of total Road time spent portal-ready and waiting. */
+  fraction: number;
+  /** Slowest realm, in days from its start to its victory. */
+  slowestRealmDays: number;
+  slowestRealm: number;
+  realms: number;
+}
+
 /** A single PASS/FAIL result. */
 export interface ValidatorResult {
   id: string;
@@ -143,6 +172,10 @@ export interface SeedResult {
   } | null;
   /** How much the upgrade panel offered across the run. */
   spendDepth: SpendDepth;
+  /** Time parked on an open portal, and how far realm cadence degraded. */
+  deadTime: DeadTime;
+  /** What active play bought in permanent currency. */
+  permanentUplift: PermanentUplift | null;
   totalKills: number;
   finalRealm: number;
   victories: number;

@@ -104,6 +104,8 @@ Required correctness validators:
 - Persistent earnings bonuses affect the documented income paths and never DPS.
 - The four player policies meet the approved pacing bands across multiple seeds and multi-realm runs.
 - The upgrade panel offers at least five priced rows at every look and four affordable at 95% of them (**P8**), so "the number and value of decisions within a 15–30 minute active session" is a measured quantity rather than an intention. Measured on the minimum for priced rows, which gold cannot move, and at 95% for affordable ones, because the greedy purchase policy empties the wallet the instant it can (`docs/DECISIONS.md` #26).
+- The portal never sits open on a finished Road for longer than 24 hours, no realm takes longer than 3 days, and the share of Road time spent waiting rather than progressing is reported (**P9**). This is what catches a guardian curve the Road cannot reach: before `docs/DECISIONS.md` #32 the bot farmed a cleared realm for 14.7 hours — 56% of its Road time — because the guardian was ~34× beyond the build the Road delivered.
+- Active play earns 1.8–2.4× the lifetime Ascendancy of an idle player over 30 days and reaches its first ascension at least 1.25× sooner (**P10**). The band is in the currency that survives an ascension; the ceiling protects idle-only play (VISION pillar 4) as much as the floor protects active play (`docs/DECISIONS.md` #31).
 
 ## Determinism and numerical safety
 
@@ -127,7 +129,7 @@ These are the shipped values, each carrying a passing sim run (`docs/DECISIONS.m
 | Hero level cost | `10 · 1.15^level · realmScale` |
 | Skill rank cost | `50 · 1.15^rank · realmScale` |
 | Skill value | `skillRankMult(rank) = 1 + SKILL_MAX_BONUS · (1 − SKILL_RANK_DECAY^rank)`, 0.176 / 0.85 — **uncapped rank, bounded value** |
-| Guardian HP | `bossHpMult · enemyHp(realm, 49) · BOSS_REALM_GAIN^realm`, 30000 / 1.22 |
+| Guardian HP | `bossHpMult · enemyHp(realm, 49) · BOSS_REALM_GAIN^realm`, 5600 / 1.19 |
 | Ascendancy node cost | `costBase · (1 + ASC_COST_STEP · rank)`, `ASC_COST_STEP` = 0.5 — **linear, uncapped** |
 | Ascendancy damage / gear effect | `(1 + perRank)^rank`, perRank 0.037 — compounding, unbounded |
 | Ascendancy speed effect | `1 + ASC_SPEED_MAX_BONUS · (1 − ASC_SPEED_DECAY^rank)`, 0.6 / 0.9 — **bounded** |
@@ -140,7 +142,7 @@ Two of those shapes are load-bearing rather than tuning, and `docs/DECISIONS.md`
 
 ### Numerical frontier
 
-Every client-facing scalar is finite and exact at realm 199. Finiteness ends at **realm 297**, where `bossHp` overflows and no build can fell a guardian, and the hero level ladder tops out at 2102 at realm 199 and 659 at realm 296. `packages/core/test/magnitude.test.ts` pins all three so a constant change cannot quietly move them.
+Every client-facing scalar is finite and exact at realm 199. Finiteness ends at **realm 301**, where `bossHp` overflows and no build can fell a guardian, and the hero level ladder tops out at 2102 at realm 199 and 659 at realm 296. `packages/core/test/magnitude.test.ts` pins all three so a constant change cannot quietly move them.
 
 ## Implemented legacy baseline (historical reference)
 

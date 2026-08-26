@@ -51,6 +51,7 @@ export {
   ASC_SPEED_DECAY,
   ASC_PER_ZONE,
   ASC_BOSS_PAYOUT,
+  ASC_CATCHES_PER_ZONE,
   ASC_REALM_GROWTH,
   EARNINGS_BONUS_PER_VICTORY,
   ASC_NODES,
@@ -119,6 +120,7 @@ export {
   damagePerSwing,
   bossEtaSec,
   ascendancyPerZone,
+  ascendancyPerCatch,
   ascendancyBossPayout,
 } from './formulas';
 export type { AscNodeEffect } from './formulas';

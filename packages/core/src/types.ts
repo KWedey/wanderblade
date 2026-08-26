@@ -204,6 +204,8 @@ export type GameEvent =
       type: 'arcCatch';
       timeSec: number;
       bonusGold: number;
+      /** Pending Ascendancy paid by the catch; 0 once the realm is portal-ready. */
+      ascendancy: number;
       /** Whether the caught arc carried gear that gained a rarity tier. */
       upgraded: boolean;
     }

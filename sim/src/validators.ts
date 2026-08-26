@@ -3,6 +3,14 @@
 // bands in docs/ACTIVE-PLAY.md. Both are pure functions of a SeedResult.
 
 import {
+  BOSS_MAX_SEC,
+  BOSS_MIN_SEC,
+  MAX_PORTAL_WAIT_FRACTION,
+  MAX_PORTAL_WAIT_SEC,
+  MAX_REALM_DAYS,
+  PERMANENT_RATIO_MAX,
+  PERMANENT_RATIO_MIN,
+  PERMANENT_SOONER_MIN,
   SPEND_MAX_DROUGHT_SEC,
   SPEND_MAX_STARVED_FRACTION,
   SPEND_PRICED_FLOOR,
@@ -187,11 +195,11 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
   const durations = r.realms
     .filter((x) => x.victorySec !== null && x.bossActiveEtaAtEntrySec !== null)
     .map((x) => x.bossActiveEtaAtEntrySec as number);
-  const outOfBand = durations.filter((d) => d < 20 * 60 || d > 90 * 60);
+  const outOfBand = durations.filter((d) => d < BOSS_MIN_SEC || d > BOSS_MAX_SEC);
   out.push(
     ok(
       'P6',
-      'Portal boss duration, prepared build: 20–90 min active',
+      `Portal boss duration, prepared build: ${BOSS_MIN_SEC / 60}–${BOSS_MAX_SEC / 60} min active`,
       durations.length > 0 && outOfBand.length === 0,
       durations.length === 0
         ? 'no completed attempt'
@@ -242,6 +250,56 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
           `(min ${sd.minAffordable}, worst realm ${sd.worstRealm}); ` +
           `under 2 affordable for ${(sd.starvedFraction * 100).toFixed(2)}% of looks, ` +
           `longest stretch ${fmtTime(sd.longestStarvedSec)}`,
+    ),
+  );
+
+
+  // P6 measures the fight and cannot see the wait before it. The capped-tree
+  // game parked the player on an open portal for 76 hours earning no
+  // Ascendancy at all, with realm cadence degrading 1.0 -> 3.5 days, while P6
+  // stayed green the whole time — the gate was hiding the damage in wait time.
+  const dt = r.deadTime;
+  const waitOk = dt.realms > 0 && dt.longestSec <= MAX_PORTAL_WAIT_SEC;
+  const shareOk = dt.realms > 0 && dt.fraction <= MAX_PORTAL_WAIT_FRACTION;
+  const cadenceOk = dt.realms > 0 && dt.slowestRealmDays <= MAX_REALM_DAYS;
+  out.push(
+    ok(
+      'P9',
+      `Portal-ready dead time ≤${MAX_PORTAL_WAIT_SEC / 3600}h, realm cadence ≤${MAX_REALM_DAYS}d`,
+      waitOk && shareOk && cadenceOk,
+      dt.realms === 0
+        ? 'no completed realms'
+        : `longest wait ${fmtTime(dt.longestSec)} (realm ${dt.worstRealm}), ` +
+          `${(dt.fraction * 100).toFixed(0)}% of Road time waiting; ` +
+          `slowest realm ${dt.slowestRealmDays.toFixed(2)}d (realm ${dt.slowestRealm}) ` +
+          `over ${dt.realms} realms`,
+    ),
+  );
+
+  // The band that replaces the gold multiplier: no rate on a temporary
+  // currency beats a night of idle, because idle has all night. Ascendancy per
+  // realm is bounded, so this is the comparison that actually separates them.
+  const pu = r.permanentUplift;
+  const sooner = (idle: number | null, active: number | null): number | null =>
+    idle !== null && active !== null && active > 0 ? idle / active : null;
+  const ascendSooner = pu ? sooner(pu.idleFirstAscensionSec, pu.activeFirstAscensionSec) : null;
+  const rankSooner = pu ? sooner(pu.idleRankSec, pu.activeRankSec) : null;
+  const ratioOk = pu !== null && pu.ratio >= PERMANENT_RATIO_MIN && pu.ratio <= PERMANENT_RATIO_MAX;
+  const soonerOk = ascendSooner !== null && ascendSooner >= PERMANENT_SOONER_MIN;
+  out.push(
+    ok(
+      'P10',
+      `Permanent power: ${PERMANENT_RATIO_MIN}–${PERMANENT_RATIO_MAX}x Ascendancy, ` +
+        `first ascension ≥${PERMANENT_SOONER_MIN}x sooner`,
+      ratioOk && soonerOk,
+      pu === null
+        ? 'not measured'
+        : `${pu.ratio.toFixed(2)}x Ascendancy at ${fmtTime(pu.horizonSec)} ` +
+          `(${pu.activeEarned.toFixed(0)} vs ${pu.idleEarned.toFixed(0)}); ` +
+          `first ascension ${fmtTime(pu.activeFirstAscensionSec)} vs ${fmtTime(pu.idleFirstAscensionSec)}` +
+          `${ascendSooner === null ? '' : ` (${ascendSooner.toFixed(2)}x sooner)`}; ` +
+          `${pu.rankTarget} tree ranks ${fmtTime(pu.activeRankSec)} vs ${fmtTime(pu.idleRankSec)}` +
+          `${rankSooner === null ? '' : ` (${rankSooner.toFixed(2)}x, reported not banded)`}`,
     ),
   );
 

@@ -146,7 +146,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
       realmScale: firstNonFinite((r) => realmScale(r)),
     };
     expect(frontier).toEqual({
-      bossHp: 297,
+      bossHp: 301,
       enemyHp: 330,
       gearPower: 331,
       enemyGold: 333,
@@ -155,7 +155,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
     });
 
     const earliest = Math.min(...Object.values(frontier));
-    expect(earliest).toBe(297);
+    expect(earliest).toBe(301);
     for (const [name, value] of clientFacing(deepState(earliest - 1))) {
       expect(Number.isFinite(value), `${name} at realm ${earliest - 1}`).toBe(true);
     }
@@ -163,7 +163,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
 
   /**
    * Hero level multiplies the realm scale in both `heroBaseDamage` and
-   * `levelCost`, so a tall enough ladder overflows well before realm 297. The
+   * `levelCost`, so a tall enough ladder overflows well before realm 301. The
    * frontier is a surface, not a line, and this pins where it crosses.
    */
   it('pins how far the hero level ladder can go before it overflows', () => {

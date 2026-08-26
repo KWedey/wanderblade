@@ -13,11 +13,27 @@ import {
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
-import { CAP_RATE, SEC_PER_HOUR, strikeThrough } from './policy';
+import { CAP_RATE, SEC_PER_DAY, SEC_PER_HOUR, strikeThrough } from './policy';
 import { clone, runPlayer, timeToKill, type RunOptions } from './simulate';
-import type { ShopSample, SimConfig, SpendDepth, Uplift } from './types';
+import type {
+  DeadTime,
+  PermanentUplift,
+  RealmRecord,
+  ShopSample,
+  SimConfig,
+  SpendDepth,
+  Uplift,
+} from './types';
 
 const ROAD_WINDOW_SEC = 20 * 60;
+
+/**
+ * The guardian band, in active minutes. The floor is 15 rather than 20 so the
+ * opening realm's guardian fits inside one session — a first ascension a new
+ * player can finish in a sitting is better onboarding than a rounder number.
+ */
+export const BOSS_MIN_SEC = 15 * 60;
+export const BOSS_MAX_SEC = 90 * 60;
 /** Guardians are allowed a long time to fall before a probe gives up. */
 const BOSS_PROBE_CAP_SEC = 30 * 86_400;
 
@@ -219,6 +235,50 @@ export const SPEND_PRICED_FLOOR = 5;
 export const SPEND_MAX_STARVED_FRACTION = 0.01;
 export const SPEND_MAX_DROUGHT_SEC = 300;
 
+/**
+ * Ceilings on time parked on an open portal. 24h is one full idle day spent
+ * earning no Ascendancy at all — past that the realm has stopped being a realm
+ * and become a waiting room. The capped-tree game ran to 76h, so this bites
+ * exactly where P6 was blind.
+ */
+export const MAX_PORTAL_WAIT_SEC = 24 * SEC_PER_HOUR;
+/** Waiting may not become the majority of a realm's Road time. */
+export const MAX_PORTAL_WAIT_FRACTION = 0.5;
+/**
+ * Realm cadence floor. Realms run about a day each once the player is going;
+ * 3 days is the point where "one realm per session or two" has visibly broken,
+ * and the capped-tree game reached 3.5.
+ */
+export const MAX_REALM_DAYS = 3;
+
+/**
+ * The band that replaces the 1.8–2.2x gold band, in the currency that survives
+ * an ascension. A gold multiplier can never beat a night of idle, because idle
+ * has all night; Ascendancy per realm is bounded, so the comparison separates
+ * the two players instead of the two clocks. The ceiling is as load-bearing as
+ * the floor: idle-only play has to stay meaningfully productive (VISION pillar
+ * 4), and a 3x active player makes it decorative.
+ *
+ * Measured 2.05x / 2.14x / 2.09x on seeds 1–3 at 30 days.
+ */
+export const PERMANENT_RATIO_MIN = 1.8;
+export const PERMANENT_RATIO_MAX = 2.4;
+
+/**
+ * How much sooner active play reaches its first ascension — the first time
+ * permanent power exists at all, and the moment onboarding either lands or
+ * does not. Measured 1.34x / 1.40x / 1.36x on seeds 1–3.
+ */
+export const PERMANENT_SOONER_MIN = 1.25;
+
+/**
+ * Tree depth reported alongside the bands but deliberately not banded: ranks
+ * are bought when the player opens the app, so the milestone lands on a
+ * session boundary and the statistic quantises to half a day. Both runs share
+ * that schedule, so the ratio is honest but far too coarse to set a band on.
+ */
+export const PERMANENT_RANK_TARGET = 20;
+
 /** Summarise every look at the upgrade panel taken past the grace window. */
 export function spendDepth(samples: ShopSample[]): SpendDepth {
   const counted = samples.filter((x) => x.sinceRealmStartSec >= SPEND_GRACE_SEC);
@@ -280,5 +340,94 @@ export function spendDepth(samples: ShopSample[]): SpendDepth {
     richFraction: rich / counted.length,
     starvedFraction: starved / counted.length,
     longestStarvedSec,
+  };
+}
+
+/**
+ * Time parked on a realm whose portal is open. It earns no Ascendancy at all
+ * (docs/DECISIONS.md #22), so it is the purest dead time the game can produce —
+ * and P6 cannot see it, because the entry gate spends it *before* the fight
+ * starts and P6 only measures the fight.
+ */
+export function deadTime(realms: RealmRecord[]): DeadTime {
+  let longestSec = 0;
+  let worstRealm = -1;
+  let waited = 0;
+  let road = 0;
+  let slowestRealmDays = 0;
+  let slowestRealm = -1;
+  let counted = 0;
+
+  for (const r of realms) {
+    if (r.portalReadySec === null || r.portalEnterSec === null) continue;
+    counted += 1;
+    const wait = r.portalEnterSec - r.portalReadySec;
+    waited += wait;
+    road += r.roadSec ?? wait;
+    if (wait > longestSec) {
+      longestSec = wait;
+      worstRealm = r.realm;
+    }
+    if (r.victorySec !== null) {
+      const days = (r.victorySec - r.startSec) / SEC_PER_DAY;
+      if (days > slowestRealmDays) {
+        slowestRealmDays = days;
+        slowestRealm = r.realm;
+      }
+    }
+  }
+
+  return {
+    longestSec,
+    worstRealm,
+    fraction: road > 0 ? waited / road : 0,
+    slowestRealmDays,
+    slowestRealm,
+    realms: counted,
+  };
+}
+
+/** Total Ascendancy a run earned, spent ranks included. */
+function totalEarned(s: GameState): number {
+  return s.ascendancy.banked + s.ascendancy.pending + ascSpent(s.ascendancy);
+}
+
+/**
+ * What active play buys in the *permanent* currency. Gold cannot answer this:
+ * no rate multiplier on a temporary resource beats a night of idle, because
+ * idle has all night. Ascendancy per realm is bounded, so this is the question
+ * that actually distinguishes the two players.
+ */
+/** First sample at which the tree has reached `target` total ranks. */
+function secToRanks(samples: { timeSec: number; treeRanks: number }[], target: number): number | null {
+  for (const x of samples) if (x.treeRanks >= target) return x.timeSec;
+  return null;
+}
+
+export function permanentUplift(
+  seed: number,
+  config: SimConfig,
+  active: { state: GameState; realms: RealmRecord[]; rankTrail: { timeSec: number; treeRanks: number }[] },
+): PermanentUplift | null {
+  // The active side is the headline run, already computed; only the idle
+  // counterpart has to be simulated here.
+  const idle = runPlayer(seed, config, { policy: 'road-idle', entry: 'prompt' });
+  if (idle.state.timeSec <= 0) return null;
+
+  const firstWin = (r: RealmRecord[]): number | null =>
+    r.find((x) => x.victorySec !== null)?.victorySec ?? null;
+
+  const idleEarned = totalEarned(idle.state);
+  const activeEarned = totalEarned(active.state);
+  return {
+    horizonSec: Math.min(idle.state.timeSec, active.state.timeSec),
+    idleEarned,
+    activeEarned,
+    ratio: idleEarned > 0 ? activeEarned / idleEarned : Infinity,
+    idleFirstAscensionSec: firstWin(idle.realms),
+    activeFirstAscensionSec: firstWin(active.realms),
+    rankTarget: PERMANENT_RANK_TARGET,
+    idleRankSec: secToRanks(idle.rankTrail, PERMANENT_RANK_TARGET),
+    activeRankSec: secToRanks(active.rankTrail, PERMANENT_RANK_TARGET),
   };
 }

@@ -145,13 +145,13 @@ export const ARC_CATCH_RADIUS = 0.12;
 
 // --- Portal guardian -----------------------------------------------------
 /** Guardian HP = this * enemyHp(realm, last zone) * BOSS_REALM_GAIN^realm. */
-export const bossHpMult = 30000;
+export const bossHpMult = 5600;
 /**
  * Guardians scale slightly faster than their realm. Without it the earnings
  * bonus, which funds hero levels, would shrink every later fight to seconds;
  * with it the Ascendancy tree's bounded power stays the real advantage.
  */
-export const BOSS_REALM_GAIN = 1.22;
+export const BOSS_REALM_GAIN = 1.19;
 
 // --- Ascendancy ----------------------------------------------------------
 /**
@@ -161,6 +161,18 @@ export const BOSS_REALM_GAIN = 1.22;
 export const ASC_PER_ZONE = 1;
 /** Guardian victory payout, the dominant share of a realm's Ascendancy. */
 export const ASC_BOSS_PAYOUT = 8;
+/**
+ * Catching a loot arc pays Ascendancy worth this fraction of a zone clear —
+ * one caught coin is 1/250th of a zone. Expressed against the zone rate rather
+ * than as a flat number so it inherits the realm scaling for free.
+ *
+ * Active play has to buy the *permanent* currency, not a bigger pile of the
+ * temporary one: no multiplier on gold can beat a night of idle, because idle
+ * has all night. Ascendancy per realm is bounded — fifty zones and one
+ * guardian, and a portal-ready realm pays nothing — so catches are the only
+ * way to raise a realm's yield, and waiting cannot substitute for them.
+ */
+export const ASC_CATCHES_PER_ZONE = 125;
 /** Both accruals grow linearly per realm: amount * (1 + this * realm). */
 export const ASC_REALM_GROWTH = 0.5;
 

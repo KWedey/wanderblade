@@ -2,6 +2,7 @@
 
 import {
   ASC_BOSS_PAYOUT,
+  ASC_CATCHES_PER_ZONE,
   ASC_COST_STEP,
   ASC_NODES,
   ASC_NODE_IDS,
@@ -225,6 +226,11 @@ export function bossEtaSec(state: GameState, momentum: number): number {
 /** Pending Ascendancy granted for clearing one zone of `realm`. */
 export function ascendancyPerZone(realm: number): number {
   return ASC_PER_ZONE * (1 + ASC_REALM_GROWTH * realm);
+}
+
+/** Pending Ascendancy granted by catching one loot-arc coin in `realm`. */
+export function ascendancyPerCatch(realm: number): number {
+  return ascendancyPerZone(realm) / ASC_CATCHES_PER_ZONE;
 }
 
 /** Pending Ascendancy granted by felling `realm`'s guardian. */

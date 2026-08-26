@@ -19,6 +19,7 @@ import {
 } from './constants';
 import {
   ascendancyBossPayout,
+  ascendancyPerCatch,
   ascendancyPerZone,
   ascNodeCost,
   bossHp,
@@ -420,6 +421,16 @@ function processStrike(
   recap.goldEarned += bonus;
   recap.arcCatches += 1;
 
+  // Gated exactly as zone clears are (docs/DECISIONS.md #22): once the portal
+  // is open the realm pays no more Ascendancy, however long it is farmed.
+  // Without this, catching would reopen the infinite-farm hole that made P7
+  // unwinnable — it is the same hole, entered through the active layer.
+  const asc = state.portalReady ? 0 : ascendancyPerCatch(state.realm);
+  if (asc > 0) {
+    state.ascendancy.pending += asc;
+    recap.pendingAscendancyEarned += asc;
+  }
+
   let upgraded = false;
   if (arc.gear) {
     const rarity = upgradeRarity(arc.gear.rarity);
@@ -435,7 +446,13 @@ function processStrike(
       );
     }
   }
-  emit(events, { type: 'arcCatch', timeSec: clock, bonusGold: bonus, upgraded });
+  emit(events, {
+    type: 'arcCatch',
+    timeSec: clock,
+    bonusGold: bonus,
+    ascendancy: asc,
+    upgraded,
+  });
 }
 
 /** Re-prime the action schedule for the phase the hero is now in. */

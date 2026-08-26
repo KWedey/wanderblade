@@ -13,6 +13,7 @@ import { parseArgs } from '../src/args';
 import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
 import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
 import {
+  deadTime,
   spendDepth,
   SPEND_GRACE_SEC,
   SPEND_TARGET,
@@ -261,6 +262,8 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     promptVsOverfarm: null,
     abandonProbe: null,
     spendDepth: spendDepth(main.shopSamples),
+    deadTime: deadTime(main.realms),
+    permanentUplift: null,
     totalKills: main.state.lifetime.kills,
     finalRealm: main.state.realm,
     victories: 0,
@@ -286,7 +289,7 @@ describe('validators are total', () => {
     const c = runCorrectness(stub);
     const p = runPacing(stub);
     expect(c.map((v) => v.id)).toEqual(['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10']);
-    expect(p.map((v) => v.id)).toEqual(['P1','P2','P3','P4','P5','P6','P7','P8']);
+    expect(p.map((v) => v.id)).toEqual(['P1','P2','P3','P4','P5','P6','P7','P8','P9','P10']);
     for (const v of [...c, ...p]) expect(typeof v.pass).toBe('boolean');
   });
 });

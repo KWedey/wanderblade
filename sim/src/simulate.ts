@@ -4,6 +4,7 @@
 import {
   advance,
   affordableCount,
+  ASC_NODE_IDS,
   attackSpeedMultiplier,
   bossEtaSec,
   deserialize,
@@ -82,6 +83,8 @@ export interface RunResult {
    * really about go unmeasured while the report still printed a large `n`.
    */
   shopSamples: ShopSample[];
+  /** Total tree ranks over time — when permanent power actually arrived. */
+  rankTrail: { timeSec: number; treeRanks: number }[];
 }
 
 export function clone(s: GameState): GameState {
@@ -250,6 +253,19 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
   const snapshots = new Map<number, GameState>();
   const roadStates: GameState[] = [];
   const shopSamples: ShopSample[] = [];
+  const rankTrail: { timeSec: number; treeRanks: number }[] = [];
+
+  // Tree depth is a property of the state, not of who bought it: ranks are also
+  // bought between sessions, where no purchase hook fires.
+  const noteRanks = (): void => {
+    let ranks = 0;
+    for (const id of ASC_NODE_IDS) ranks += state.ascendancy.nodes[id] ?? 0;
+    if (ranks !== lastRanks) {
+      rankTrail.push({ timeSec: state.timeSec, treeRanks: ranks });
+      lastRanks = ranks;
+    }
+  };
+  let lastRanks = -1;
   let totalActiveSec = 0;
   let stop = false;
   let overfarmUntilSec: number | null = null;
@@ -257,6 +273,37 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
   let nextRoadStateAt = 0;
 
   const current = (): RealmRecord => realms[realms.length - 1] as RealmRecord;
+
+  /** Commit to the portal if the strategy says the moment has come. */
+  const maybeEnter = (): void => {
+    if (stop || state.phase !== 'road' || !state.portalReady) return;
+    if (
+      opts.entry === 'overfarm-2x' &&
+      overfarmUntilSec !== null &&
+      state.timeSec < overfarmUntilSec
+    ) {
+      return;
+    }
+    current().treePurchasesTotal += botTouch(state).tree;
+    const r = current();
+    if (
+      r.portalReadySec !== null &&
+      state.timeSec - r.portalReadySec < PREPARE_PATIENCE_SEC &&
+      previewEtaSec(state) > PREPARED_MAX_ETA_SEC
+    ) {
+      return; // the preview says this fight is not worth committing to yet
+    }
+    const res = enterPortal(state);
+    if (!res.entered) return;
+    r.portalEnterSec = state.timeSec;
+    r.roadSec = state.timeSec - r.startSec;
+    r.gearPowerAtEntry = gearPowerTotal(state.gear);
+    r.dpsAtEntry = heroDps(state);
+    r.bossEtaAtEntrySec = bossEtaSec(state, 0);
+    r.bossActiveEtaAtEntrySec = bossEtaSec(state, 1);
+    snapshots.set(r.realm, clone(state));
+    hooks.onEvents?.(res.events);
+  };
 
   const hooks: RunHooks = {
     onEvents: (events) => {
@@ -297,6 +344,10 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
       current().treePurchasesTotal += bought.tree;
     },
     onSlice: () => {
+      noteRanks();
+      // `prompt` means the moment it opens. Checking only at session boundaries
+      // would time every realm to the session schedule instead of the economy.
+      if (opts.entry === 'prompt') maybeEnter();
       const r = current();
       if (state.gold > r.goldPeak) r.goldPeak = state.gold;
       if (state.timeSec >= nextSampleAt && samples.length < 5000) {
@@ -312,37 +363,6 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
         nextRoadStateAt = state.timeSec + ROAD_STATE_INTERVAL_SEC;
       }
     },
-  };
-
-  /** Commit to the portal if the strategy says the moment has come. */
-  const maybeEnter = (): void => {
-    if (stop || state.phase !== 'road' || !state.portalReady) return;
-    if (
-      opts.entry === 'overfarm-2x' &&
-      overfarmUntilSec !== null &&
-      state.timeSec < overfarmUntilSec
-    ) {
-      return;
-    }
-    current().treePurchasesTotal += botTouch(state).tree;
-    const r = current();
-    if (
-      r.portalReadySec !== null &&
-      state.timeSec - r.portalReadySec < PREPARE_PATIENCE_SEC &&
-      previewEtaSec(state) > PREPARED_MAX_ETA_SEC
-    ) {
-      return; // the preview says this fight is not worth committing to yet
-    }
-    const res = enterPortal(state);
-    if (!res.entered) return;
-    r.portalEnterSec = state.timeSec;
-    r.roadSec = state.timeSec - r.startSec;
-    r.gearPowerAtEntry = gearPowerTotal(state.gear);
-    r.dpsAtEntry = heroDps(state);
-    r.bossEtaAtEntrySec = bossEtaSec(state, 0);
-    r.bossActiveEtaAtEntrySec = bossEtaSec(state, 1);
-    snapshots.set(r.realm, clone(state));
-    hooks.onEvents?.(res.events);
   };
 
   const horizon = config.days * SEC_PER_DAY;
@@ -386,6 +406,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     snapshots,
     roadStates,
     shopSamples,
+    rankTrail,
   };
 }
 
