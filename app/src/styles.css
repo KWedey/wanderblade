@@ -32,11 +32,10 @@
      only thing a font-size does here is pick that integer scale, and the judged
      "two resolutions" was a scale that does not divide the world's.
 
-     The world runs at round(canvasWidth / 300) = 6 at the judged capture. Every
-     size below is an exact 7k, and every k divides 6, so panel type sits on a
-     whole sub-lattice of the world grid. The previous ramp used k of 2,3,4,7,8
-     - three of which do not - and the one before that mixed all five inside a
-     single panel. app/test/typegrid.test.ts holds both halves. */
+     Every size is an exact 7k, so a size never rounds to a scale it does not
+     name, and k is never below 2: at 1 the bitmap face is 1:1 with CSS pixels
+     and stops being readable. app/test/typegrid.test.ts holds both at every
+     viewport the game ships on, rather than at one hardcoded width. */
   --ui-1: 14px;
   --ui-2: 21px;
   --ui-3: 42px;
@@ -84,6 +83,18 @@
   --touch: 56px;
 
   color-scheme: dark;
+}
+
+/* Phones and tablets. The hero number at 42px is 282px of glyph in a panel that
+   is 263px wide on a landscape iPhone - it ran past the box it sits in, and the
+   upgrade rows beside it wrapped to five lines. 28px is the same grid, one step
+   down. */
+@media (max-width: 900px) {
+  :root {
+    --ui-3: 28px;
+    --num-3: 28px;
+    --num-4: 28px;
+  }
 }
 
 * {
