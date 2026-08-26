@@ -176,7 +176,14 @@ const LOOT_GLOW = '#fbf236';
  * made a coin indistinguishable from the shower it spawned inside, so the one
  * thing worth aiming at looked like the thing you were told to ignore.
  */
-const SPARK_INK = '#9badb7';
+/**
+ * Two stops down from the old white-hot burst, and never gold. White sparks
+ * were the brightest pixels on screen, which is what kept beating the hero for
+ * attention however they were layered; sharing the realm accent with loot made
+ * a coin indistinguishable from the shower it spawned inside. Steel reads as
+ * impact without competing for the eye or for the thing worth aiming at.
+ */
+const SPARK_COLORS = ['#9badb7', '#696a6a', '#847e87'];
 const RIM_OFFSETS: readonly (readonly [number, number])[] = [
   [-1, 0],
   [1, 0],
@@ -618,7 +625,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const lead = queue[0];
     const x = lead ? lead.x + lead.spread : heroX + BLADE_REACH;
     const y = groundY;
-    burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, '#ffffff', SPARK_INK], 130);
+    burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, ...SPARK_COLORS], 130);
     impacts.push({ x, y: y - 12, age: 0, life: 0.34 });
     shake = Math.min(MAX_SHAKE, shake + 2.1);
 
@@ -632,17 +639,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   function swing(fromStrike: boolean): void {
     swingAnim = SWING_ANIM_SEC;
-    const skin = realmSkin(model.region);
     const lead = queue[0];
     if (!lead || lead.x - engageInset() > heroX + BLADE_REACH + 16) return;
 
     const leadSprite = skinnedFor(model.region).monsters[lead.shape];
     const leadHeight = leadSprite ? leadSprite.height : 16;
-    const contactX = lead.x + lead.spread - 6;
+    // On the creature's body, past its near edge. Six pixels back toward the
+    // swinger put the brightest thing in the frame in the hero's neighbourhood,
+    // and a burst beside him beats his silhouette even when it paints behind
+    // him: draw order fixes occlusion, not adjacency.
+    const contactX = lead.x + lead.spread + Math.round(leadSprite ? leadSprite.width * 0.2 : 3);
     const contactY = groundY - Math.round(leadHeight * 0.55);
     lead.flash = 0.05;
     lead.recoil = fromStrike ? 5 : 3;
-    burst(contactX, contactY, fromStrike ? 9 : 5, ['#ffffff', SPARK_INK, skin.monBody], 105);
+    burst(contactX, contactY, fromStrike ? 9 : 5, SPARK_COLORS, 105);
     shake = Math.min(MAX_SHAKE, shake + (fromStrike ? 1.5 : 0.7));
 
     // Only the player's own strikes get a number. Auto-swings land several a

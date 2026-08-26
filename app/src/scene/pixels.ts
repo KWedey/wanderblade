@@ -115,36 +115,36 @@ const MONSTER_LEGEND: Record<string, string> = {
 /** 24x30 - the heavy. Crag-grown shoulder, head thrust forward, weight on the front foot. */
 export const MON_GOLEM: SpriteMap = {
   rows: [
-    '........b...............',
-    '.....b.bb...............',
-    '.....bbbb...bb.bbbbb....',
-    '.....bbbb....b.bbbbb....',
-    '...bbbbbb.....bbbbbbbb..',
-    '...bbbbbb.....bbbbbbbb..',
-    '..bbbbbbb..bbbbbbbbbbb..',
-    '..bbbbbbb..bbbbbbbbbbbb.',
-    '..bb.bbbbbbbbbbbEEbbEEb.',
-    '..bb.bbbbbbbbbbbbbbbbbb.',
-    '.bbb.bbbbbbbbbbbbbbbbb..',
-    '.bbb.bbbbbbbbbbbtttttt..',
-    '.bbb..bbbbbbbbbbbtbbtb..',
-    '.bbb..bbbbbbbbbb.bbbb...',
-    'bbbb..bbbbbbbbbb...bbb..',
-    'bbbb..bbbbbbbbbb...bbb..',
-    'bbbb..bbbbbbbbbb...bbb..',
-    'bbb....bbbbbbbbb....bbbb',
-    'bbb....bbbbbbbbb....bbbb',
-    'bbb....bbbbbbbbb....bbbb',
-    'bbb...bbbbbbbbbbb..bbbbb',
-    'bbbb..bbbbbbbbbbb..bbbbb',
-    'bbbb..bbbbbbbbbbb..b.b.b',
-    'b.b..bbbb...bbbbb....b..',
-    '.....bbbb...bbbbb.......',
-    '.....bbbb...bbbbb.......',
-    '.....bbbb....bbbbb......',
-    '....bbbbb....bbbbb......',
-    '....bbbbb....bbbbbbb....',
-    '....bbbbb....bbbbbbb....',
+    '...bbbb..........bbbb...',
+    '..bbbbbb........bbbbbb..',
+    '..bbbbbbb......bbbbbbb..',
+    '.bbbbbbbbbbbbbbbbbbbbbb.',
+    '.bbbbbbbbbbbbbbbbbbbbbb.',
+    '.bbbbbb.bbbbbbbb.bbbbbb.',
+    'bbbbbb..bbEEbbEE..bbbbbb',
+    'bbbbbb..bbbbbbbb..bbbbbb',
+    'bbbbbb..bbtttbtb..bbbbbb',
+    'bbbbbb..bbbbbbbb..bbbbbb',
+    'bbbbbb.bbbbbbbbbb.bbbbbb',
+    'bbbbbbbbbbbbbbbbbbbbbbbb',
+    'bbbbbbbbbbbbbbbbbbbbbbbb',
+    '.bbbbbbbbbbbbbbbbbbbbbb.',
+    '.bbbbbbbbbbbbbbbbbbbbbb.',
+    '.bbbbb.bbbbbbbbbb.bbbbb.',
+    'bbbbbb.bbbbbbbbbb.bbbbbb',
+    'bbbbbb.bbbbbbbbbb.bbbbbb',
+    'bbbbbb.bbbbbbbbbb.bbbbbb',
+    '.bbbb..bbbbbbbbbb..bbbb.',
+    '.......bbbbbbbbbb.......',
+    '......bbbbbbbbbbbb......',
+    '.....bbbbbbbbbbbbbb.....',
+    '.....bbbbbb..bbbbbb.....',
+    '....bbbbbbb..bbbbbbb....',
+    '....bbbbbbb..bbbbbbb....',
+    '...bbbbbbbb..bbbbbbbb...',
+    '...bbbbbbbb..bbbbbbbb...',
+    '..bbbbbbbbb..bbbbbbbbb..',
+    '..bbbbbbbbb..bbbbbbbbb..',
   ],
   legend: MONSTER_LEGEND,
 };
@@ -797,8 +797,16 @@ export function massProfile(map: SpriteMap): MassProfile {
     while (last > first && row[last] === '.') last--;
     return last - first + 1;
   });
+  const lit = map.rows.map((row) => {
+    let n = 0;
+    for (const ch of row) if (ch !== '.') n++;
+    return n;
+  });
   const widest = Math.max(0, ...extent);
+  const densest = Math.max(0, ...lit);
   if (widest === 0) return { top: 0, width: map.rows[0]?.length ?? 0 };
-  const shoulders = extent.findIndex((n) => n * 2 >= widest);
+  // Wide *and* solid. Extent alone calls two thin horns far apart a shoulder
+  // line; ink alone calls a narrow solid neck one. A bar belongs where both hold.
+  const shoulders = extent.findIndex((n, i) => n * 2 >= widest && lit[i]! * 3 >= densest);
   return { top: shoulders < 0 ? 0 : shoulders, width: widest };
 }

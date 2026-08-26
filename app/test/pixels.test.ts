@@ -252,14 +252,31 @@ describe('sprite mass profile', () => {
   });
 
   // A health bar hung off the bounding box floats on empty air over anything
-  // with a horn, an antenna or a raised tail.
+  // with a horn, an antenna or a raised tail. Thinness is measured by extent,
+  // the same way massProfile measures width: counting lit pixels called the
+  // golem's two spread shoulder humps an antenna and demanded the bar drop
+  // below the very row it belongs on.
   it('starts below the bounding box on every creature with a thin crown', () => {
     for (const [i, map] of MONSTER_SHAPES.entries()) {
       const mass = massProfile(map);
-      const crown = map.rows[0]!.replace(/\./g, '').length;
+      const row = map.rows[0]!;
+      const first = row.search(/[^.]/);
+      let last = row.length - 1;
+      while (last > first && row[last] === '.') last--;
+      const crown = first < 0 ? 0 : last - first + 1;
       if (crown * 2 >= mass.width) continue;
       expect(mass.top, `shape ${i} anchors to its box, not its mass`).toBeGreaterThan(0);
     }
+  });
+
+  // The guard above only bites on a creature that has a thin crown, so pin the
+  // case outright rather than trusting the roster to keep containing one.
+  it('drops the bar below a lone antenna every time', () => {
+    const antenna: SpriteMap = {
+      rows: ['..#..', '..#..', '..#..', '#####', '#####', '#####'],
+      legend: { '#': 'body' },
+    };
+    expect(massProfile(antenna).top).toBe(3);
   });
 
   // Sized by lit-pixel count, a golem standing with its legs apart reported a

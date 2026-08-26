@@ -412,21 +412,26 @@ export function panelVars(skin: RealmSkin): Record<string, string> {
 }
 
 /** Fixed inks the hero and his sword always wear, in every realm. */
+/**
+ * The hero has to be the brightest silhouette in the frame, not the darkest.
+ * A dark figure with a thin rim works when the space around it is empty; ours
+ * stands in a busy one, so it wins on luminance or it does not win.
+ */
 export const HERO_INK: InkSet = {
   outline: INK.black,
-  hair: INK.wood,
-  skin: INK.parchment,
+  hair: lighten(INK.wood, 0.2),
+  skin: lighten(INK.parchment, 0.18),
   // A face has to read at 14px: a lit cheek, a dark eye, one tunic highlight.
-  skinLit: lighten(INK.parchment, 0.35),
+  skinLit: lighten(INK.parchment, 0.5),
   eye: '#241016',
-  hatBand: '#3c2a3f',
-  cloak: INK.rose,
-  scarf: INK.rose,
-  tunic: INK.blue,
-  tunicLit: lighten(INK.blue, 0.28),
-  belt: INK.woodLight,
-  pants: INK.plum,
-  boot: INK.wood,
+  hatBand: lighten('#3c2a3f', 0.3),
+  cloak: lighten(INK.rose, 0.22),
+  scarf: lighten(INK.rose, 0.22),
+  tunic: lighten(INK.blue, 0.3),
+  tunicLit: lighten(INK.blue, 0.55),
+  belt: lighten(INK.woodLight, 0.25),
+  pants: lighten(INK.plum, 0.3),
+  boot: lighten(INK.wood, 0.18),
   steel: '#ffffff',
   steelDark: INK.ice,
   // A fuller down the blade: a solid white bar read as a parallelogram.
@@ -590,7 +595,12 @@ function toHex(h: number, s: number, l: number): string {
 
 /** Hue offsets per roster slot, so five creatures share one realm skin
  *  without three identically-coloured bodies standing in the same frame. */
-const SHAPE_HUE = [0, 0.07, -0.06, 0.13, -0.11];
+/**
+ * Hue turns kept on the cold/sour side of the realm's monster colour. Positive
+ * turns walked the palette into magenta, and a critic read the result as
+ * friendly: pink is a reward colour, not a threat colour.
+ */
+const SHAPE_HUE = [0, -0.05, -0.09, 0.04, -0.13];
 
 export function monsterInk(skin: RealmSkin, shape = 0): InkSet {
   const turn = SHAPE_HUE[((shape % SHAPE_HUE.length) + SHAPE_HUE.length) % SHAPE_HUE.length] ?? 0;
