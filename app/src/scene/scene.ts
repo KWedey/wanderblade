@@ -38,10 +38,13 @@ import {
   OUTLINE_INK,
   REALM_SKIN_COUNT,
   backdropSkin,
+  clampHillStep,
+  depthHaze,
   foliageNotchAt,
   foregroundInk,
   grassClumpBlades,
   groundBladeOf,
+  hillBaseInk,
   inFoliageLobe,
   inRun,
   lighten,
@@ -388,6 +391,56 @@ interface SkinnedSprites {
   flower: BakedSprite;
   fern: BakedSprite;
   birds: BakedSprite[];
+}
+
+/** The subset of CanvasRenderingContext2D a flat-fill draw loop needs — narrow enough to fake in a test without a real canvas. */
+export interface FillCtx {
+  fillStyle: string | CanvasGradient | CanvasPattern;
+  fillRect(x: number, y: number, w: number, h: number): void;
+}
+
+/**
+ * Stepped hill band — quantized columns give the hard pixel silhouette. A
+ * dark base and a lit cap carry the slope's own form, the same two-band
+ * trick drawRange uses below; a single flat fill read as a cardboard
+ * cutout, not a hillside catching light from one direction.
+ */
+export function drawHills(
+  ctx: FillCtx,
+  vw: number,
+  groundY: number,
+  color: string,
+  lip: string | null,
+  scroll: number,
+  amp: number,
+  baseH: number,
+  freq: number,
+  stepPx: number,
+  haze: string,
+): void {
+  const base = hillBaseInk(color, haze);
+  const cap = lip ?? lighten(color, 0.22);
+  // Column height is clamped to a slope the column width can actually draw
+  // — the raw sine profile jumps further than a step is wide, which is what
+  // a staircased silhouette looks like at this resolution.
+  const maxDelta = stepPx * 1.5;
+  let prevH: number | null = null;
+  for (let x = 0; x < vw; x += stepPx) {
+    const wx = (x + scroll) * freq;
+    const rawH = Math.floor(
+      baseH + Math.sin(wx * 0.035) * amp + Math.sin(wx * 0.0131 + 1.3) * amp * 0.6,
+    );
+    const h = clampHillStep(prevH, rawH, maxDelta);
+    prevH = h;
+    const top = groundY - h;
+    const baseBandH = Math.max(1, Math.floor(h * 0.4));
+    ctx.fillStyle = color;
+    ctx.fillRect(x, top, stepPx, h);
+    ctx.fillStyle = base;
+    ctx.fillRect(x, groundY - baseBandH, stepPx, baseBandH);
+    ctx.fillStyle = cap;
+    ctx.fillRect(x, top, stepPx, 2);
+  }
 }
 
 export function createScene(canvas: HTMLCanvasElement): Scene {
@@ -1120,39 +1173,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       ctx.fillRect(x + 9, y - 6, Math.max(3, w - 18), 3);
       ctx.fillStyle = skin.cloudShade;
       ctx.fillRect(x, y + 4, w, 2);
-    }
-  }
-
-  /**
-   * Stepped hill band — quantized columns give the hard pixel silhouette. A
-   * dark base and a lit cap carry the slope's own form, the same two-band
-   * trick drawRange uses below; a single flat fill read as a cardboard
-   * cutout, not a hillside catching light from one direction.
-   */
-  function drawHills(
-    color: string,
-    lip: string | null,
-    scroll: number,
-    amp: number,
-    baseH: number,
-    freq: number,
-    stepPx: number,
-  ): void {
-    const base = mixHex(color, '#000000', 0.18);
-    const cap = lip ?? lighten(color, 0.22);
-    for (let x = 0; x < vw; x += stepPx) {
-      const wx = (x + scroll) * freq;
-      const h = Math.floor(
-        baseH + Math.sin(wx * 0.035) * amp + Math.sin(wx * 0.0131 + 1.3) * amp * 0.6,
-      );
-      const top = groundY - h;
-      const baseBandH = Math.max(1, Math.floor(h * 0.4));
-      ctx.fillStyle = color;
-      ctx.fillRect(x, top, stepPx, h);
-      ctx.fillStyle = base;
-      ctx.fillRect(x, groundY - baseBandH, stepPx, baseBandH);
-      ctx.fillStyle = cap;
-      ctx.fillRect(x, top, stepPx, 2);
     }
   }
 
@@ -2003,12 +2023,25 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     ctx.clearRect(0, 0, vw, vh);
 
     const far = backdropSkin(skin);
+    const haze = depthHaze(skin);
     drawSky(skin);
     drawClouds(skin);
     drawBirds(sprites);
     drawRange(far);
-    drawHills(far.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4);
-    drawHills(far.hillNear, far.hillLip, scrollHillNear, groundY * 0.11, groundY * 0.18, 1.7, 3);
+    drawHills(ctx, vw, groundY, far.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4, haze);
+    drawHills(
+      ctx,
+      vw,
+      groundY,
+      far.hillNear,
+      far.hillLip,
+      scrollHillNear,
+      groundY * 0.11,
+      groundY * 0.18,
+      1.7,
+      3,
+      haze,
+    );
     drawGrove(far);
     drawDrift(far);
     drawTreeline(sprites);

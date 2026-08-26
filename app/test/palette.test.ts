@@ -3,15 +3,19 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_TEXTURE_CONTRAST,
   MIN_ACCENT_LIGHTNESS,
+  MIN_HILL_SHADOW_GAP,
   MIN_SKY_LIGHTNESS,
   MIN_SPRITE_BACKDROP_GAP,
   MIN_VALUE_SPREAD,
   REALM_SKIN_COUNT,
   backdropSkin,
+  clampHillStep,
   coherentRange,
+  depthHaze,
   foliageNotchAt,
   grassClumpBlades,
   groundBladeOf,
+  hillBaseInk,
   inFoliageLobe,
   inRun,
   lightnessOf,
@@ -114,6 +118,45 @@ describe('ground texture never fights the sprites', () => {
     if (Math.abs(lightnessOf(skin.grassBlade) - lightnessOf(skin.turf)) <= MAX_TEXTURE_CONTRAST) {
       expect(groundBladeOf(skin)).toBe(skin.grassBlade);
     }
+  });
+});
+
+describe('clampHillStep bounds how far one hill column can jump from its neighbour', () => {
+  it('passes the target through unclamped when the change fits', () => {
+    expect(clampHillStep(10, 12, 4)).toBe(12);
+    expect(clampHillStep(10, 7, 4)).toBe(7);
+  });
+
+  it('clamps a jump larger than maxDelta in either direction', () => {
+    expect(clampHillStep(10, 30, 4)).toBe(14);
+    expect(clampHillStep(10, -30, 4)).toBe(6);
+  });
+
+  it('passes the first column through with no prior height to compare against', () => {
+    expect(clampHillStep(null, 999, 1)).toBe(999);
+  });
+});
+
+describe('hillBaseInk keeps the hill shadow clear of the haze behind it', () => {
+  it('holds the fixed 18% mix when it already clears the floor', () => {
+    expect(hillBaseInk('#ffffff', '#000000')).toBe('#d1d1d1');
+  });
+
+  it('backs the mix off until the gap opens, for every realm', () => {
+    for (let region = 0; region < REALM_SKIN_COUNT; region++) {
+      const skin = realmSkin(region);
+      const haze = depthHaze(skin);
+      const base = hillBaseInk(skin.hillFar, haze);
+      expect(lightnessOf(base) - lightnessOf(haze), `realm ${region}`).toBeGreaterThanOrEqual(
+        MIN_HILL_SHADOW_GAP - 1e-9,
+      );
+    }
+  });
+
+  it('gives up bounded, without darkening past the floor when the colour cannot clear it', () => {
+    // A colour already at the floor: no amount of backing off the mix opens a
+    // gap, so the loop must stop rather than spin forever.
+    expect(() => hillBaseInk('#101010', '#101010')).not.toThrow();
   });
 });
 

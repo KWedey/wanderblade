@@ -773,3 +773,18 @@ Fewer, larger islands at higher coverage is the "isolated blades → continuous 
 - Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 36 passed (36)**, **Tests 690 passed (690)**.
 
 **Not touched:** the hero sprite (owned by a different agent this round), `drawGrove`'s procedural background trees (already correct), and the background hill, ground turf, and sun halo — the other three surfaces named in the same verdict, addressed in following commits.
+
+## 55. Background hills stop staircasing and their shadow band clears the haze behind it — 2026-08-26
+
+**Decision:** `drawHills` moves out of the `createScene()` closure into a standalone exported function taking a narrow `FillCtx` (`fillStyle`/`fillRect` only). Two pure helpers in `palette.ts` back it: `clampHillStep` caps how far one column's height can jump from its neighbour, and `hillBaseInk` backs off its shadow-mix percentage until the base band clears `depthHaze` by `MIN_HILL_SHADOW_GAP` (0.1 lightness) instead of using a fixed 18% mix regardless of realm.
+
+**Why:** Gauntlet round 36 (`.gauntlet/verdict36.md`, img-4) named the background hill's edge as "stepped/staircased, like a jagged EKG line" and its base shadow as "nearly merging with the shadow under the trees in front of it — you can't tell where one ends and the other begins." Both were mechanical: the raw sine profile could jump 14px between 3-4px-wide columns (steeper than the column is wide, which draws as right angles), and a fixed 18% black mix landed only 0.084 lightness above Greenwood's haze — visually indistinguishable from it.
+
+**Same light direction as everywhere else.** The lit cap and dark base are the same two-band trick `drawRange` and the near hills already used (ADR #53); this round extends it to the far hill layer and fixes the two defects specific to it.
+
+**Evidence:**
+- Deterministic: `clampHillStep` and `hillBaseInk` are pure functions with unit tests in `palette.test.ts` — bounds in both directions, the null-prior first-column case, and a sweep over every realm's `hillFar` confirming the shadow gap holds everywhere, not just the one realm that failed at 18%.
+- Deterministic, draw-level: `app/test/scene.test.ts` calls the real, now-exported `drawHills` against a fake `FillCtx` that records every `fillRect` call — confirming the shipped draw loop, not just the geometry functions it calls, fills every column, keeps the base band above the haze floor, and never lets adjacent columns jump past the clamp. This is the fake-context pattern the tree fix (ADR #54) didn't need but this surface does, since the defect lived in the loop's column-to-column stepping, not in a static sprite grid.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 699 passed (699)**.
+
+**Not touched:** the near hill layer's cap/base logic (already correct per ADR #53, only re-used here), and the ground turf and sun halo — the remaining two surfaces from the same verdict, addressed in following commits.

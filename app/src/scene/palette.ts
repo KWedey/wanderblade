@@ -536,6 +536,38 @@ export function backdropSkin(skin: RealmSkin): RealmSkin {
 }
 
 /**
+ * Largest height change one hill column may take from its neighbour. The raw
+ * sine profile could jump 14px between 3-4px-wide columns — steeper than the
+ * column is wide — which draws as a staircase of right angles, not a slope.
+ */
+export function clampHillStep(prevH: number | null, targetH: number, maxDelta: number): number {
+  if (prevH === null) return targetH;
+  const delta = targetH - prevH;
+  if (delta > maxDelta) return prevH + maxDelta;
+  if (delta < -maxDelta) return prevH - maxDelta;
+  return targetH;
+}
+
+/** Minimum lightness a hill's shadow base must hold over the haze behind it. */
+export const MIN_HILL_SHADOW_GAP = 0.1;
+
+/**
+ * A hill's dark base band, backed off until it clears the depth haze the
+ * grove's shadow tones recede toward. A fixed 18% mix landed only 0.084 above
+ * that haze in Greenwood, so the "shadow" merged into the real one behind it.
+ */
+export function hillBaseInk(color: string, floor: string, amount = 0.18): string {
+  let mix = amount;
+  let out = mixHex(color, '#000000', mix);
+  for (let step = 0; step < 24 && mix > 0; step++) {
+    if (lightnessOf(out) - lightnessOf(floor) >= MIN_HILL_SHADOW_GAP) break;
+    mix = Math.max(0, mix - 0.02);
+    out = mixHex(color, '#000000', mix);
+  }
+  return out;
+}
+
+/**
  * Ceiling on how far ground texture may stray from the turf under it. Blade
  * tones were hand-authored accents, so the road read as "a confetti field that
  * fights the sprites": texture modulates a surface, it does not compete with
