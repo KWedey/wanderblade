@@ -1088,14 +1088,19 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // Distance sets value and height together. The far rank used to tower
       // over the near one at nearly its saturation, so thirty trees crossed
       // the ridgeline as one flat sheet with no depth in it at all.
-      const fade = 0.56 - depth * 0.44;
-      const leafFade = fade * 0.72;
+      const fade = 0.4 - depth * 0.32;
+      // Foliage holds its hue much harder than bark does. Mixed toward the sky
+      // at the bark's rate the far canopies came out the same grey-white value
+      // as the clouds behind them, and the grove was read as scaffolding.
+      const leafFade = fade * 0.42;
       const bark = mixHex(skin.bark, haze, fade);
       const barkLit = mixHex(lighten(skin.bark, 0.4), haze, fade);
       const barkDark = mixHex(mixHex(skin.bark, '#000000', 0.4), haze, fade);
       const leafDark = mixHex(skin.leafDark, haze, leafFade);
       const leaf = mixHex(skin.leaf, haze, leafFade);
-      const leafLite = mixHex(lighten(skin.leaf, 0.34), haze, leafFade);
+      // Lightening the leaf by a third walked it to grey-green, which is the
+      // value the clouds already occupy. The lit face stays a green.
+      const leafLite = mixHex(lighten(skin.leaf, 0.18), haze, leafFade);
       // Near crowns run off the top edge; far ones close well inside it. A
       // canopy nobody can see is a pole, and the poles were named by name.
       const crownY = Math.floor(groundY * (0.66 - depth * 0.5));
@@ -1120,14 +1125,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         }
       }
 
-      // One short bough into the crown it holds up. Long thin limbs across
-      // open sky read as cabling, so this stays inside the foliage.
+      // One bough, growing out of the bole rather than hovering beside it. The
+      // first version started a pixel clear of the trunk and read as a wire
+      // strung across the sky; this starts inside the wood and tapers.
       const boughSide = hash01(i * 8.3) > 0.5 ? 1 : -1;
-      const boughLen = trunkW + 2;
+      const boughLen = trunkW + 3;
       ctx.fillStyle = barkDark;
       for (let n = 0; n < boughLen; n++) {
-        const bx = boughSide > 0 ? x + trunkW + n : x - 1 - n;
-        ctx.fillRect(bx, crownY + 4 - Math.round(n * 0.8), 2, 2);
+        const bx = boughSide > 0 ? x + trunkW - 1 + n : x - n;
+        const thick = n < 2 ? 3 : n < boughLen - 2 ? 2 : 1;
+        ctx.fillRect(bx, crownY + 5 - Math.round(n * 0.9), 1, thick);
       }
 
       // A crown with a profile, not a stack of slabs. Width follows a lobed
@@ -1141,7 +1148,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         if (y < -4) break;
         const t = k / crownH;
         const prof = Math.sin(Math.PI * (0.16 + t * 0.8));
-        const notch = Math.round((hash01(i * 9.4 + k * 1.7) - 0.5) * 4);
+        const notch = Math.round((hash01(i * 9.4 + k * 1.7) - 0.5) * 7);
         const half = Math.max(1, Math.round((crownW / 2) * prof) + notch);
         const lx = cx - half;
         const w = half * 2;
