@@ -68,16 +68,41 @@ This is the contract that keeps idle honest: active play multiplies, it never ga
 
 ## Pacing bands (targets the simulator must prove)
 
-| Band | Target |
-|---|---|
-| Road active (20-min session) vs same span idle | 1.8× – 2.2× gold |
-| Boss active vs zero-tap, same build | 1.4× – 1.8× faster |
-| 8 h idle return | ≥ 1 meaningful upgrade affordable |
-| 24 h idle return | ≥ 1 zone of road progress |
-| Realm start → portal available | 2 – 4 h active, 8 – 16 h idle |
-| Portal boss duration (prepared build) | 20 – 90 min active |
-| Ascend promptly vs farm a ready realm 2× longer | prompt ascension wins |
-| Upgrade panel, any moment of Road play | ≥5 priced rows, ≥4 affordable at 95% of looks |
+The headline band is **permanent power, not gold** (`docs/DECISIONS.md` #31). Gold is
+wiped by every ascension, so a rate multiplier on it cannot beat a night of idle — idle
+has all night. Ascendancy per realm is bounded, so it is the currency where a 20-minute
+session and eight hours of sleep are actually comparable.
+
+| Band | Target | Validator |
+|---|---|---|
+| **Ascendancy earned, active vs idle, at a 30-day horizon** | **1.6× – 2.4×** | P10 |
+| **Time to first ascension, idle ÷ active** | **≥ 1.20× sooner** | P10 |
+| Road active (20-min session) vs same span idle | 1.8× – 2.2× gold | P1 |
+| Boss active vs zero-tap, same build | 1.4× – 1.8× faster | P2 |
+| 8 h idle return | ≥ 1 meaningful upgrade affordable | P3 |
+| 24 h idle return | ≥ 1 zone of road progress | P4 |
+| Realm start → portal available | 2 – 4 h active, 8 – 16 h idle | P5 |
+| Portal boss duration (prepared build) | **15 – 90 min active** | P6 |
+| Ascend promptly vs farm a ready realm 2× longer | prompt ascension wins | P7 |
+| Upgrade panel, any moment of Road play | ≥5 priced rows, ≥4 affordable at 95% of looks | P8 |
+| Portal-ready dead time / realm cadence | ≤ 24 h waiting, ≤ 3 days per realm | P9 |
+
+**The horizon is part of the band, not a detail.** Both players climb the same
+realm ladder and it ends at realm 300, so the ratio decays as they converge:
+1.91× at 30 days, 1.17× at 90, where 302 realms are already behind both of them.
+30 days is one full arc of the tree and the horizon the band is stated at.
+
+**Superseded.** The 1.8–2.2× gold band was the *headline* band; it is now a supporting
+one. The constants hit it exactly (2.07× in playtest, P1 passing on every seed) and the
+result was still that eight hours of sleep dwarfed a 30-minute session. Hitting a band
+that measures the wrong quantity is not balance. P1 survives because a Road session
+should still feel richer minute-for-minute; it is no longer the claim that active play
+matters.
+
+**The guardian floor moved from 20 to 15 minutes.** A shorter first guardian is better
+onboarding, not a failure: realm 0's fight measures **16.1 minutes**, so a new player
+reaches their first ascension inside one session. Realms 1–94 sit between 20 and 90
+minutes, so 15 is a floor for the opening realm rather than a loosening of the band.
 
 ## Determinism
 

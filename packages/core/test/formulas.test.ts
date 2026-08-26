@@ -39,7 +39,8 @@ import {
   skillMult,
   skillRankMult,
   SKILL_IDS,
-  SKILL_MAX_BONUS,
+  SKILL_MULT_CEILING,
+  SKILLS,
   swingInterval,
   zonesPerRealm,
 } from '../src/index';
@@ -52,7 +53,7 @@ describe('realm scaling', () => {
       expect(enemyHp(r, 4) / enemyHp(0, 4)).toBeCloseTo(realmScale(r), 6);
       expect(enemyGold(r, 4) / enemyGold(0, 4)).toBeCloseTo(realmScale(r), 6);
       expect(levelCost(7, r) / levelCost(7, 0)).toBeCloseTo(realmScale(r), 6);
-      expect(skillCost(3, r) / skillCost(3, 0)).toBeCloseTo(realmScale(r), 6);
+      expect(skillCost('cleave', 3, r) / skillCost('cleave', 3, 0)).toBeCloseTo(realmScale(r), 6);
       expect(gearPower(r, 4, 'rare') / gearPower(0, 4, 'rare')).toBeCloseTo(realmScale(r), 6);
     }
   });
@@ -87,9 +88,19 @@ describe('cost formulas', () => {
     expect(levelCost(1, 0)).toBeCloseTo(11.5, 10);
   });
 
-  it('skillCost(rank, 0) = 50 * 1.15^rank', () => {
-    expect(skillCost(0, 0)).toBeCloseTo(50, 10);
-    expect(skillCost(1, 0)).toBeCloseTo(57.5, 10);
+  it('prices each skill on its own geometry, not one shared curve', () => {
+    for (const id of SKILL_IDS) {
+      const def = SKILLS[id]!;
+      expect(skillCost(id, 0, 0)).toBeCloseTo(def.costBase, 10);
+      expect(skillCost(id, 1, 0)).toBeCloseTo(def.costBase * def.costRate, 10);
+      expect(skillCost(id, 5, 0)).toBeCloseTo(def.costBase * def.costRate ** 5, 10);
+    }
+    // The tracks are not five copies of one decision: the cheapest rank-0 row
+    // costs a fraction of the dearest, and the price curves cross with rank.
+    expect(skillCost('cleave', 0, 0)).toBeLessThan(skillCost('secondWind', 0, 0) / 8);
+    expect(skillCost('sunder', 0, 0)).toBeGreaterThan(skillCost('warcry', 0, 0));
+    expect(skillCost('sunder', 40, 0)).toBeLessThan(skillCost('warcry', 40, 0));
+    expect(skillCost('unknown', 0, 0)).toBe(Infinity);
   });
 
   it('ascNodeCost rises linearly in rank and never caps out', () => {
@@ -116,28 +127,44 @@ describe('hero damage model', () => {
   it('skillMult is the product of skillRankMult; rank 0 is neutral', () => {
     expect(skillMult({ cleave: 0, warcry: 0 })).toBeCloseTo(1, 10);
     expect(skillMult({ cleave: 2, warcry: 4 })).toBeCloseTo(
-      skillRankMult(2) * skillRankMult(4),
+      skillRankMult('cleave', 2) * skillRankMult('warcry', 4),
       10,
     );
   });
 
-  it('skillRankMult rises with rank and never exceeds 1 + SKILL_MAX_BONUS', () => {
-    expect(skillRankMult(0)).toBe(1);
-    // Strictly increasing over the ranks a realm actually reaches. Past the
-    // point where the decay term underflows to zero it sits exactly on the
-    // asymptote, so the durable bound is "never exceeds", not "never reaches".
-    for (let r = 1; r <= 60; r++) {
-      expect(skillRankMult(r)).toBeGreaterThan(skillRankMult(r - 1));
+  it('rises with rank toward each skill\u2019s own ceiling, never past it', () => {
+    for (const id of SKILL_IDS) {
+      const cap = 1 + SKILLS[id]!.maxBonus;
+      expect(skillRankMult(id, 0)).toBe(1);
+      // Strictly increasing over the ranks a realm actually reaches. Past the
+      // point where the decay term underflows to zero it sits exactly on the
+      // asymptote, so the durable bound is "never exceeds", not "never reaches".
+      for (let r = 1; r <= 60; r++) {
+        expect(skillRankMult(id, r)).toBeGreaterThan(skillRankMult(id, r - 1));
+      }
+      for (let r = 1; r < 2000; r++) {
+        expect(skillRankMult(id, r)).toBeGreaterThanOrEqual(skillRankMult(id, r - 1));
+        expect(skillRankMult(id, r)).toBeLessThanOrEqual(cap);
+      }
+      expect(skillRankMult(id, 1e6)).toBe(cap);
     }
-    for (let r = 1; r < 2000; r++) {
-      expect(skillRankMult(r)).toBeGreaterThanOrEqual(skillRankMult(r - 1));
-      expect(skillRankMult(r)).toBeLessThanOrEqual(1 + SKILL_MAX_BONUS);
-    }
-    expect(skillRankMult(1e6)).toBe(1 + SKILL_MAX_BONUS);
+    expect(skillRankMult('unknown', 50)).toBe(1);
+  });
+
+  it('gives each skill a different curve, not one curve under five names', () => {
+    const caps = SKILL_IDS.map((id) => 1 + SKILLS[id]!.maxBonus);
+    expect(new Set(caps).size).toBe(SKILL_IDS.length);
+    // Maturity differs too: Second Wind is nearly paid out by rank 10 where
+    // Sunder, the deepest track, has barely started.
+    const paid = (id: string, r: number) =>
+      (skillRankMult(id, r) - 1) / SKILLS[id]!.maxBonus;
+    expect(paid('secondWind', 10)).toBeGreaterThan(0.95);
+    expect(paid('sunder', 10)).toBeLessThan(0.45);
+    expect(paid('cleave', 10)).toBeGreaterThan(paid('warcry', 10));
   });
 
   it('bounds skillMult at the ceiling no matter how many ranks are bought', () => {
-    const ceiling = Math.pow(1 + SKILL_MAX_BONUS, SKILL_IDS.length);
+    const ceiling = SKILL_MULT_CEILING;
     const maxed: Record<string, number> = {};
     for (const id of SKILL_IDS) maxed[id] = 1e6;
     expect(skillMult(maxed)).toBeLessThanOrEqual(ceiling * (1 + 1e-12));
@@ -176,7 +203,7 @@ describe('hero damage model', () => {
     s.ascendancy.nodes.heft = 1;
     const edge = (1 + ASC_NODES.edge!.perRank) ** 2;
     const heft = (1 + ASC_NODES.heft!.perRank) ** 1;
-    const expected = (d0 * 1.12 ** 3 * edge + 40 * heft) * skillRankMult(2);
+    const expected = (d0 * 1.12 ** 3 * edge + 40 * heft) * skillRankMult('cleave', 2);
     expect(heroDps(s)).toBeCloseTo(expected, 8);
   });
 

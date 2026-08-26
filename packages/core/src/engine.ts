@@ -19,6 +19,7 @@ import {
 } from './constants';
 import {
   ascendancyBossPayout,
+  ascendancyPerCatch,
   ascendancyPerZone,
   ascNodeCost,
   bossHp,
@@ -34,6 +35,7 @@ import { arcHitIndex, arcsForKill } from './arcs';
 import { addMomentum, momentumAt } from './momentum';
 import { createRng, type Rng } from './rng';
 import type {
+  PortalEntry,
   EventLog,
   GameEvent,
   GameState,
@@ -111,7 +113,7 @@ export function buySkill(state: GameState, id: string): boolean {
   if (!def) return false;
   if (state.hero.level < def.unlockLevel) return false;
   const current = state.hero.skills[id] ?? 0;
-  const cost = skillCost(current, state.realm);
+  const cost = skillCost(id, current, state.realm);
   if (!(state.gold >= cost)) return false;
   state.gold -= cost;
   state.hero.skills[id] = current + 1;
@@ -137,18 +139,25 @@ export function buyAscendancyNode(state: GameState, id: string): boolean {
  * Enter the portal. Always an explicit player action — nothing in `advance`
  * calls this, online or offline (docs/DECISIONS.md #15).
  */
-export function enterPortal(state: GameState): { entered: boolean; events: GameEvent[] } {
+export function enterPortal(state: GameState): PortalEntry {
   const events: GameEvent[] = [];
-  if (state.phase !== 'road' || !state.portalReady) return { entered: false, events };
+  if (state.phase !== 'road' || !state.portalReady) {
+    return { entered: false, reason: 'not-ready', events };
+  }
 
   const hp = bossHp(state.realm);
+  // Past the overflow frontier a guardian's HP is Infinity and no build can
+  // ever fell it. Refusing entry turns a soft-lock into a closed portal.
+  if (!Number.isFinite(hp) || hp <= 0) {
+    return { entered: false, reason: 'unwinnable', events };
+  }
   state.phase = 'boss';
   state.boss = { hpRemaining: hp, hpMax: hp, enteredAtSec: state.timeSec };
   state.arcs = [];
   state.nextActionAtSec =
     state.timeSec + swingInterval(state, momentumAt(state.momentum, state.timeSec));
   events.push({ type: 'portalEnter', timeSec: state.timeSec, realm: state.realm, bossHp: hp });
-  return { entered: true, events };
+  return { entered: true, reason: null, events };
 }
 
 /** Abandon the attempt: guardian HP resets, the Road build is untouched. */
@@ -420,6 +429,16 @@ function processStrike(
   recap.goldEarned += bonus;
   recap.arcCatches += 1;
 
+  // Gated exactly as zone clears are (docs/DECISIONS.md #22): once the portal
+  // is open the realm pays no more Ascendancy, however long it is farmed.
+  // Without this, catching would reopen the infinite-farm hole that made P7
+  // unwinnable — it is the same hole, entered through the active layer.
+  const asc = state.portalReady ? 0 : ascendancyPerCatch(state.realm);
+  if (asc > 0) {
+    state.ascendancy.pending += asc;
+    recap.pendingAscendancyEarned += asc;
+  }
+
   let upgraded = false;
   if (arc.gear) {
     const rarity = upgradeRarity(arc.gear.rarity);
@@ -435,7 +454,13 @@ function processStrike(
       );
     }
   }
-  emit(events, { type: 'arcCatch', timeSec: clock, bonusGold: bonus, upgraded });
+  emit(events, {
+    type: 'arcCatch',
+    timeSec: clock,
+    bonusGold: bonus,
+    ascendancy: asc,
+    upgraded,
+  });
 }
 
 /** Re-prime the action schedule for the phase the hero is now in. */

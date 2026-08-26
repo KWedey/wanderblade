@@ -12,7 +12,7 @@ import {
   SKILL_IDS,
   skillMult,
   skillRankMult,
-  SKILL_MAX_BONUS,
+  SKILL_MULT_CEILING,
   SKILLS,
 } from '../src/index';
 import { portalReady } from './helpers';
@@ -89,22 +89,38 @@ describe('buySkill unlock gates', () => {
   it('charges the skill cost curve and is a no-op when unaffordable', () => {
     const s = initialState(1);
     s.hero.level = 20;
-    s.gold = skillCost(0, 0); // exactly 50
+    s.gold = skillCost('cleave', 0, 0);
     expect(buySkill(s, 'cleave')).toBe(true);
     expect(s.gold).toBeCloseTo(0, 6);
     expect(buySkill(s, 'cleave')).toBe(false);
     expect(s.hero.skills.cleave).toBe(1);
   });
 
-  it('each rank multiplies DPS by skillRankMult(rank)', () => {
-    const s = initialState(1);
-    s.hero.level = 5;
-    s.gold = 1e9;
-    const base = heroDps(s);
-    buySkill(s, 'cleave');
-    expect(heroDps(s)).toBeCloseTo(base * skillRankMult(1), 8);
-    buySkill(s, 'cleave');
-    expect(heroDps(s)).toBeCloseTo(base * skillRankMult(2), 8);
+  it('each rank multiplies DPS by that skill\u2019s own rank curve', () => {
+    for (const id of SKILL_IDS) {
+      const s = initialState(1);
+      s.hero.level = 20;
+      s.gold = 1e12;
+      const base = heroDps(s);
+      buySkill(s, id);
+      expect(heroDps(s)).toBeCloseTo(base * skillRankMult(id, 1), 8);
+      buySkill(s, id);
+      expect(heroDps(s)).toBeCloseTo(base * skillRankMult(id, 2), 8);
+    }
+  });
+
+  it('buys different amounts of power for the same gold, skill to skill', () => {
+    const gain = (id: string): number => {
+      const s = initialState(1);
+      s.hero.level = 20;
+      s.gold = 1000;
+      const base = heroDps(s);
+      while (buySkill(s, id));
+      return heroDps(s) / base;
+    };
+    const gains = SKILL_IDS.map(gain);
+    // Five interchangeable tracks would return five identical numbers.
+    expect(new Set(gains.map((g) => g.toFixed(6))).size).toBe(SKILL_IDS.length);
   });
 });
 
@@ -127,7 +143,7 @@ describe('skill ranks are uncapped, and the asymptote is what bounds them', () =
     s.hero.level = 20;
     s.gold = 1e18;
     for (const id of SKILL_IDS) for (let i = 0; i < 300; i++) buySkill(s, id);
-    const ceiling = Math.pow(1 + SKILL_MAX_BONUS, SKILL_IDS.length);
+    const ceiling = SKILL_MULT_CEILING;
     expect(skillMult(s.hero.skills)).toBeLessThan(ceiling);
   });
 

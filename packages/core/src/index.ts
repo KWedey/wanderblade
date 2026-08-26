@@ -17,10 +17,6 @@ export {
   rD,
   levelCostBase,
   rC,
-  skillCostBase,
-  skillCostRate,
-  SKILL_MAX_BONUS,
-  SKILL_RANK_DECAY,
   gearPowerBase,
   gearPowerRate,
   dropChance,
@@ -51,18 +47,22 @@ export {
   ASC_SPEED_DECAY,
   ASC_PER_ZONE,
   ASC_BOSS_PAYOUT,
+  ASC_CATCHES_PER_ZONE,
   ASC_REALM_GROWTH,
   EARNINGS_BONUS_PER_VICTORY,
   ASC_NODES,
   ASC_NODE_IDS,
   SKILLS,
   SKILL_IDS,
+  SKILL_MULT_CEILING,
 } from './constants';
 export type { AscNodeDef, SkillDef } from './constants';
 
 // --- Types ---------------------------------------------------------------
 export type {
   ArcPoint,
+  PortalEntry,
+  PortalRefusal,
   Strike,
   Rarity,
   GearSlot,
@@ -119,6 +119,7 @@ export {
   damagePerSwing,
   bossEtaSec,
   ascendancyPerZone,
+  ascendancyPerCatch,
   ascendancyBossPayout,
 } from './formulas';
 export type { AscNodeEffect } from './formulas';

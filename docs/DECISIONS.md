@@ -143,6 +143,8 @@ Content from D&D books, settings, adventures, brands, or art that is not in the 
 
 ## 23. `BOSS_REALM_GAIN` rubber-bands guardians against the earnings bonus — 2026-08-25
 
+> Superseded in part by #32: the gain is 1.19, and it absorbs the Ascendancy tree's compounding as well as the earnings bonus.
+
 **Decision:** `bossHp(realm)` multiplies the realm's final-zone enemy by `bossHpMult` **and** `BOSS_REALM_GAIN^realm` (1.22).
 
 **Why:** The automatic per-victory earnings bonus (`1.15^victories`) is gold-only, but gold buys hero levels, so it indirectly funds DPS. Unchecked, guardian fights collapsed from 53 minutes at realm 0 to 11.8 seconds by realm 39 — outside the 20–90 minute band by three orders of magnitude. A slightly faster boss curve absorbs the compounding and holds every realm in band across 30-day runs.
@@ -181,7 +183,7 @@ The sampler is uncapped. It previously stopped at 20,000 samples, which fell aro
 
 ## 27. The Ascendancy tree is uncapped, and its price curve is linear — 2026-08-25
 
-**Decision:** `ascNodeCost(id, rank) = costBase * (1 + ASC_COST_STEP * rank)` — **linear in rank, with no cap** — and a node's damage or gear-power effect **compounds** per rank rather than adding. Persistent attack speed is the single exception: it rises toward `1 + ASC_SPEED_MAX_BONUS` and stops. `BOSS_REALM_GAIN` stays 1.22.
+**Decision:** `ascNodeCost(id, rank) = costBase * (1 + ASC_COST_STEP * rank)` — **linear in rank, with no cap** — and a node's damage or gear-power effect **compounds** per rank rather than adding. Persistent attack speed is the single exception: it rises toward `1 + ASC_SPEED_MAX_BONUS` and stops. `BOSS_REALM_GAIN` stays 1.22 (lowered to 1.19 by #32).
 
 **Why:** At 90 days P6 failed from **realm 45** (95.8 min against a 90-minute ceiling, running away to 179 min by realm 51, identical on every seed). The cause was the tree being a bounded sink: 32 total ranks, fully bought by realm 39, leaving **18,829 banked Ascendancy unspendable**. Past that point hero persistent power grew only ×1.12/realm from the earnings bonus against a guardian growing ×1.22/realm — a ~9%/realm deficit compounding forever. The entry gate hid it by making the player farm a portal-ready realm, where Decision #22 credits no Ascendancy at all; that stall grew 15h → 27 → 39 → 52 → 63 → 76h until the three-day patience cap ran out and P6 broke.
 
@@ -201,11 +203,11 @@ The cost curve is the shape that matters. Ascendancy income per realm grows line
 
 **Why:** P7 compared the leftover banked balance, which was a fair proxy only while the tree was capped and the balance was pure unspent residue. Against an uncapped sink it measures *who spent less*, and it inverted for that reason alone — prompt 2196 against overfarm 2312, with the band and the game both unchanged. On the corrected instrument the same run reads prompt 110,635 against overfarm 103,165. The band did not move; the instrument was wrong.
 
-## 29. The engine's overflow frontier is realm 297, and it is pinned — 2026-08-25
+## 29. The engine's overflow frontier is pinned — 2026-08-25
 
-**Decision:** `packages/core/test/magnitude.test.ts` asserts that every client-facing scalar is finite at realm 199, and pins the two frontiers where finiteness ends: `bossHp` overflows first at **realm 297**, and the hero level ladder tops out at **2102 at realm 199** and **659 at realm 296** because level and realm multiply in both `heroBaseDamage` and `levelCost`.
+**Decision:** `packages/core/test/magnitude.test.ts` asserts that every client-facing scalar is finite at realm 199, and pins the two frontiers where finiteness ends: `bossHp` overflows first at **realm 301** (297 before #32 lowered `bossHpMult`), and the hero level ladder tops out at **2102 at realm 199** and **659 at realm 296** because level and realm multiply in both `heroBaseDamage` and `levelCost`.
 
-**Why:** A late-game capture showed gold rendering as `1.0637e+278` and a portal panel reading `Infinityd NaNh`, and the question was whether the client-side formatter fixes were papering over real overflow in core. They were not — core is finite and exact at those magnitudes. But there is a real cliff past it: at realm 297 a guardian's HP is `Infinity` and no build can ever fell it, which is a soft-lock rather than a rendering problem. `docs/ECONOMY.md` requires detecting non-finite values before they reach client state, so the frontier is now a test that fails if a constant change drags it toward realms a player can reach.
+**Why:** A late-game capture showed gold rendering as `1.0637e+278` and a portal panel reading `Infinityd NaNh`, and the question was whether the client-side formatter fixes were papering over real overflow in core. They were not — core is finite and exact at those magnitudes. But there is a real cliff past it: at that frontier a guardian's HP is `Infinity` and no build can ever fell it, which is a soft-lock rather than a rendering problem. `docs/ECONOMY.md` requires detecting non-finite values before they reach client state, so the frontier is now a test that fails if a constant change drags it toward realms a player can reach.
 
 ## 30. A kill's payout is thrown as several coins, and the split lives in core — 2026-08-25
 
@@ -216,3 +218,61 @@ The cost curve is the shape that matters. Ascendancy income per realm grows line
 **`ARC_CATCH_MULT` moves 1.15 → 1.6, and the reason is not the number of coins.** The binding constraint is the **strike rate**, not arc availability: the reference player strikes 3.3×/s against 4.2 kills/s, and measurement confirms **0.999 catches per strike** — every aimed strike already connects. Splitting a payout across n coins therefore divides each catch by n and buys no additional catches. At 1.15 the split measured **1.75–1.76×** Road-active, below the 1.8 floor; at 1.6 it measures **1.91–1.95×, mean 1.93**, mid-band. This supersedes the 1.15 that Decision #25 settled for an un-split arc; that value was correct for the payout shape it was measured against.
 
 **Also fixed here:** `pruneArcs` took a leading prefix of the arc list, which assumed arcs expire in the order they were created. Staggering breaks that — one kill's later coins outlive the next kill's first — so it now filters. The old form would have leaked landed arcs into the save rather than mis-crediting, but it would have leaked.
+
+## 31. Active play is banded in Ascendancy, not gold — 2026-08-25
+
+> Superseded in part by #33: the shipped band is **1.6–2.4×** with first ascension **≥1.20× sooner** (`PERMANENT_RATIO_MIN` / `PERMANENT_RATIO_MAX` / `PERMANENT_SOONER_MIN` in `sim/src/probes.ts`), re-derived from six seeds — 2.16 / 1.96 / 1.81 / 1.63 / 1.93 / 1.97, mean 1.91. The 1.8–2.4× and ≥1.25× below were measured on three seeds before #33 gave the five skills five price curves.
+
+**Decision:** The headline pacing band is **1.8–2.4× lifetime Ascendancy** over a 30-day horizon plus **first ascension ≥1.25× sooner** (validator P10). The 1.8–2.2× Road gold band survives as P1, a supporting band, not the claim that active play matters. `docs/ACTIVE-PLAY.md` carries the superseded note.
+
+**Why:** A playtest reported 5,144 → 391M gold across eight hours of sleep. Our constants hit the gold band exactly — 2.07× measured, P1 green on every seed — and the result was still that one night dwarfed a 30-minute session. That is not a tuning miss; it is the band measuring the wrong quantity. Gold is wiped by every ascension and idle accrues it for as many hours as there are in a night, so **no** multiplier on gold survives the comparison. Ascendancy per realm is bounded by realms completed, which is the one axis where 20 attended minutes and 8 unattended hours are commensurable.
+
+**The ceiling is as load-bearing as the floor.** VISION pillar 4 requires idle-only play to stay meaningfully productive; at 3× the idle player is a spectator. Measured 2.05× / 2.14× / 2.09× on seeds 1–3, first ascension 1.34× / 1.40× / 1.36× sooner.
+
+**Tree depth is reported, not banded.** Ranks are bought when the player opens the app, so "time to 20 tree ranks" lands on a session boundary and quantises to half a day — 3.50d vs 4.50d on all three seeds. Both runs share that schedule so the ratio is honest, but half-day resolution cannot carry a band. Lifetime Ascendancy is the same claim at usable resolution: cumulative node cost is quadratic in rank, so 2.09× the Ascendancy is ≈1.45× the tree depth.
+
+**This band failed on the old constants.** At `bossHpMult` 30000 the ratio was **1.10×** — below the floor — because only 31 realms completed in 30 days and lifetime Ascendancy degenerated into a realm count. Decision #32 is what made the statistic informative.
+
+## 32. The Road has to be able to reach the guardian it opens — 2026-08-25
+
+**Decision:** `bossHpMult` 30000 → **5600** and `BOSS_REALM_GAIN` 1.22 → **1.19**. The guardian band moves from 20–90 to **15–90 active minutes**. Validator **P9** is added: the portal may not sit open on a finished Road for more than 24 hours, no realm may take more than 3 days, and the share of Road time spent waiting is reported. This supersedes the 1.22 that Decisions #23 and #27 settled.
+
+**Why:** Clearing all 50 zones did not build a hero who could face the realm's guardian. At realm 9 the portal opened with the fight previewed at **18 hours**; the modelled player then farmed the last zone for **13 hours** — earning no Ascendancy, seeing no new content (ADR #22) — until the preview fell to 32 minutes. Across 30 realms that was **56% of all Road time** spent waiting, and it was the reason every downstream statistic was uninformative: realm length was pinned at 23.4 h by the session schedule rather than by the economy.
+
+The gap was a **shape** problem, not a level one. It widened ~1.29× per realm, so no single `bossHpMult` closes it. `BOSS_REALM_GAIN` was set against the earnings bonus alone (#23); it also has to cover the Ascendancy tree's compounding damage (#27), which only bites once ranks accumulate. Swept over 30-day runs: gain 1.16 peaks at 41 min then decays to 14 by realm 60; 1.22 rides the 90-minute ceiling and reaches only 51 realms; **1.19 rises from 16 minutes to a ~70-minute plateau and holds it** — 95/95 realms in band, min 16.1, max 90.0.
+
+**The floor moved to 15 because a shorter first guardian is better onboarding.** Realm 0's fight is **16.1 minutes**, so a new player's first ascension fits inside one session. Realms 1–94 all sit at 20 minutes or above; 15 is a floor for the opening realm, not a loosening.
+
+**Result:** longest portal wait **14.74 h → 17.5 m**, waiting share **56% → 0%**, slowest realm **1.01 d → 0.50 d**, realms in 30 days **31 → 95**.
+
+**Also fixed here:** the simulator's `prompt` entry strategy only checked the portal at session boundaries, so a portal opening mid-gap waited up to 11.7 h for the next session while the Road kept building power — which trivialised the fight it then measured (0.1 min by realm 37). `prompt` now means prompt. Separately, `vitest.config.ts` raises `testTimeout` 30 s → 180 s: the many-way split across a ten-day gap is ~40 s of real work and was failing on `main` as a timeout, not an assertion.
+
+## 33. Five skills, five curves — and a panel that is never all grey — 2026-08-25
+
+**Decision:** `SkillDef` carries its own `costBase`, `costRate`, `maxBonus` and `decay`. `skillCost(id, rank, realm)` and `skillRankMult(id, rank)` take the skill they are pricing. The shared `skillCostBase` / `skillCostRate` / `SKILL_MAX_BONUS` / `SKILL_RANK_DECAY` constants are gone; `SKILL_MULT_CEILING` is derived from the roster. Validator **P8** gains a hard clause: at least one row affordable at every look, never merely most of them.
+
+| Skill | Unlock | Rank-0 | Rate | Ceiling | Decay |
+|---|---|---|---|---|---|
+| Cleave | 0 | 35 | 1.12 | +12% | 0.78 |
+| Warcry | 0 | 60 | 1.19 | +23% | 0.93 |
+| Riposte | 2 | 110 | 1.15 | +17% | 0.86 |
+| Sunder | 6 | 190 | 1.13 | +27% | 0.95 |
+| Second Wind | 14 | 300 | 1.21 | +10% | 0.72 |
+
+**Why:** All five cost 50 gold at rank 0, grew at 1.15, and approached the same +17.6%, so they converged on the same rank and were one decision printed five times. Breadth without difference is not breadth. Cheap-and-shallow through dear-and-deep: Cleave is the row a broke hero can always afford and has paid out most of its value by rank 10; Sunder costs six times as much to start but has the slowest price growth and the highest ceiling, so it is the track a rich hero keeps feeding. Second Wind is a burst — dear, small, and 95% paid by rank 10.
+
+**The ceilings still multiply to 2.25×**, the same total the uniform tracks reached, which is why P1–P7 did not move. What did move is P10: first ascension went 1.34× → 1.22× sooner, because a 35-gold opening row helps the idle player too. The band was re-derived from six seeds rather than kept.
+
+**Staggering the prices is the mechanism behind the new P8 clause.** An all-grey panel answers "what do I spend on next" with "nothing". With one shared price every row greys together; with a 35-to-300 spread the cheap track is buyable long before the dear one. `packages/core/test/shop.test.ts` pins it at the engine: from a fresh ascension at realms 0–60, an affordable row is back on the panel in under 60 seconds.
+
+**Also settled here:** a geometric price overflows to Infinity eventually, and an Infinity price is a MAX label wearing a different hat. `magnitude.test.ts` pins each track's frontier — 3,694 (Second Wind) to 6,232 (Cleave) — against realm-local ranks that peak in the low hundreds and reset every ascension.
+
+## 34. The realm ladder ends at 300, and the portal says so — 2026-08-25
+
+**Decision:** `enterPortal` returns `{ entered, reason, events }` where `reason` is `'not-ready'`, `'unwinnable'`, or `null`. It **refuses to open** when `bossHp(realm)` is not finite. Realm 300 is the last winnable realm. The simulator ends a run at the frontier and reports it rather than accumulating wait time against P9.
+
+**Why:** Past realm 300 a guardian's HP is `Infinity`. The old code entered anyway and started a fight no build can ever end — a soft-lock, with the boss ETA reading `Infinity` and the portal panel showing nothing actionable. A closed portal is a state the client can explain; an endless fight is not.
+
+**Why a horizon rather than a representation that survives.** `bossHp` overflows at realm 301, but `enemyHp` follows at 330, `gearPower` at 331, `enemyGold` at 333 and `levelCost` at 341. Carrying `bossHp` in a mantissa/exponent pair buys 30 realms and leaves the wall standing, so a real fix is a big-number representation through the whole economy — an M2+ project with its own determinism contract, not a guard. The guard is what makes the wall a defined edge instead of a hang.
+
+**It is reachable.** A 90-day run at 3 seeds reaches **realm 302**. This is a real endgame boundary at roughly three months of steady play, not a theoretical one. `packages/core/test/magnitude.test.ts` pins entry succeeding at realm 300 and refusing at 301, 302, 400 and 5000, with the Road left untouched by the refusal.

@@ -68,10 +68,10 @@ function bestGoldBuy(state: GameState): Candidate | null {
     const def = SKILLS[id];
     if (!def || level < def.unlockLevel) continue;
     const rank = state.hero.skills[id] ?? 0;
-    const cost = skillCost(rank, state.realm);
+    const cost = skillCost(id, rank, state.realm);
     if (!Number.isFinite(cost) || cost > state.gold) continue;
-    const oldF = skillRankMult(rank);
-    const newF = skillRankMult(rank + 1);
+    const oldF = skillRankMult(id, rank);
+    const newF = skillRankMult(id, rank + 1);
     const ratio = (flat * mult * (newF / oldF - 1)) / cost;
     if (Number.isFinite(ratio) && ratio > 0) candidates.push({ kind: 'skill', id, cost, ratio });
   }

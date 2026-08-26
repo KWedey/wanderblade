@@ -17,7 +17,7 @@ npm run dev                  # Vite dev server at http://localhost:5173
 npm run dev -- --host        # expose on LAN for phone testing
 npm run build                # production build of app/
 npm run verify               # THE GATE: lint + typecheck + test
-npm test                     # vitest across all workspaces (15 files / 223 tests)
+npm test                     # vitest across all workspaces (19 files / 279 tests)
 npm run typecheck            # tsc --noEmit over core, sim, and app
 npm run lint                 # eslint (type-aware); --fix for the autofixable ones
 npm run sim                  # economy simulator, default 3 seeds × 10 days
@@ -33,7 +33,7 @@ npx vitest run -t "split-advance determinism"
 npx vitest packages/core/test           # watch mode
 ```
 
-**The gate is `npm run verify`.** All three stages must pass before any task is complete. `vitest.config.ts` sets only a 30 s `testTimeout` — the long-gap tests replay millions of kills on purpose — and vitest otherwise uses defaults, resolving `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
+**The gate is `npm run verify`.** All three stages must pass before any task is complete. `vitest.config.ts` sets only a 180 s `testTimeout` — the long-gap tests replay millions of kills on purpose — and vitest otherwise uses defaults, resolving `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
 
 **A fresh worktree needs its own `npm install`.** Without the local `node_modules/@wanderblade/*` symlinks, vitest silently resolves the core from the parent checkout and the tests grade someone else's code; `tsc` and `tsx` do not, because they follow tsconfig `paths`.
 

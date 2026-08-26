@@ -110,6 +110,15 @@ export interface LifetimeStats {
   bossDamage: number;
 }
 
+/** Why a portal did not open. `unwinnable` means the guardian's HP is not finite. */
+export type PortalRefusal = 'not-ready' | 'unwinnable';
+
+export interface PortalEntry {
+  entered: boolean;
+  reason: PortalRefusal | null;
+  events: GameEvent[];
+}
+
 /**
  * The complete serializable game state. Every field is a plain number/string/
  * boolean or a nested plain object or array of them, so `JSON.stringify`
@@ -204,6 +213,8 @@ export type GameEvent =
       type: 'arcCatch';
       timeSec: number;
       bonusGold: number;
+      /** Pending Ascendancy paid by the catch; 0 once the realm is portal-ready. */
+      ascendancy: number;
       /** Whether the caught arc carried gear that gained a rarity tier. */
       upgraded: boolean;
     }

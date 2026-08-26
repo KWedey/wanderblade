@@ -24,6 +24,7 @@ import {
   levelCost,
   realmScale,
   skillCost,
+  SKILL_IDS,
   skillMult,
   swingInterval,
   zonesPerRealm,
@@ -86,7 +87,7 @@ function clientFacing(s: GameState): Array<[string, number]> {
     ['ascDamageMult', ascMultiplier(s.ascendancy, 'damage')],
     ['ascGearMult', ascMultiplier(s.ascendancy, 'gearPower')],
     ['levelCost', levelCost(s.hero.level, s.realm)],
-    ['skillCost', skillCost(200, s.realm)],
+    ['skillCost', skillCost('sunder', 200, s.realm)],
     ['ascNodeCost', ascNodeCost('edge', 300)],
     ['ascendancyPerZone', ascendancyPerZone(s.realm)],
     ['ascendancyBossPayout', ascendancyBossPayout(s.realm)],
@@ -146,7 +147,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
       realmScale: firstNonFinite((r) => realmScale(r)),
     };
     expect(frontier).toEqual({
-      bossHp: 297,
+      bossHp: 301,
       enemyHp: 330,
       gearPower: 331,
       enemyGold: 333,
@@ -155,7 +156,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
     });
 
     const earliest = Math.min(...Object.values(frontier));
-    expect(earliest).toBe(297);
+    expect(earliest).toBe(301);
     for (const [name, value] of clientFacing(deepState(earliest - 1))) {
       expect(Number.isFinite(value), `${name} at realm ${earliest - 1}`).toBe(true);
     }
@@ -163,7 +164,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
 
   /**
    * Hero level multiplies the realm scale in both `heroBaseDamage` and
-   * `levelCost`, so a tall enough ladder overflows well before realm 297. The
+   * `levelCost`, so a tall enough ladder overflows well before realm 301. The
    * frontier is a surface, not a line, and this pins where it crosses.
    */
   it('pins how far the hero level ladder can go before it overflows', () => {
@@ -181,5 +182,73 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
     // The curve the simulator walks stays well clear of both.
     expect(levelAt(199)).toBeLessThan(topLevel(199));
     expect(levelAt(296)).toBeLessThan(topLevel(296));
+  });
+
+  /**
+   * The frontier is a wall, and the engine has to say so rather than open a
+   * fight with Infinity HP that no build can ever end. Realm 300 is the last
+   * winnable realm; 301 and beyond refuse entry.
+   */
+  it('closes the portal past the frontier instead of opening an endless fight', () => {
+    const ready = (realm: number): GameState => {
+      const s = initialState(5);
+      s.realm = realm;
+      s.zone = zonesPerRealm - 1;
+      s.portalReady = true;
+      return s;
+    };
+
+    const last = ready(300);
+    expect(Number.isFinite(bossHp(300))).toBe(true);
+    const opened = enterPortal(last);
+    expect(opened.entered).toBe(true);
+    expect(opened.reason).toBeNull();
+    expect(last.phase).toBe('boss');
+    expect(Number.isFinite(last.boss.hpMax)).toBe(true);
+
+    for (const realm of [301, 302, 400, 5000]) {
+      const s = ready(realm);
+      expect(Number.isFinite(bossHp(realm))).toBe(false);
+      const res = enterPortal(s);
+      expect(res.entered).toBe(false);
+      expect(res.reason).toBe('unwinnable');
+      expect(res.events).toHaveLength(0);
+      // A refused portal leaves the Road exactly as it was.
+      expect(s.phase).toBe('road');
+      expect(s.boss.hpMax).toBe(0);
+      expect(s.boss.hpRemaining).toBe(0);
+      expect(s.portalReady).toBe(true);
+      // And the preview never invites the commit.
+      expect(bossEtaSec(s, 1)).toBe(Infinity);
+    }
+  });
+
+  it('distinguishes a closed portal from an unopened one', () => {
+    const notReady = initialState(5);
+    expect(notReady.portalReady).toBe(false);
+    expect(enterPortal(notReady).reason).toBe('not-ready');
+  });
+
+  /**
+   * A skill's price is geometric in its own rate, so the steepest track
+   * overflows first. Pinned because an Infinity price is a MAX label wearing a
+   * different hat, and ADR #26 promises the panel never shows one.
+   */
+  it('keeps every skill priced far past the ranks a realm reaches', () => {
+    const frontier: Record<string, number> = {};
+    for (const id of SKILL_IDS) {
+      let rank = 0;
+      while (rank < 20_000 && Number.isFinite(skillCost(id, rank, 0))) rank += 1;
+      frontier[id] = rank;
+    }
+    expect(frontier).toEqual({
+      cleave: 6232,
+      warcry: 4057,
+      riposte: 5045,
+      sunder: 5765,
+      secondWind: 3694,
+    });
+    // Realm-local ranks reset every ascension and peak in the low hundreds.
+    expect(Math.min(...Object.values(frontier))).toBeGreaterThan(1000);
   });
 });

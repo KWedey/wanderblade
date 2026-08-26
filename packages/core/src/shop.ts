@@ -64,7 +64,7 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
     if (!def) continue;
     const rank = state.hero.skills[id] ?? 0;
     const unlocked = level >= def.unlockLevel;
-    const cost = skillCost(rank, state.realm);
+    const cost = skillCost(def.id, rank, state.realm);
     out.push({
       kind: 'skill',
       id,
