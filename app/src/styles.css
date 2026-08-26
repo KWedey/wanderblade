@@ -832,19 +832,21 @@ body {
 
 /* --- Gear ------------------------------------------------------------- */
 
+/* Rows, not three columns. A third of the panel is 115px, and the bitmap face
+   dropped to 1x to fit "Dragonscale Aegis" into it - three glyph sizes inside
+   one slot. A full-width row gives every name the panel's width at 2x. */
 .gear-slots {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
 .gear-slot {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 3px;
-  padding: 6px 5px;
-  min-height: 70px;
+  gap: 8px;
+  padding: 5px 8px;
   border: 3px solid var(--wood-shadow);
   background: rgba(0, 0, 0, 0.25);
   text-align: center;
@@ -854,6 +856,7 @@ body {
   font-size: var(--ui-1);
   text-transform: uppercase;
   color: var(--ink-faint);
+  white-space: nowrap;
 }
 
 .gear-name {
@@ -865,6 +868,8 @@ body {
 .gear-power {
   font-size: var(--ui-1);
   color: var(--ink-faint);
+  white-space: nowrap;
+  text-align: right;
 }
 
 .gear-slot.filled .gear-power {

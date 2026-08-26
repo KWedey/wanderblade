@@ -20,6 +20,12 @@ export const LINE_GAP = 2;
  * how many device pixels one glyph pixel occupies — never fractional, which is
  * the whole point of moving off the webfont.
  */
+/**
+ * Smallest scale UI type may be drawn at. Stepping to 1 put three glyph sizes
+ * inside one gear slot - the "two resolutions" break, in our own panel.
+ */
+export const MIN_UI_SCALE = 2;
+
 export function pixelScaleFor(fontSizePx: number): number {
   return Math.max(1, Math.round(fontSizePx / GLYPH_H));
 }
@@ -87,10 +93,12 @@ export function layoutPixelText(
   preferredScale: number,
   maxWidth: number,
   singleLine = false,
+  minScale = 1,
 ): PixelLayout | null {
   const trimmed = text.trim();
   if (!trimmed || maxWidth <= 0) return null;
-  for (let scale = Math.max(1, Math.floor(preferredScale)); scale >= 1; scale--) {
+  const floor = Math.max(1, Math.floor(minScale));
+  for (let scale = Math.max(floor, Math.floor(preferredScale)); scale >= floor; scale--) {
     const lines = singleLine
       ? [trimmed.replace(/\s+/g, ' ')]
       : wrapPixelText(trimmed, scale, maxWidth);
@@ -257,7 +265,7 @@ export function paintElement(
       return paintElement(el, dpr, true);
     }
   }
-  const layout = layoutPixelText(trimmed, preferred, boxWidth, nowrap);
+  const layout = layoutPixelText(trimmed, preferred, boxWidth, nowrap, MIN_UI_SCALE);
   if (!layout) {
     fallBack(el, holder);
     return false;

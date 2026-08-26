@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { FONT_COVERAGE, GLYPH_H, textWidth } from '../src/scene/pixels';
 import {
+  LINE_GAP,
+  MIN_UI_SCALE,
   alignOffset,
   layoutPixelText,
-  LINE_GAP,
   lineHeight,
   measurePixelText,
   pixelScaleFor,
@@ -190,3 +191,38 @@ describe('alignOffset', () => {
     expect(alignOffset(40, 100, 'right')).toBe(60);
   });
 });
+
+describe('UI type never drops below its floor', () => {
+  const PANEL_STRINGS = [
+    'Dragonscale Aegis',
+    'Runed Longsword',
+    'Weapon',
+    'Trinket',
+    'Level up your blade',
+    'Second Wind',
+    'power 6.84B',
+  ];
+
+  // The shipped break: a gear slot a third of the panel wide stepped the face
+  // to 1x, so one slot carried three glyph sizes — the "two resolutions"
+  // complaint, inside our own panel.
+  it('returns nothing rather than a scale the panel would not match', () => {
+    for (const text of PANEL_STRINGS) {
+      for (const width of [10, 30, 60, 90, 120, 200, 400]) {
+        const layout = layoutPixelText(text, 2, width, false, MIN_UI_SCALE);
+        if (layout === null) continue;
+        expect(layout.scale, `"${text}" at ${width}px dropped below the floor`).toBeGreaterThanOrEqual(
+          MIN_UI_SCALE,
+        );
+      }
+    }
+  });
+
+  it('still fits every panel string at the floor once the box is a panel row', () => {
+    for (const text of PANEL_STRINGS) {
+      const layout = layoutPixelText(text, 2, 174, false, MIN_UI_SCALE);
+      expect(layout, `"${text}" has no layout in a 174px row`).not.toBeNull();
+      expect(layout!.scale).toBe(MIN_UI_SCALE);
+    }
+  });
+})
