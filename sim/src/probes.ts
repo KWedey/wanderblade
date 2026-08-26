@@ -7,6 +7,7 @@ import {
   advance,
   bossEtaSec,
   enterPortal,
+  ascSpent,
   gearPower,
   GEAR_SLOTS,
   type GameState,
@@ -14,7 +15,7 @@ import {
 import { botTouch } from './bot';
 import { CAP_RATE, SEC_PER_HOUR, strikeThrough } from './policy';
 import { clone, runPlayer, timeToKill, type RunOptions } from './simulate';
-import type { SimConfig, Uplift } from './types';
+import type { ShopSample, SimConfig, SpendDepth, Uplift } from './types';
 
 const ROAD_WINDOW_SEC = 20 * 60;
 /** Guardians are allowed a long time to fall before a probe gives up. */
@@ -142,9 +143,13 @@ export function promptVsOverfarm(
   const prompt = runPlayer(seed, config, base);
   const over = runPlayer(seed, config, { ...base, entry: 'overfarm-2x' });
   if (prompt.state.timeSec <= 0) return null;
+  // Total earned, not the leftover balance: the tree is an uncapped sink, so a
+  // balance comparison measures who spent less, not who earned more.
+  const earned = (s: GameState): number =>
+    s.ascendancy.banked + s.ascendancy.pending + ascSpent(s.ascendancy);
   return {
-    promptBanked: prompt.state.ascendancy.banked + prompt.state.ascendancy.pending,
-    overfarmBanked: over.state.ascendancy.banked + over.state.ascendancy.pending,
+    promptBanked: earned(prompt.state),
+    overfarmBanked: earned(over.state),
     horizonSec: Math.min(prompt.state.timeSec, over.state.timeSec),
   };
 }
@@ -187,5 +192,70 @@ export function abandonProbe(
     lostBossSec: lostFraction * investSec,
     roadGoldGained: farming.lifetime.goldEarned - goldBefore,
     etaImprovement: etaBefore - bossEtaSec(farmed, 0),
+  };
+}
+
+/**
+ * Gold resets to zero on ascension, so the first seconds of a realm have
+ * nothing affordable through no fault of the upgrade list. The grace window
+ * excludes exactly that, and is stated here rather than hidden in a threshold.
+ */
+export const SPEND_GRACE_SEC = 60;
+/** Below this many affordable rows the player has no real choice to make. */
+const STARVED_BELOW = 2;
+/** The affordable-row count the panel should offer at a typical look. */
+export const SPEND_TARGET = 4;
+/** Priced rows the panel must carry at *every* look, gold irrelevant. */
+export const SPEND_PRICED_FLOOR = 5;
+
+/** Summarise every look at the upgrade panel taken past the grace window. */
+export function spendDepth(samples: ShopSample[]): SpendDepth {
+  const counted = samples.filter((x) => x.sinceRealmStartSec >= SPEND_GRACE_SEC);
+  if (counted.length === 0) {
+    return {
+      counted: 0,
+      minAffordable: 0,
+      minPriced: 0,
+      worstRealm: -1,
+      richFraction: 0,
+      starvedFraction: 1,
+      longestStarvedSec: Infinity,
+    };
+  }
+
+  let minAffordable = Infinity;
+  let minPriced = Infinity;
+  let worstRealm = counted[0]!.realm;
+  let starved = 0;
+  let rich = 0;
+  let longestStarvedSec = 0;
+  let runStartSec: number | null = null;
+
+  for (const x of counted) {
+    if (x.affordable < minAffordable) {
+      minAffordable = x.affordable;
+      worstRealm = x.realm;
+    }
+    if (x.priced < minPriced) minPriced = x.priced;
+    if (x.affordable >= SPEND_TARGET) rich += 1;
+
+    if (x.affordable < STARVED_BELOW) {
+      starved += 1;
+      if (runStartSec === null) runStartSec = x.timeSec;
+      const span = x.timeSec - runStartSec;
+      if (span > longestStarvedSec) longestStarvedSec = span;
+    } else {
+      runStartSec = null;
+    }
+  }
+
+  return {
+    counted: counted.length,
+    minAffordable,
+    minPriced,
+    worstRealm,
+    richFraction: rich / counted.length,
+    starvedFraction: starved / counted.length,
+    longestStarvedSec,
   };
 }

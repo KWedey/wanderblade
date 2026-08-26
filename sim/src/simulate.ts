@@ -3,6 +3,7 @@
 
 import {
   advance,
+  affordableCount,
   attackSpeedMultiplier,
   bossEtaSec,
   bossHp,
@@ -14,6 +15,7 @@ import {
   initialState,
   killTime,
   momentumAt,
+  pricedCount,
   serialize,
   swingInterval,
   type GameEvent,
@@ -21,7 +23,14 @@ import {
 } from '@wanderblade/core';
 import { botTouch } from './bot';
 import { CAP_RATE, runActive, runIdle, SEC_PER_DAY, strikeTimes, type RunHooks } from './policy';
-import type { BreachKind, PolicyName, RealmRecord, Sample, SimConfig } from './types';
+import type {
+  BreachKind,
+  PolicyName,
+  RealmRecord,
+  Sample,
+  ShopSample,
+  SimConfig,
+} from './types';
 
 /** How often a Road clone is kept as a probe fixture. */
 const ROAD_STATE_INTERVAL_SEC = 3600;
@@ -70,6 +79,8 @@ export interface RunResult {
   snapshots: Map<number, GameState>;
   /** Periodic Road clones, the fixtures the windowed probes replay from. */
   roadStates: GameState[];
+  /** Every look at the upgrade panel, taken before any purchase loop ran. */
+  shopSamples: ShopSample[];
 }
 
 export function clone(s: GameState): GameState {
@@ -237,6 +248,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
 
   const snapshots = new Map<number, GameState>();
   const roadStates: GameState[] = [];
+  const shopSamples: ShopSample[] = [];
   let totalActiveSec = 0;
   let stop = false;
   let overfarmUntilSec: number | null = null;
@@ -269,6 +281,16 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
           if (opts.maxVictories !== undefined && e.victories >= opts.maxVictories) stop = true;
         }
       }
+    },
+    onShop: (s) => {
+      if (s.phase !== 'road' || shopSamples.length >= 20_000) return;
+      shopSamples.push({
+        timeSec: s.timeSec,
+        sinceRealmStartSec: s.timeSec - current().startSec,
+        realm: s.realm,
+        affordable: affordableCount(s),
+        priced: pricedCount(s),
+      });
     },
     onPurchases: (bought) => {
       current().treePurchasesTotal += bought.tree;
@@ -362,6 +384,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     totalActiveSec,
     snapshots,
     roadStates,
+    shopSamples,
   };
 }
 

@@ -125,7 +125,6 @@ export function buyAscendancyNode(state: GameState, id: string): boolean {
   const def = ASC_NODES[id];
   if (!def) return false;
   const rank = state.ascendancy.nodes[id] ?? 0;
-  if (rank >= def.maxRank) return false;
   const cost = ascNodeCost(id, rank);
   if (!Number.isFinite(cost) || !(state.ascendancy.banked >= cost)) return false;
   state.ascendancy.banked -= cost;

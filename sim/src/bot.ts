@@ -5,6 +5,7 @@
 // the purchases themselves still execute through the engine.
 
 import {
+  ascMultiplier,
   ascNodeCost,
   ascSpeedMultiplier,
   ASC_NODES,
@@ -89,16 +90,22 @@ function bestNodeBuy(state: GameState): Candidate | null {
     const def = ASC_NODES[id];
     if (!def) continue;
     const rank = asc.nodes[id] ?? 0;
-    if (rank >= def.maxRank) continue;
     const cost = ascNodeCost(id, rank);
     if (!Number.isFinite(cost) || cost > asc.banked) continue;
 
+    // Ranks compound, so a rank is worth perRank of what the node already
+    // multiplies — not perRank of the un-noded base.
     let dDps: number;
-    if (def.effect === 'damage') dDps = base * def.perRank * mult;
-    else if (def.effect === 'gearPower') dDps = gear * def.perRank * mult;
-    else {
-      const speed = ascSpeedMultiplier(asc);
-      dDps = (dps * def.perRank) / speed;
+    if (def.effect === 'damage') {
+      dDps = base * ascMultiplier(asc, 'damage') * def.perRank * mult;
+    } else if (def.effect === 'gearPower') {
+      dDps = gear * ascMultiplier(asc, 'gearPower') * def.perRank * mult;
+    } else {
+      // Speed is asymptotic, so its marginal worth is the ratio the next rank
+      // actually moves the multiplier by — not a flat perRank.
+      const before = ascSpeedMultiplier(asc);
+      const after = ascSpeedMultiplier({ ...asc, nodes: { ...asc.nodes, [id]: rank + 1 } });
+      dDps = dps * (after / before - 1);
     }
     const ratio = dDps / cost;
     if (Number.isFinite(ratio) && ratio > 0) candidates.push({ kind: 'node', id, cost, ratio });

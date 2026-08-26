@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   affordableCount,
   ASC_NODE_IDS,
-  ASC_NODES,
   ascNodeCost,
   buyHeroLevel,
   buySkill,
@@ -97,15 +96,16 @@ describe('purchaseOptions', () => {
     }
   });
 
-  it('reports a capped tree node as atMax with no finite price', () => {
+  it('never reports a tree node as maxed, however deep it is bought', () => {
     const s = initialState(1);
     s.ascendancy.banked = 1e12;
-    const id = ASC_NODE_IDS[0]!;
-    s.ascendancy.nodes[id] = ASC_NODES[id]!.maxRank;
-    const row = purchaseOptions(s).find((r) => r.id === id);
-    expect(row?.atMax).toBe(true);
-    expect(Number.isFinite(row?.cost ?? Infinity)).toBe(false);
-    expect(row?.affordable).toBe(false);
+    for (const id of ASC_NODE_IDS) s.ascendancy.nodes[id] = 5_000;
+    for (const row of purchaseOptions(s)) {
+      if (row.kind !== 'node') continue;
+      expect(row.atMax).toBe(false);
+      expect(row.maxRank).toBeNull();
+      expect(Number.isFinite(row.cost)).toBe(true);
+    }
   });
 
   it('never reports a skill as maxed, however many ranks are bought', () => {

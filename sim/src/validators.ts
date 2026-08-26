@@ -2,6 +2,7 @@
 // docs/ECONOMY.md "Redesigned simulator contract"; P-validators are the pacing
 // bands in docs/ACTIVE-PLAY.md. Both are pure functions of a SeedResult.
 
+import { SPEND_PRICED_FLOOR, SPEND_TARGET } from './probes';
 import type { BreachKind, SeedResult, Uplift, ValidatorResult } from './types';
 
 const SEC_PER_HOUR = 3600;
@@ -203,6 +204,35 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
       pv === null
         ? 'not measured'
         : `prompt ${pv.promptBanked.toFixed(1)} vs overfarm ${pv.overfarmBanked.toFixed(1)} Ascendancy at ${fmtTime(pv.horizonSec)}`,
+    ),
+  );
+
+  // Three claims, because one number cannot carry this honestly.
+  //
+  // `priced` is the critic's actual complaint — five rows with prices on them,
+  // always, whatever the wallet says. Gold cannot move it, so nothing can blip
+  // it, and it is asserted on the strict minimum.
+  //
+  // `affordable` is what the player can act on, and it dips to zero for one
+  // sample whenever the purchase loop has just spent everything. That is the
+  // spend policy, not an empty shop, so it is asserted at 95% of looks rather
+  // than on the minimum, with the starvation floor below catching a real drought.
+  const sd = r.spendDepth;
+  const richPct = sd.richFraction * 100;
+  const pricedOk = sd.counted > 0 && sd.minPriced >= SPEND_PRICED_FLOOR;
+  const richOk = sd.counted > 0 && sd.richFraction >= 0.95;
+  const droughtOk = sd.counted > 0 && sd.longestStarvedSec <= 60;
+  out.push(
+    ok(
+      'P8',
+      `Upgrade panel: ≥${SPEND_PRICED_FLOOR} priced always, ≥${SPEND_TARGET} affordable at 95% of looks`,
+      pricedOk && richOk && droughtOk,
+      sd.counted === 0
+        ? 'no samples'
+        : `${sd.minPriced} priced at the leanest look; ` +
+          `≥${SPEND_TARGET} affordable at ${richPct.toFixed(1)}% of ${sd.counted} looks ` +
+          `(min ${sd.minAffordable}, worst realm ${sd.worstRealm}); ` +
+          `longest stretch under 2 affordable ${fmtTime(sd.longestStarvedSec)}`,
     ),
   );
 

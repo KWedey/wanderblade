@@ -81,7 +81,6 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
     const def = ASC_NODES[id];
     if (!def) continue;
     const rank = state.ascendancy.nodes[id] ?? 0;
-    const atMax = rank >= def.maxRank;
     const cost = ascNodeCost(id, rank);
     out.push({
       kind: 'node',
@@ -89,12 +88,12 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
       name: def.name,
       currency: 'ascendancy',
       rank,
-      maxRank: def.maxRank,
+      maxRank: null,
       cost,
       unlockLevel: 0,
       unlocked: true,
-      atMax,
-      affordable: !atMax && state.ascendancy.banked >= cost,
+      atMax: false,
+      affordable: state.ascendancy.banked >= cost,
     });
   }
 

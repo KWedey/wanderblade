@@ -12,10 +12,15 @@ import {
 import { parseArgs } from '../src/args';
 import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
 import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
-import { twentyFourHourReturn } from '../src/probes';
+import {
+  spendDepth,
+  SPEND_GRACE_SEC,
+  SPEND_TARGET,
+  twentyFourHourReturn,
+} from '../src/probes';
 import { runPlayer } from '../src/simulate';
 import { runCorrectness, runPacing } from '../src/validators';
-import type { BreachKind, SeedResult, SimConfig } from '../src/types';
+import type { BreachKind, SeedResult, ShopSample, SimConfig } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
   days: 1,
@@ -251,6 +256,7 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     portalReachSec: { idle: null, active: null },
     promptVsOverfarm: null,
     abandonProbe: null,
+    spendDepth: spendDepth(main.shopSamples),
     totalKills: main.state.lifetime.kills,
     finalRealm: main.state.realm,
     victories: 0,
@@ -276,7 +282,7 @@ describe('validators are total', () => {
     const c = runCorrectness(stub);
     const p = runPacing(stub);
     expect(c.map((v) => v.id)).toEqual(['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10']);
-    expect(p.map((v) => v.id)).toEqual(['P1','P2','P3','P4','P5','P6','P7']);
+    expect(p.map((v) => v.id)).toEqual(['P1','P2','P3','P4','P5','P6','P7','P8']);
     for (const v of [...c, ...p]) expect(typeof v.pass).toBe('boolean');
   });
 });
@@ -322,5 +328,73 @@ describe('the idle-return probes measure a return, not a session', () => {
     expect(s.hero.level).toBe(before.level);
     expect(s.gold).toBe(before.gold);
     expect(s.ascendancy.banked).toBe(before.banked);
+  });
+});
+
+describe('spendDepth', () => {
+  const sample = (over: Partial<ShopSample>): ShopSample => ({
+    timeSec: 0,
+    sinceRealmStartSec: SPEND_GRACE_SEC,
+    realm: 0,
+    affordable: 5,
+    priced: 6,
+    ...over,
+  });
+
+  it('ignores the post-ascension grace window, where gold is zero by design', () => {
+    const d = spendDepth([
+      sample({ sinceRealmStartSec: 0, affordable: 0 }),
+      sample({ sinceRealmStartSec: SPEND_GRACE_SEC - 1, affordable: 0 }),
+      sample({ sinceRealmStartSec: SPEND_GRACE_SEC, affordable: 4 }),
+    ]);
+    expect(d.counted).toBe(1);
+    expect(d.minAffordable).toBe(4);
+  });
+
+  it('reports the minimum and the realm holding it, not an average', () => {
+    const d = spendDepth([
+      sample({ realm: 1, affordable: 9 }),
+      sample({ realm: 2, affordable: 2 }),
+      sample({ realm: 3, affordable: 9 }),
+    ]);
+    expect(d.minAffordable).toBe(2);
+    expect(d.worstRealm).toBe(2);
+  });
+
+  it('measures the longest unbroken starved stretch in seconds', () => {
+    const d = spendDepth([
+      sample({ timeSec: 0, affordable: 1 }),
+      sample({ timeSec: 30, affordable: 1 }),
+      sample({ timeSec: 60, affordable: 1 }),
+      sample({ timeSec: 90, affordable: 5 }),
+      sample({ timeSec: 120, affordable: 1 }),
+    ]);
+    expect(d.longestStarvedSec).toBe(60);
+    expect(d.starvedFraction).toBeCloseTo(4 / 5, 10);
+  });
+
+  it('counts the rich share against the target, not against the minimum', () => {
+    const d = spendDepth([
+      sample({ affordable: SPEND_TARGET }),
+      sample({ affordable: SPEND_TARGET + 3 }),
+      sample({ affordable: SPEND_TARGET - 1 }),
+      sample({ affordable: 0 }),
+    ]);
+    expect(d.richFraction).toBeCloseTo(0.5, 10);
+    expect(d.minAffordable).toBe(0);
+  });
+
+  it('treats no samples as the worst case rather than a silent pass', () => {
+    const d = spendDepth([]);
+    expect(d.counted).toBe(0);
+    expect(d.minAffordable).toBe(0);
+    expect(d.richFraction).toBe(0);
+    expect(d.starvedFraction).toBe(1);
+  });
+
+  it('is fed by real runs: a road run produces looks past the grace window', () => {
+    const r = runPlayer(5, cfg({ days: 1 }), { policy: 'road-active', entry: 'prompt' });
+    expect(r.shopSamples.length).toBeGreaterThan(0);
+    expect(spendDepth(r.shopSamples).counted).toBeGreaterThan(0);
   });
 });

@@ -2,10 +2,13 @@
 
 import {
   ASC_BOSS_PAYOUT,
+  ASC_COST_STEP,
   ASC_NODES,
   ASC_NODE_IDS,
   ASC_PER_ZONE,
   ASC_REALM_GROWTH,
+  ASC_SPEED_DECAY,
+  ASC_SPEED_MAX_BONUS,
   BOSS_REALM_GAIN,
   bossHpMult,
   bossSwingSec,
@@ -89,22 +92,44 @@ export function skillCost(rank: number, realm: number): number {
   return skillCostBase * Math.pow(skillCostRate, rank) * realmScale(realm);
 }
 
-/** Banked-Ascendancy cost of the next rank of `id`, or Infinity if capped. */
+/** Banked-Ascendancy cost of the next rank of `id`. Uncapped; Infinity if unknown. */
 export function ascNodeCost(id: string, rank: number): number {
   const def = ASC_NODES[id];
-  if (!def || rank >= def.maxRank) return Infinity;
-  return def.costBase * Math.pow(def.costRate, rank);
+  if (!def) return Infinity;
+  return def.costBase * (1 + ASC_COST_STEP * rank);
 }
 
-/** Summed `perRank` across purchased nodes with the given effect. */
-export function ascBonus(asc: AscendancyState, effect: AscNodeEffect): number {
+/**
+ * Banked Ascendancy already sunk into the tree: the exact sum of every rank
+ * price paid. With an uncapped tree the leftover balance is spending residue,
+ * so "how much did this run earn" is balance plus this.
+ */
+export function ascSpent(asc: AscendancyState): number {
   let total = 0;
+  for (const id of ASC_NODE_IDS) {
+    const rank = asc.nodes[id] ?? 0;
+    for (let r = 0; r < rank; r++) total += ascNodeCost(id, r);
+  }
+  return total;
+}
+
+/**
+ * The tree's multiplier for one effect. Damage and gear power compound per
+ * rank and are unbounded; attack speed rises toward `1 + ASC_SPEED_MAX_BONUS`
+ * and stops, because it is the one that costs the engine work.
+ */
+export function ascMultiplier(asc: AscendancyState, effect: AscNodeEffect): number {
+  let ranks = 0;
+  let m = 1;
   for (const id of ASC_NODE_IDS) {
     const def = ASC_NODES[id];
     if (!def || def.effect !== effect) continue;
-    total += def.perRank * (asc.nodes[id] ?? 0);
+    const rank = asc.nodes[id] ?? 0;
+    ranks += rank;
+    m *= Math.pow(1 + def.perRank, rank);
   }
-  return total;
+  if (effect !== 'attackSpeed') return m;
+  return ranks > 0 ? 1 + ASC_SPEED_MAX_BONUS * (1 - Math.pow(ASC_SPEED_DECAY, ranks)) : 1;
 }
 
 /** Hero base damage from realm-local levels. */
@@ -142,14 +167,14 @@ export function gearPowerTotal(gear: GearState): number {
 export function heroDps(state: GameState): number {
   const base = heroBaseDamage(state.hero.level, state.realm);
   const gear = gearPowerTotal(state.gear);
-  const dmgBonus = 1 + ascBonus(state.ascendancy, 'damage');
-  const gearBonus = 1 + ascBonus(state.ascendancy, 'gearPower');
+  const dmgBonus = ascMultiplier(state.ascendancy, 'damage');
+  const gearBonus = ascMultiplier(state.ascendancy, 'gearPower');
   return (base * dmgBonus + gear * gearBonus) * skillMult(state.hero.skills);
 }
 
 /** Persistent attack-speed multiplier from the Ascendancy tree. */
 export function ascSpeedMultiplier(asc: AscendancyState): number {
-  return 1 + ascBonus(asc, 'attackSpeed');
+  return ascMultiplier(asc, 'attackSpeed');
 }
 
 /** Combined attack-speed multiplier: persistent tree speed times momentum. */

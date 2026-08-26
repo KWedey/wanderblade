@@ -22,6 +22,7 @@ import {
   promptVsOverfarm,
   roadUplift,
   roadWindowUplift,
+  spendDepth,
   twentyFourHourReturn,
 } from './probes';
 import { clone, runPlayer } from './simulate';
@@ -59,6 +60,7 @@ function emptyResult(
     portalReachSec: { idle: null, active: null },
     promptVsOverfarm: null,
     abandonProbe: null,
+    spendDepth: spendDepth(main.shopSamples),
     totalKills: main.state.lifetime.kills,
     finalRealm: main.state.realm,
     victories: main.state.ascendancy.victories,
@@ -160,6 +162,7 @@ function simulateSeed(seed: number, config: SimConfig): SeedResult {
     },
     promptVsOverfarm: promptVsOverfarm(seed, config),
     abandonProbe: abandonProbe(readyState),
+    spendDepth: spendDepth(main.shopSamples),
     totalKills: main.state.lifetime.kills,
     finalRealm: main.state.realm,
     victories: main.state.ascendancy.victories,
