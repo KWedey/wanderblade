@@ -54,14 +54,8 @@ describe('what the thumb costs', () => {
   // Subsumed by packages/core/test/thumb.test.ts, which holds both tables.
   it('forgives lag near landing as readily as at the apex', () => {
     const warm = warmState(OPTS.seed);
-    // 240s, not the 30s the rest of this file uses. The landing rate climbs
-    // with sample length - 39.3% at 30s, 43.0% at 60, 47.7% at 120, 57.1% at
-    // 240 - because a sparse early run leaves the bot aiming at whatever coin
-    // exists, often one with milliseconds of flight left. The apex rate is
-    // flat at ~95% throughout, so a short sample reads a transient on one side
-    // only and inflates the ratio to 2.42. Thresholds below are unchanged.
     const at = (pick: 'landing' | 'apex'): number =>
-      runThumb(thumb({ latencyMs: 250, pick }), { ...OPTS, seconds: 240 }, warm).catchRate;
+      runThumb(thumb({ latencyMs: 250, pick }), OPTS, warm).catchRate;
     const apex = at('apex');
     const landing = at('landing');
     expect(apex).toBeGreaterThan(0.5);
