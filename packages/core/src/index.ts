@@ -38,11 +38,17 @@ export {
   MOMENTUM_MAX_BONUS,
   ARC_FLIGHT_SEC,
   ARC_CATCH_MULT,
+  ARC_SPLIT_MIN,
+  ARC_SPLIT_MAX,
+  ARC_STAGGER_SEC,
   ARC_MIN_REACH,
   ARC_MAX_REACH,
   ARC_CATCH_RADIUS,
   bossHpMult,
   BOSS_REALM_GAIN,
+  ASC_COST_STEP,
+  ASC_SPEED_MAX_BONUS,
+  ASC_SPEED_DECAY,
   ASC_PER_ZONE,
   ASC_BOSS_PAYOUT,
   ASC_REALM_GROWTH,
@@ -77,7 +83,7 @@ export type {
 } from './types';
 
 // --- Loot arcs -----------------------------------------------------------
-export { arcLandingX, arcPositionAt, arcHitIndex } from './arcs';
+export { arcLandingX, arcPositionAt, arcHitIndex, arcsForKill, arcSplitCount } from './arcs';
 
 // --- Momentum ------------------------------------------------------------
 export {
@@ -99,7 +105,8 @@ export {
   levelCost,
   skillCost,
   ascNodeCost,
-  ascBonus,
+  ascMultiplier,
+  ascSpent,
   heroBaseDamage,
   skillMult,
   skillRankMult,

@@ -2,10 +2,20 @@
 // origin, x runs along the road, and an arc's apex is one unit high. The client
 // maps this onto its own scene; it never decides a catch.
 
-import { ARC_CATCH_RADIUS, ARC_FLIGHT_SEC, ARC_MAX_REACH, ARC_MIN_REACH } from './constants';
+import {
+  ARC_CATCH_RADIUS,
+  ARC_FLIGHT_SEC,
+  ARC_MAX_REACH,
+  ARC_MIN_REACH,
+  ARC_SPLIT_MAX,
+  ARC_SPLIT_MIN,
+  ARC_STAGGER_SEC,
+} from './constants';
 import type { ArcPoint, LootArc } from './types';
 
 const GOLDEN_FRACTION = 0.618_033_988_749_894_9;
+/** A second irrational, so a kill's coin count does not track its reach. */
+const SPLIT_FRACTION = 0.414_213_562_373_095_1;
 
 /**
  * How far the arc thrown by `killIndex` flies. The golden ratio spreads
@@ -15,6 +25,44 @@ const GOLDEN_FRACTION = 0.618_033_988_749_894_9;
 export function arcLandingX(killIndex: number): number {
   const u = (killIndex * GOLDEN_FRACTION) % 1;
   return ARC_MIN_REACH + u * (ARC_MAX_REACH - ARC_MIN_REACH);
+}
+
+/** How many coins the kill at `killIndex` throws. */
+export function arcSplitCount(killIndex: number): number {
+  const span = ARC_SPLIT_MAX - ARC_SPLIT_MIN + 1;
+  const u = (killIndex * SPLIT_FRACTION) % 1;
+  const n = ARC_SPLIT_MIN + Math.floor(u * span);
+  return n > ARC_SPLIT_MAX ? ARC_SPLIT_MAX : n;
+}
+
+/**
+ * The arcs one kill throws. Coin values sum to `gold` exactly — the last coin
+ * carries the residual rather than a rounded share, so no fraction of a payout
+ * is created or lost by the split. Any gear rides the first coin; a drop cannot
+ * be halved.
+ */
+export function arcsForKill(
+  killIndex: number,
+  gold: number,
+  launchSec: number,
+  gear: LootArc['gear'] = null,
+): LootArc[] {
+  const n = arcSplitCount(killIndex);
+  const share = gold / n;
+  const out: LootArc[] = [];
+  let credited = 0;
+  for (let i = 0; i < n; i++) {
+    const last = i === n - 1;
+    const value = last ? gold - credited : share;
+    credited += value;
+    out.push({
+      gold: value,
+      expiresAtSec: launchSec + i * ARC_STAGGER_SEC + ARC_FLIGHT_SEC,
+      landingX: arcLandingX(killIndex * ARC_SPLIT_MAX + i),
+      gear: i === 0 ? gear : null,
+    });
+  }
+  return out;
 }
 
 /** Where `arc` is at `atSec`, or null before launch and once it has landed. */

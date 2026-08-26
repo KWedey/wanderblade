@@ -23,20 +23,32 @@ The extra swing per Strike is expressed by this curve rather than as a separate 
 unbounded per-strike swing has no ceiling, so no strike rate could satisfy a bounded band
 (`docs/DECISIONS.md` #19).
 
-**Loot Arcs.** Every kill flings its gold (and any gear drop) on a visible arc across the
-scene. An arc that lands uncaught still credits **full base value** — idle loses nothing.
-Striking an arc mid-flight **catches** it, paying `ARC_CATCH_MULT` **of that kill's base
-gold**: the kill already credited 1.0×, so a catch pays only the increment. Gear arcs
-caught in flight roll one extra rarity tier.
+**Loot Arcs.** Every kill flings its gold (and any gear drop) as **several coins** on
+visible arcs across the scene, so the air carries a stream of loot rather than one blip
+per kill. Coins that land uncaught still credit **full base value** — idle loses nothing.
+Striking a coin mid-flight **catches** it, paying `ARC_CATCH_MULT` **of that coin's own
+value**: the kill already credited 1.0×, so a catch pays only the increment, and catching
+some of a kill's coins is a partial catch. Gear rides the first coin and rolls one extra
+rarity tier when caught.
 
-- `ARC_FLIGHT_SEC` default 1.5 — how long an arc stays catchable
-- `ARC_CATCH_MULT` **1.15**
+- `ARC_FLIGHT_SEC` default 1.5 — how long a coin stays catchable
+- `ARC_SPLIT_MIN` / `ARC_SPLIT_MAX` **2 / 4** coins per kill, `ARC_STAGGER_SEC` **0.12**
+- `ARC_CATCH_MULT` **1.6**
 
-The 1.15 is what the band allows, not a preference. Momentum's ×1.75 and arc catching
-compound, so the Road-active ceiling is `1.75 × 1.15 ≈ 2.0×` — the middle of the 1.8–2.2×
-band below. The 2.0 this document originally carried was written before anything was
-simulated; stacked on ×1.75 it reaches ~3.5× and breaks the band it was meant to satisfy.
-Measured at 1.15: **1.95×, zero spread across seeds** (`npm run sim -- --seeds 5 --days 30`).
+Split count, stagger and landing point all come from the kill index, so they are
+deterministic and the renderer never chooses them. Coin values sum to the kill's payout
+**exactly** — the last coin carries the residual, so the split can neither mint nor lose
+a fraction (`arcsForKill` in `packages/core/src/arcs.ts`).
+
+The multiplier is what the band allows, not a preference, and it moved when the payout was
+split. The binding constraint is the **strike rate, not the number of coins in the air**:
+the reference player strikes 3.3×/s against 4.2 kills/s, so splitting across n coins
+divides each catch by n and buys no extra catches. At the old 1.15 the split measured
+1.75–1.76×, below the floor. At 1.6: **1.91–1.95×, mean 1.93** (`npm run sim -- --seeds 3`).
+
+For the record, this document originally carried 2.0, written before anything was
+simulated and against a single un-split arc; stacked on momentum's ×1.75 it reached ~3.5×
+and broke the band it was meant to satisfy.
 
 **A catch is a hit test, not a queue.** A Strike carries where it landed. Core computes
 every live arc's position at the strike's timestamp and catches the nearest one inside
@@ -65,6 +77,7 @@ This is the contract that keeps idle honest: active play multiplies, it never ga
 | Realm start → portal available | 2 – 4 h active, 8 – 16 h idle |
 | Portal boss duration (prepared build) | 20 – 90 min active |
 | Ascend promptly vs farm a ready realm 2× longer | prompt ascension wins |
+| Upgrade panel, any moment of Road play | ≥5 priced rows, ≥4 affordable at 95% of looks |
 
 ## Determinism
 

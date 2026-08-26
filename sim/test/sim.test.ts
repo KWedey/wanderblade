@@ -12,10 +12,15 @@ import {
 import { parseArgs } from '../src/args';
 import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
 import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
-import { twentyFourHourReturn } from '../src/probes';
+import {
+  spendDepth,
+  SPEND_GRACE_SEC,
+  SPEND_TARGET,
+  twentyFourHourReturn,
+} from '../src/probes';
 import { runPlayer } from '../src/simulate';
 import { runCorrectness, runPacing } from '../src/validators';
-import type { BreachKind, SeedResult, SimConfig } from '../src/types';
+import type { BreachKind, SeedResult, ShopSample, SimConfig } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
   days: 1,
@@ -167,8 +172,12 @@ describe('aimAtOldestArc', () => {
     advance(s, 4.001);
     expect(s.arcs.length).toBeGreaterThanOrEqual(2);
 
-    const aim = aimAtOldestArc(s, 4.05);
-    expect(aim).toEqual(arcPositionAt(s.arcs[0] as LootArc, 4.05));
+    // The head of the list can already have landed: arcs are pruned at the next
+    // kill, not continuously, and one kill's coins are staggered. The oldest
+    // *still in flight* is the first with a live position.
+    const oldestLive = s.arcs.find((a) => arcPositionAt(a, 4.05) !== null);
+    expect(oldestLive).toBeDefined();
+    expect(aimAtOldestArc(s, 4.05)).toEqual(arcPositionAt(oldestLive as LootArc, 4.05));
 
     // Long past every arc's flight time, there is nothing left to aim at.
     expect(aimAtOldestArc(s, 4.05 + ARC_FLIGHT_SEC * 2)).toBeNull();
@@ -251,6 +260,7 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     portalReachSec: { idle: null, active: null },
     promptVsOverfarm: null,
     abandonProbe: null,
+    spendDepth: spendDepth(main.shopSamples),
     totalKills: main.state.lifetime.kills,
     finalRealm: main.state.realm,
     victories: 0,
@@ -276,7 +286,7 @@ describe('validators are total', () => {
     const c = runCorrectness(stub);
     const p = runPacing(stub);
     expect(c.map((v) => v.id)).toEqual(['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10']);
-    expect(p.map((v) => v.id)).toEqual(['P1','P2','P3','P4','P5','P6','P7']);
+    expect(p.map((v) => v.id)).toEqual(['P1','P2','P3','P4','P5','P6','P7','P8']);
     for (const v of [...c, ...p]) expect(typeof v.pass).toBe('boolean');
   });
 });
@@ -322,5 +332,93 @@ describe('the idle-return probes measure a return, not a session', () => {
     expect(s.hero.level).toBe(before.level);
     expect(s.gold).toBe(before.gold);
     expect(s.ascendancy.banked).toBe(before.banked);
+  });
+});
+
+describe('spendDepth', () => {
+  const sample = (over: Partial<ShopSample>): ShopSample => ({
+    timeSec: 0,
+    sinceRealmStartSec: SPEND_GRACE_SEC,
+    realm: 0,
+    affordable: 5,
+    priced: 6,
+    ...over,
+  });
+
+  it('ignores the post-ascension grace window, where gold is zero by design', () => {
+    const d = spendDepth([
+      sample({ sinceRealmStartSec: 0, affordable: 0 }),
+      sample({ sinceRealmStartSec: SPEND_GRACE_SEC - 1, affordable: 0 }),
+      sample({ sinceRealmStartSec: SPEND_GRACE_SEC, affordable: 4 }),
+    ]);
+    expect(d.counted).toBe(1);
+    expect(d.minAffordable).toBe(4);
+  });
+
+  it('reports the minimum and the realm holding it, not an average', () => {
+    const d = spendDepth([
+      sample({ realm: 1, affordable: 9 }),
+      sample({ realm: 2, affordable: 2 }),
+      sample({ realm: 3, affordable: 9 }),
+    ]);
+    expect(d.minAffordable).toBe(2);
+    expect(d.worstRealm).toBe(2);
+  });
+
+  it('brackets a starved stretch by the window it sits inside', () => {
+    const d = spendDepth([
+      sample({ timeSec: 0, affordable: 5 }),
+      sample({ timeSec: 30, affordable: 1 }),
+      sample({ timeSec: 60, affordable: 1 }),
+      sample({ timeSec: 90, affordable: 5 }),
+    ]);
+    // Starved at 30 and 60, healthy at 0 and 90: the drought began after 0 and
+    // ended before 90, so 90 is the honest bound — not the 30 a first-to-last
+    // starved-sample measure would report.
+    expect(d.longestStarvedSec).toBe(90);
+    expect(d.starvedFraction).toBeCloseTo(2 / 4, 10);
+  });
+
+  it('gives a drought seen once the interval it hides in, not zero', () => {
+    const d = spendDepth([
+      sample({ timeSec: 0, affordable: 5 }),
+      sample({ timeSec: 30, affordable: 1 }),
+      sample({ timeSec: 60, affordable: 5 }),
+    ]);
+    expect(d.longestStarvedSec).toBe(60);
+  });
+
+  it('closes an unbroken starved run that reaches the end of the samples', () => {
+    const d = spendDepth([
+      sample({ timeSec: 0, affordable: 5 }),
+      sample({ timeSec: 30, affordable: 1 }),
+      sample({ timeSec: 60, affordable: 1 }),
+    ]);
+    expect(d.longestStarvedSec).toBe(60);
+  });
+
+  it('counts the rich share against the target, not against the minimum', () => {
+    const d = spendDepth([
+      sample({ affordable: SPEND_TARGET }),
+      sample({ affordable: SPEND_TARGET + 3 }),
+      sample({ affordable: SPEND_TARGET - 1 }),
+      sample({ affordable: 0 }),
+    ]);
+    expect(d.richFraction).toBeCloseTo(0.5, 10);
+    expect(d.minAffordable).toBe(0);
+  });
+
+  it('treats no samples as the worst case rather than a silent pass', () => {
+    const d = spendDepth([]);
+    expect(d.counted).toBe(0);
+    expect(d.minAffordable).toBe(0);
+    expect(d.richFraction).toBe(0);
+    expect(d.starvedFraction).toBe(1);
+  });
+
+  it('is fed by real runs: a road run produces looks past the grace window', () => {
+    const r = runPlayer(5, cfg({ days: 1 }), { policy: 'road-active', entry: 'prompt' });
+    expect(r.shopSamples.length).toBeGreaterThan(0);
+    expect(spendDepth(r.shopSamples).counted).toBeGreaterThan(0);
   });
 });

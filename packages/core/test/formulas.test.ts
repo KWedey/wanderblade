@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ascBonus,
+  ascMultiplier,
+  ascSpent,
+  ASC_COST_STEP,
+  ASC_SPEED_DECAY,
+  ASC_SPEED_MAX_BONUS,
   ascendancyBossPayout,
   ascendancyPerZone,
   ascNodeCost,
+  buyAscendancyNode,
   ascSpeedMultiplier,
   ASC_BOSS_PAYOUT,
   ASC_NODES,
@@ -87,11 +92,17 @@ describe('cost formulas', () => {
     expect(skillCost(1, 0)).toBeCloseTo(57.5, 10);
   });
 
-  it('ascNodeCost follows the node curve and is Infinity at the cap', () => {
+  it('ascNodeCost rises linearly in rank and never caps out', () => {
     const def = ASC_NODES.edge!;
     expect(ascNodeCost('edge', 0)).toBeCloseTo(def.costBase, 10);
-    expect(ascNodeCost('edge', 2)).toBeCloseTo(def.costBase * def.costRate ** 2, 8);
-    expect(ascNodeCost('edge', def.maxRank)).toBe(Infinity);
+    expect(ascNodeCost('edge', 2)).toBeCloseTo(def.costBase * (1 + ASC_COST_STEP * 2), 10);
+    // The linear price is what lets reachable rank grow with the realm; a
+    // constant second difference is the property that carries that.
+    const step = def.costBase * ASC_COST_STEP;
+    for (let r = 0; r < 500; r++) {
+      expect(ascNodeCost('edge', r + 1) - ascNodeCost('edge', r)).toBeCloseTo(step, 8);
+      expect(Number.isFinite(ascNodeCost('edge', r))).toBe(true);
+    }
     expect(ascNodeCost('nope', 0)).toBe(Infinity);
   });
 });
@@ -163,17 +174,79 @@ describe('hero damage model', () => {
     s.gear.weapon = { power: 40, rarity: 'common', realm: 0, zone: 0 };
     s.ascendancy.nodes.edge = 2;
     s.ascendancy.nodes.heft = 1;
-    const edge = 1 + ASC_NODES.edge!.perRank * 2;
-    const heft = 1 + ASC_NODES.heft!.perRank * 1;
+    const edge = (1 + ASC_NODES.edge!.perRank) ** 2;
+    const heft = (1 + ASC_NODES.heft!.perRank) ** 1;
     const expected = (d0 * 1.12 ** 3 * edge + 40 * heft) * skillRankMult(2);
     expect(heroDps(s)).toBeCloseTo(expected, 8);
   });
 
-  it('ascBonus sums only the nodes with the asked-for effect', () => {
+  it('ascMultiplier compounds only the nodes with the asked-for effect', () => {
     const asc = { pending: 0, banked: 0, nodes: { edge: 3, heft: 2, fury: 1 }, victories: 0 };
-    expect(ascBonus(asc, 'damage')).toBeCloseTo(ASC_NODES.edge!.perRank * 3, 10);
-    expect(ascBonus(asc, 'gearPower')).toBeCloseTo(ASC_NODES.heft!.perRank * 2, 10);
-    expect(ascSpeedMultiplier(asc)).toBeCloseTo(1 + ASC_NODES.fury!.perRank * 1, 10);
+    expect(ascMultiplier(asc, 'damage')).toBeCloseTo((1 + ASC_NODES.edge!.perRank) ** 3, 10);
+    expect(ascMultiplier(asc, 'gearPower')).toBeCloseTo((1 + ASC_NODES.heft!.perRank) ** 2, 10);
+    expect(ascSpeedMultiplier(asc)).toBeCloseTo(
+      1 + ASC_SPEED_MAX_BONUS * (1 - ASC_SPEED_DECAY),
+      10,
+    );
+  });
+
+  it('ascSpent totals every rank price actually paid', () => {
+    const empty = { pending: 0, banked: 0, nodes: {}, victories: 0 };
+    expect(ascSpent(empty)).toBe(0);
+
+    const one = { pending: 0, banked: 0, nodes: { edge: 1 }, victories: 0 };
+    expect(ascSpent(one)).toBeCloseTo(ascNodeCost('edge', 0), 10);
+
+    const three = { pending: 0, banked: 0, nodes: { edge: 3 }, victories: 0 };
+    expect(ascSpent(three)).toBeCloseTo(
+      ascNodeCost('edge', 0) + ascNodeCost('edge', 1) + ascNodeCost('edge', 2),
+      10,
+    );
+  });
+
+  it('ascSpent matches what the engine actually deducted', () => {
+    const s = initialState(1);
+    s.ascendancy.banked = 1e7;
+    const start = s.ascendancy.banked;
+    for (let i = 0; i < 40; i++) {
+      buyAscendancyNode(s, 'edge');
+      buyAscendancyNode(s, 'heft');
+      buyAscendancyNode(s, 'fury');
+    }
+    expect(ascSpent(s.ascendancy)).toBeCloseTo(start - s.ascendancy.banked, 6);
+  });
+
+  it('bounds persistent attack speed however deep the tree goes', () => {
+    // Speed divides through the kill-time floor, so an unbounded multiplier
+    // means unbounded event steps per simulated second — an offline gap that
+    // never finishes reconciling. Damage and gear power carry the growth.
+    let prev = 1;
+    for (const rank of [1, 10, 50, 200, 1_000, 100_000]) {
+      const m = ascSpeedMultiplier({ pending: 0, banked: 0, nodes: { fury: rank }, victories: 0 });
+      expect(m).toBeGreaterThanOrEqual(prev);
+      expect(m).toBeLessThanOrEqual(1 + ASC_SPEED_MAX_BONUS);
+      prev = m;
+    }
+    const deep = ascMultiplier(
+      { pending: 0, banked: 0, nodes: { edge: 1_000 }, victories: 0 },
+      'damage',
+    );
+    expect(deep).toBeGreaterThan(1 + ASC_SPEED_MAX_BONUS);
+  });
+
+  it('ascMultiplier is neutral on a fresh tree and grows with every rank', () => {
+    const empty = { pending: 0, banked: 0, nodes: {}, victories: 0 };
+    expect(ascMultiplier(empty, 'damage')).toBe(1);
+    let prev = 1;
+    for (let r = 1; r <= 200; r++) {
+      const m = ascMultiplier(
+        { pending: 0, banked: 0, nodes: { edge: r }, victories: 0 },
+        'damage',
+      );
+      expect(m).toBeGreaterThan(prev);
+      expect(Number.isFinite(m)).toBe(true);
+      prev = m;
+    }
   });
 });
 

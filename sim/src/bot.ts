@@ -5,6 +5,7 @@
 // the purchases themselves still execute through the engine.
 
 import {
+  ascMultiplier,
   ascNodeCost,
   ascSpeedMultiplier,
   ASC_NODES,
@@ -46,12 +47,17 @@ function bestGoldBuy(state: GameState): Candidate | null {
   const level = state.hero.level;
   const base = heroBaseDamage(level, state.realm);
   const mult = skillMult(state.hero.skills);
-  const flat = base + gearPowerTotal(state.gear);
+  // The tree multiplies damage and gear by different factors, so the flat term
+  // has to be built the way heroDps builds it or the two candidates are ranked
+  // on different scales once edge and heft ranks diverge.
+  const ascDmg = ascMultiplier(state.ascendancy, 'damage');
+  const ascGear = ascMultiplier(state.ascendancy, 'gearPower');
+  const flat = base * ascDmg + gearPowerTotal(state.gear) * ascGear;
   const candidates: Candidate[] = [];
 
   const heroCost = levelCost(level, state.realm);
   if (Number.isFinite(heroCost) && heroCost <= state.gold) {
-    const dDps = (heroBaseDamage(level + 1, state.realm) - base) * mult;
+    const dDps = (heroBaseDamage(level + 1, state.realm) - base) * ascDmg * mult;
     const ratio = dDps / heroCost;
     if (Number.isFinite(ratio) && ratio > 0) {
       candidates.push({ kind: 'hero', id: null, cost: heroCost, ratio });
@@ -89,16 +95,22 @@ function bestNodeBuy(state: GameState): Candidate | null {
     const def = ASC_NODES[id];
     if (!def) continue;
     const rank = asc.nodes[id] ?? 0;
-    if (rank >= def.maxRank) continue;
     const cost = ascNodeCost(id, rank);
     if (!Number.isFinite(cost) || cost > asc.banked) continue;
 
+    // Ranks compound, so a rank is worth perRank of what the node already
+    // multiplies — not perRank of the un-noded base.
     let dDps: number;
-    if (def.effect === 'damage') dDps = base * def.perRank * mult;
-    else if (def.effect === 'gearPower') dDps = gear * def.perRank * mult;
-    else {
-      const speed = ascSpeedMultiplier(asc);
-      dDps = (dps * def.perRank) / speed;
+    if (def.effect === 'damage') {
+      dDps = base * ascMultiplier(asc, 'damage') * def.perRank * mult;
+    } else if (def.effect === 'gearPower') {
+      dDps = gear * ascMultiplier(asc, 'gearPower') * def.perRank * mult;
+    } else {
+      // Speed is asymptotic, so its marginal worth is the ratio the next rank
+      // actually moves the multiplier by — not a flat perRank.
+      const before = ascSpeedMultiplier(asc);
+      const after = ascSpeedMultiplier({ ...asc, nodes: { ...asc.nodes, [id]: rank + 1 } });
+      dDps = dps * (after / before - 1);
     }
     const ratio = dDps / cost;
     if (Number.isFinite(ratio) && ratio > 0) candidates.push({ kind: 'node', id, cost, ratio });
