@@ -152,8 +152,19 @@ describe('bitmap font', () => {
     it('keeps g clear of the s and the 9 it has been read as', () => {
       expect(FONT['g']!.join('/'), 'g is drawn as s').not.toBe(FONT['s']!.join('/'));
       expect(FONT['g']!.join('/'), 'g is drawn as 9').not.toBe(FONT['9']!.join('/'));
-      expect(FONT['g']!.at(-1)!.startsWith('#'), 'g has no leftward tail').toBe(true);
-      expect(FONT['9']!.at(-1)!.startsWith('#'), '9 grew a leftward tail').toBe(false);
+      // The tail has to leave the stem, not merely exist: a descender that
+      // drops straight down is a q. A critic reading at native size called the
+      // first fix "a flat closed bowl and no visible ear" — connected was
+      // necessary and not sufficient.
+      const stemCol = (row: string): number => row.lastIndexOf('#');
+      const g = FONT['g']!;
+      expect(g.at(-1)!.indexOf('#'), "g's tail never leaves its stem").toBeLessThan(
+        stemCol(g.at(-2)!),
+      );
+      // And the bowl has to be a bowl: two rows of enclosed counter, so it
+      // reads as round rather than as a bar with a slot in it.
+      const counters = g.filter((row) => /^#[^#]*#$/.test(row)).length;
+      expect(counters, 'g has no round bowl').toBeGreaterThanOrEqual(2);
     });
 
     // "Armor" read as "Arnor": m's middle stem stopped two rows above the
