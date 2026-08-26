@@ -279,7 +279,46 @@ The gap was a **shape** problem, not a level one. It widened ~1.29× per realm, 
 
 **It is reachable.** A 90-day run at 3 seeds reaches **realm 301**. This is a real endgame boundary at roughly three months of steady play, not a theoretical one. `packages/core/test/magnitude.test.ts` pins entry succeeding at realm 300 and refusing at 301, 302, 400 and 5000, with the Road left untouched by the refusal.
 
-## 35. Creature colour belongs to the species; the realm identifies itself in the backdrop — 2026-08-25
+## 35. The catch window is constant in time, not in distance — 2026-08-25
+
+**Decision:** `ARC_CATCH_RADIUS` (a fixed 0.12 arc units) is replaced by `ARC_CATCH_SEC` = **0.14 s**. `arcCatchRadius(arc, atSec) = ARC_CATCH_SEC · arcSpeedAt(arc, atSec)`, so the forgiveness a player gets is the same number of milliseconds anywhere along a coin's flight. `arcHitIndex` now compares distance as a fraction of each arc's own radius, so the coin a strike is most clearly inside wins.
+
+**Why:** The geometry made *which coin you reach for* matter more than how fast you reacted. A coin's vertical speed passes through zero at the apex, so a late strike still lands inside a fixed radius; near the ground `|dy/dt|` peaks and the same strike misses by the height the coin fell in the meantime. Measured here, one coin alone in the air at a 50 ms reach:
+
+| | apex | near landing |
+|---|---|---|
+| fixed radius | 6/6 reaches | **3/6 reaches** |
+| constant time | 6/6 | **6/6** |
+
+And in play with several coins up, at a 250 ms human reach: apex **36.0%** vs landing **18.5%** before, **30.8%** vs **29.6%** after — a 1.95× penalty for reaching at the wrong moment, down to 1.04×.
+
+**A 100× cliff on undocumented knowledge does not sort players into skilled and unskilled.** It sorts them into *found it* and *concluded the mechanic is fake*, and the second group is right about what they experienced. Guardrail 3 bans gimmick-led design and a hidden apex-timing trick is a gimmick; guardrail 4 wants active play materially faster, not conditionally faster on a secret.
+
+**0.14 s is the value that keeps aim honest.** At mid-reach it makes the apex radius 0.093, near the old 0.12, so apex play barely moves; near the ground it opens to 0.385, which is what closes the gap. A tap at empty sky still catches nothing, and wild aim — 0.5 units of scatter, over three times the old radius — falls to under a fifth of a modest thumb's rate. A window wide enough to forgive a full 250 ms everywhere would make any tap near the ground catch a neighbouring coin, which is mercy that has eaten the mechanic.
+
+`packages/core/test/thumb.test.ts` is the acceptance test and holds the table above.
+
+## 36. The starvation and dead-time clauses are proven to bite — 2026-08-25
+
+**Decision:** `sim/test/sim.test.ts` feeds the pre-fix measurements straight into `runPacing` and asserts the verdict flips. P8 fails on `minAffordable: 0` and on a four-hour drought; P9 fails on the pre-fix dead time (14.74 h longest wait, **56%** of Road time waiting, 1.01 d slowest realm), on a cadence past three days, and on a portal parked open for 76 hours.
+
+**Why:** A ceiling set from a measured distribution is only trustworthy if we can see it reject the thing it was written to catch. If a clause passes on both the broken and the fixed numbers it is decoration, and nobody finds that out until it fails to catch the next regression. Pinning it as a test rather than as a one-off run means a later tuning pass cannot widen the clause into decoration without turning something red.
+
+## 37. A zone is monsters, not one monster repeated — 2026-08-25
+
+**Decision:** `SPECIES` in `packages/core/src/constants.ts` is a roster of variation *slots* carrying `goldMult` and `dropMult`. `speciesIndex(killIndex)` picks one, derived from the kill index through a third irrational so it **consumes no RNG draw**. A kill pays `goldPerKill(state) · goldMult` and rolls its drop against `dropChance · dropMult`. The `kill` event carries `species`, and `collection.speciesKills` counts them — the Bestiary's substrate.
+
+**Why:** Every monster in a zone paid identically, so an event log read `+220M gold` beside three different creature names and a blind reviewer filed it under *"repeated or stubbed-looking content — reads as a hardcoded constant"*. They were right about what they saw. `docs/VISION.md` pillar 5 makes the Bestiary one of the two dopamine engines, and a bestiary of numerically indistinguishable creatures has nothing to collect.
+
+**No band moved, by construction.** `goldMult` sums to exactly the roster length, so mean payout per kill is unchanged; the sim reads ALL PASS on 20 validators × 6 seeds either way. `dropMult` deliberately does not track gold — the richest monster is not the most generous one, which is what makes the roster worth learning.
+
+**Enemy HP is deliberately left uniform.** Kill time is the clock (`nextActionAtSec`), and varying HP per kill perturbs the load-bearing invariant for a payoff nothing on screen shows. Gold and drop weight are the entire visible surface of what the reviewer saw.
+
+**These are slots, not creatures.** The SRD roster, names, and provenance are M4 content under `docs/SRD-CONTENT.md`; what lives in core is the shape a zone's monsters vary along, so the content drop is a table and not a core change.
+
+**Save compatibility:** `deserialize` defaults `speciesKills` to `[]`, and `app/src/save.ts` accepts its absence rather than discarding the run over a field that did not exist when the save was written.
+
+## 38. Creature colour belongs to the species; the realm identifies itself in the backdrop — 2026-08-25
 
 **Decision:** `monsterInk(body, ground)` takes the **species' own** hex. Hue and saturation come from it and never move. Only **value** answers the realm: the mid tone is pushed off the ground's lightness by `MIN_BODY_CONTRAST` (0.17), plus `SAME_HUE_CONTRAST` (0.16) more when the creature shares that ground's hue. Sprites bake per **roster slot**, not per silhouette, so a realm that fields one silhouette twice gets two species in two colours.
 

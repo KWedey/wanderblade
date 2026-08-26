@@ -26,6 +26,8 @@ import {
   damagePerSwing,
   gearPower,
   goldPerKill,
+  speciesFor,
+  speciesIndex,
   killTime,
   levelCost,
   skillCost,
@@ -82,7 +84,7 @@ export function initialState(seed: number): GameState {
     ascendancy: { pending: 0, banked: 0, nodes: zeroRanks(ASC_NODE_IDS), victories: 0 },
     momentum: { value: 0, atSec: 0 },
     arcs: [],
-    collection: { bossTrophies: 0, gearFound: 0, zonesCleared: 0 },
+    collection: { bossTrophies: 0, gearFound: 0, zonesCleared: 0, speciesKills: [] },
     lifetime: { kills: 0, goldEarned: 0, ascensions: 0, abandons: 0, bossDamage: 0 },
   };
   state.nextActionAtSec = state.timeSec + killTime(state, 0);
@@ -274,8 +276,12 @@ function processKill(
 
   pruneArcs(state, clock);
 
-  const gold = goldPerKill(state);
+  const species = speciesIndex(state.killIndex);
+  const kind = speciesFor(state.killIndex);
+  const gold = goldPerKill(state) * kind.goldMult;
   state.gold += gold;
+  state.collection.speciesKills[species] =
+    (state.collection.speciesKills[species] ?? 0) + 1;
   state.lifetime.kills += 1;
   state.lifetime.goldEarned += gold;
   recap.kills += 1;
@@ -283,13 +289,21 @@ function processKill(
   // Built only under the cap: a ten-day gap is millions of kills, and the
   // object churn — not the math — is what makes reconciliation slow.
   if (events.length < EVENT_CAP) {
-    events.push({ type: 'kill', timeSec: clock, realm, zone: z, killIndex: state.killIndex, gold });
+    events.push({
+      type: 'kill',
+      timeSec: clock,
+      realm,
+      zone: z,
+      killIndex: state.killIndex,
+      gold,
+      species,
+    });
   }
 
   // One RNG draw every kill keeps the stream keyed to killIndex; two more only
   // when a drop actually occurs.
   let arcGear: LootArc['gear'] = null;
-  if (rng.next() < dropChance) {
+  if (rng.next() < dropChance * kind.dropMult) {
     const slot = pickSlot(rng.next());
     const rarity = pickRarity(rng.next());
     const power = gearPower(realm, z, rarity);
@@ -533,7 +547,9 @@ export function serialize(state: GameState): string {
 
 /** Parse a state produced by `serialize`. */
 export function deserialize(json: string): GameState {
-  return JSON.parse(json) as GameState;
+  const state = JSON.parse(json) as GameState;
+  state.collection.speciesKills ??= [];
+  return state;
 }
 
 // --- Recap ---------------------------------------------------------------

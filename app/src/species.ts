@@ -22,7 +22,7 @@ export interface Species {
   /**
    * The creature's own colour, not its realm's. A species keeps it wherever it
    * is drawn, so the Bestiary and the road agree and a player learns a threat
-   * by sight. Realm identity is the backdrop's job (DECISIONS.md #35).
+   * by sight. Realm identity is the backdrop's job (DECISIONS.md #38).
    */
   body: string;
 }

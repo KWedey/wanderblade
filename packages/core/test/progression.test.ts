@@ -6,6 +6,8 @@ import {
   initialState,
   killsPerZone,
   leaguePerKill,
+  speciesFor,
+  speciesIndex,
   summarizeEvents,
   zonesPerRealm,
   type EventLog,
@@ -18,9 +20,16 @@ describe('road progression sanity', () => {
     const s = initialState(1);
     const events = advance(s, ROAD_KILL0_SEC + 1e-6);
     expect(s.lifetime.kills).toBe(1);
-    expect(s.gold).toBeCloseTo(1, 6); // enemyGold(0, 0) = 1
+    // enemyGold(0, 0) = 1, scaled by which monster this kill was
+    expect(s.gold).toBeCloseTo(speciesFor(1).goldMult, 6);
     expect(s.leagues).toBeCloseTo(leaguePerKill, 6);
-    expect(events[0]).toMatchObject({ type: 'kill', killIndex: 1, realm: 0, zone: 0 });
+    expect(events[0]).toMatchObject({
+      type: 'kill',
+      killIndex: 1,
+      realm: 0,
+      zone: 0,
+      species: speciesIndex(1),
+    });
   });
 
   it('clears a zone every killsPerZone kills and emits the step', () => {

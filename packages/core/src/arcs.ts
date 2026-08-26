@@ -3,7 +3,7 @@
 // maps this onto its own scene; it never decides a catch.
 
 import {
-  ARC_CATCH_RADIUS,
+  ARC_CATCH_SEC,
   ARC_FLIGHT_SEC,
   ARC_MAX_REACH,
   ARC_MIN_REACH,
@@ -75,8 +75,30 @@ export function arcPositionAt(arc: LootArc, atSec: number): ArcPoint | null {
 }
 
 /**
+ * How fast `arc` is travelling at `atSec`, in arc units per second. Zero once
+ * the coin is down, which is also when it stops being catchable.
+ */
+export function arcSpeedAt(arc: LootArc, atSec: number): number {
+  if (!Number.isFinite(arc.landingX)) return 0;
+  const p = 1 - (arc.expiresAtSec - atSec) / ARC_FLIGHT_SEC;
+  if (!(p >= 0) || p >= 1) return 0;
+  const dy = 4 - 8 * p;
+  return Math.sqrt(arc.landingX * arc.landingX + dy * dy) / ARC_FLIGHT_SEC;
+}
+
+/**
+ * The catch radius for `arc` at `atSec`: `ARC_CATCH_SEC` of its own travel, so
+ * the forgiveness a player gets is the same number of milliseconds anywhere
+ * along the flight rather than collapsing near the ground.
+ */
+export function arcCatchRadius(arc: LootArc, atSec: number): number {
+  return ARC_CATCH_SEC * arcSpeedAt(arc, atSec);
+}
+
+/**
  * Index of the arc a strike landing on `aim` catches, or -1 for a clean miss.
- * Nearest inside `ARC_CATCH_RADIUS` wins; an exact tie goes to the older arc.
+ * Compared as a fraction of each arc's own radius, so the coin the strike is
+ * most clearly inside wins; an exact tie goes to the older arc.
  */
 export function arcHitIndex(
   arcs: readonly LootArc[],
@@ -84,17 +106,19 @@ export function arcHitIndex(
   atSec: number,
 ): number {
   let best = -1;
-  let bestDistSq = ARC_CATCH_RADIUS * ARC_CATCH_RADIUS;
+  let bestScore = 1;
   for (let i = 0; i < arcs.length; i++) {
     const arc = arcs[i];
     if (!arc) continue;
     const p = arcPositionAt(arc, atSec);
     if (!p) continue;
+    const r = arcCatchRadius(arc, atSec);
+    if (!(r > 0)) continue;
     const dx = p.x - aim.x;
     const dy = p.y - aim.y;
-    const distSq = dx * dx + dy * dy;
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq;
+    const score = (dx * dx + dy * dy) / (r * r);
+    if (score < bestScore) {
+      bestScore = score;
       best = i;
     }
   }

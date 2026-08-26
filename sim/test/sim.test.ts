@@ -426,3 +426,75 @@ describe('spendDepth', () => {
     expect(spendDepth(r.shopSamples).counted).toBeGreaterThan(0);
   });
 });
+
+/**
+ * A ceiling set from a measured distribution is only trustworthy if it rejects
+ * the thing it was written to catch. These pin the pre-fix measurements — the
+ * ones that motivated P8's starvation clause and P9 — against today's, so a
+ * later tuning pass cannot quietly widen either into decoration.
+ */
+describe('the dead-time and starvation clauses bite', () => {
+  const find = (r: SeedResult, id: string) =>
+    runPacing(r).find((v) => v.id === id) as { id: string; pass: boolean; detail: string };
+
+  it('P8 fails on a panel that goes all grey, and passes on today', () => {
+    const main = stubResult();
+    expect(find(main, 'P8').pass).toBe(true);
+    expect(main.spendDepth.minAffordable).toBeGreaterThanOrEqual(1);
+
+    // The capped-tree game: every row priced, none of them buyable.
+    const allGrey = stubResult({
+      spendDepth: { ...main.spendDepth, minAffordable: 0 },
+    });
+    expect(find(allGrey, 'P8').pass).toBe(false);
+  });
+
+  it('P8 fails on a long drought even when the panel is never fully grey', () => {
+    const main = stubResult();
+    const starved = stubResult({
+      spendDepth: {
+        ...main.spendDepth,
+        minAffordable: 1,
+        starvedFraction: 0.2,
+        longestStarvedSec: 4 * 3600,
+      },
+    });
+    expect(find(starved, 'P8').pass).toBe(false);
+  });
+
+  it('P9 fails on the pre-fix dead time, and passes on today', () => {
+    const main = stubResult();
+    expect(find(main, 'P9').pass).toBe(true);
+
+    // Measured on bossHpMult 30000 / BOSS_REALM_GAIN 1.22: the Road ended ~34x
+    // short of its own guardian, so the player farmed a cleared realm.
+    const preFix = stubResult({
+      deadTime: {
+        ...main.deadTime,
+        longestSec: 14.74 * 3600,
+        fraction: 0.56,
+        slowestRealmDays: 1.01,
+        realms: 30,
+      },
+    });
+    const v = find(preFix, 'P9');
+    expect(v.pass).toBe(false);
+    expect(v.detail).toContain('56% of Road time waiting');
+  });
+
+  it('P9 fails on a realm cadence that degrades past three days', () => {
+    const main = stubResult();
+    const slow = stubResult({
+      deadTime: { ...main.deadTime, slowestRealmDays: 3.5, realms: 30 },
+    });
+    expect(find(slow, 'P9').pass).toBe(false);
+  });
+
+  it('P9 fails on a portal parked open for longer than a day', () => {
+    const main = stubResult();
+    const parked = stubResult({
+      deadTime: { ...main.deadTime, longestSec: 76 * 3600, realms: 30 },
+    });
+    expect(find(parked, 'P9').pass).toBe(false);
+  });
+});

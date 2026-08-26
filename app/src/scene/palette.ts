@@ -642,7 +642,7 @@ function hueCloseness(a: number, b: number): number {
  * one that changed colour every seventh realm could never become a thing a
  * player recognises. Only value answers the realm, pushed off the ground it
  * stands on, and pushed further when it shares that ground's hue — the medium
- * separates a figure with value and a hard outline (DECISIONS.md #35).
+ * separates a figure with value and a hard outline (DECISIONS.md #38).
  */
 export function monsterInk(body: string, ground = '#000000'): InkSet {
   const [h, sat, l] = toHsl(body);

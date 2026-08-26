@@ -29,8 +29,10 @@ import {
   RARITY_MULTIPLIERS,
   SKILL_IDS,
   SKILLS,
+  SPECIES,
   zonesPerRealm,
 } from './constants';
+import type { SpeciesDef } from './constants';
 import { momentumMultiplier } from './momentum';
 import type { AscendancyState, GameState, GearState, Rarity } from './types';
 
@@ -58,9 +60,25 @@ export function earningsMultiplier(victories: number): number {
 
 /** Gold actually credited by one Road kill in the hero's current position. */
 export function goldPerKill(state: GameState): number {
-  return (
-    enemyGold(state.realm, state.zone) * earningsMultiplier(state.ascendancy.victories)
-  );
+  return enemyGold(state.realm, state.zone) * earningsMultiplier(state.ascendancy.victories);
+}
+
+const SPECIES_FRACTION = 0.732_050_807_568_877_2;
+
+/**
+ * Which species the kill at `killIndex` is. Derived rather than rolled — a
+ * third irrational, so it consumes no RNG draw and cannot shift the kill-keyed
+ * stream that every drop depends on (docs/DECISIONS.md #6).
+ */
+export function speciesIndex(killIndex: number): number {
+  const u = (killIndex * SPECIES_FRACTION) % 1;
+  const i = Math.floor(u * SPECIES.length);
+  return i >= SPECIES.length ? SPECIES.length - 1 : i;
+}
+
+/** The species definition for `killIndex`. */
+export function speciesFor(killIndex: number): SpeciesDef {
+  return SPECIES[speciesIndex(killIndex)] as SpeciesDef;
 }
 
 /** Guardian HP for `realm`: a multiple of that realm's final-zone enemy. */

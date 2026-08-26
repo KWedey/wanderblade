@@ -39,7 +39,7 @@ export {
   ARC_STAGGER_SEC,
   ARC_MIN_REACH,
   ARC_MAX_REACH,
-  ARC_CATCH_RADIUS,
+  ARC_CATCH_SEC,
   bossHpMult,
   BOSS_REALM_GAIN,
   ASC_COST_STEP,
@@ -54,9 +54,10 @@ export {
   ASC_NODE_IDS,
   SKILLS,
   SKILL_IDS,
+  SPECIES,
   SKILL_MULT_CEILING,
 } from './constants';
-export type { AscNodeDef, SkillDef } from './constants';
+export type { AscNodeDef, SkillDef, SpeciesDef } from './constants';
 
 // --- Types ---------------------------------------------------------------
 export type {
@@ -83,7 +84,15 @@ export type {
 } from './types';
 
 // --- Loot arcs -----------------------------------------------------------
-export { arcLandingX, arcPositionAt, arcHitIndex, arcsForKill, arcSplitCount } from './arcs';
+export {
+  arcCatchRadius,
+  arcHitIndex,
+  arcLandingX,
+  arcPositionAt,
+  arcsForKill,
+  arcSpeedAt,
+  arcSplitCount,
+} from './arcs';
 
 // --- Momentum ------------------------------------------------------------
 export {
@@ -96,6 +105,8 @@ export {
 // --- Formulas ------------------------------------------------------------
 export {
   realmScale,
+  speciesFor,
+  speciesIndex,
   enemyHp,
   enemyGold,
   earningsMultiplier,
