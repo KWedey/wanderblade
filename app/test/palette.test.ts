@@ -8,7 +8,10 @@ import {
   MIN_VALUE_SPREAD,
   REALM_SKIN_COUNT,
   backdropSkin,
+  foliageNotchAt,
+  grassClumpBlades,
   groundBladeOf,
+  inFoliageLobe,
   lightnessOf,
   glowRingRadii,
   momentumLift,
@@ -137,5 +140,85 @@ describe('a glow carries intensity as ring count, not as dither', () => {
     expect(glowRingRadii(0, 1)).toEqual([]);
     expect(glowRingRadii(40, 0)).toEqual([]);
     expect(glowRingRadii(1, 1)).not.toContain(0);
+  });
+});
+
+describe('a pine crown carries its silhouette as lobes, not a per-row roll', () => {
+  it('is zero outside every lobe', () => {
+    const lobe = { from: 5, len: 5, depth: 4 };
+    expect(foliageNotchAt(0, [lobe])).toBe(0);
+    expect(foliageNotchAt(10, [lobe])).toBe(0);
+  });
+
+  it('peaks at the lobe centre, tapering to zero at both ends', () => {
+    const lobe = { from: 10, len: 7, depth: 4 };
+    expect(foliageNotchAt(13, [lobe])).toBeCloseTo(4);
+    expect(foliageNotchAt(10, [lobe])).toBeCloseTo(0);
+    expect(foliageNotchAt(16, [lobe])).toBeCloseTo(0);
+  });
+
+  it('sums overlapping lobes', () => {
+    const a = { from: 0, len: 11, depth: 2 };
+    const b = { from: 0, len: 11, depth: 3 };
+    expect(foliageNotchAt(5, [a, b])).toBeCloseTo(5);
+  });
+
+  it('never jumps between adjacent rows the way an independent roll did', () => {
+    // Four lobes across a 50-row crown, the shape drawGrove actually builds.
+    const lobes = [0, 1, 2, 3].map((li) => ({
+      from: (li * 11) % 50,
+      len: 10,
+      depth: (li % 2 === 0 ? 1 : -1) * 4,
+    }));
+    let prev = foliageNotchAt(0, lobes);
+    let maxDelta = 0;
+    for (let row = 1; row < 50; row++) {
+      const cur = foliageNotchAt(row, lobes);
+      maxDelta = Math.max(maxDelta, Math.abs(cur - prev));
+      prev = cur;
+    }
+    // The old per-row roll could swing (hash01 - 0.5) * 7, a 7px jump.
+    expect(maxDelta).toBeLessThan(3.5);
+  });
+});
+
+describe('inFoliageLobe', () => {
+  it('is true only inside a run, false right at and past its end', () => {
+    const lobe = { from: 4, len: 3 };
+    expect(inFoliageLobe(3, [lobe])).toBe(false);
+    expect(inFoliageLobe(4, [lobe])).toBe(true);
+    expect(inFoliageLobe(6, [lobe])).toBe(true);
+    expect(inFoliageLobe(7, [lobe])).toBe(false);
+  });
+
+  it('is true if any lobe in the list covers the row', () => {
+    const lobes = [{ from: 0, len: 2 }, { from: 10, len: 2 }];
+    expect(inFoliageLobe(11, lobes)).toBe(true);
+    expect(inFoliageLobe(5, lobes)).toBe(false);
+  });
+});
+
+describe('grassClumpBlades', () => {
+  it('always includes the stamped blade plus at least one neighbour', () => {
+    const blades = grassClumpBlades(0, 0, 0);
+    expect(blades.length).toBeGreaterThanOrEqual(2);
+    expect(blades[0]).toEqual({ dx: 0, dy: 0 });
+  });
+
+  it('adds a third blade only above the roll threshold', () => {
+    expect(grassClumpBlades(0.5, 0.5, 0.34)).toHaveLength(2);
+    expect(grassClumpBlades(0.5, 0.5, 0.36)).toHaveLength(3);
+  });
+
+  it('keeps neighbours close enough to overlap the clump, not scatter', () => {
+    for (let i = 0; i < 50; i++) {
+      const r1 = (i * 0.037) % 1;
+      const r2 = (i * 0.071) % 1;
+      const r3 = (i * 0.113) % 1;
+      for (const b of grassClumpBlades(r1, r2, r3)) {
+        expect(Math.abs(b.dx)).toBeLessThanOrEqual(5);
+        expect(Math.abs(b.dy)).toBeLessThanOrEqual(3);
+      }
+    }
   });
 });

@@ -38,8 +38,11 @@ import {
   OUTLINE_INK,
   REALM_SKIN_COUNT,
   backdropSkin,
+  foliageNotchAt,
   foregroundInk,
+  grassClumpBlades,
   groundBladeOf,
+  inFoliageLobe,
   lighten,
   mixHex,
   glowRingRadii,
@@ -47,6 +50,7 @@ import {
   monsterInk,
   realmSkin,
   sceneryInk,
+  type FoliageLobe,
   type RealmSkin,
 } from './palette';
 import {
@@ -1256,12 +1260,31 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const cx = x + Math.floor(trunkW / 2);
       const crownW = trunkW * 4 + 14;
       const crownH = Math.round(crownW * 0.95);
+      // Needle clumps: each lobe holds a start row and a run, the same fix as
+      // the bark streaks above. A fresh notch every row read as static.
+      const crownLobes: FoliageLobe[] = [0, 1, 2, 3].map((li) => {
+        const seed = i * 9.4 + li * 3.7;
+        return {
+          from: Math.floor(hash01(seed) * crownH),
+          len: Math.max(3, Math.round(crownH * (0.18 + hash01(seed + 1.3) * 0.2))),
+          depth: (hash01(seed + 2.6) - 0.5) * 8,
+        };
+      });
+      // Shadow patches, same fix: a per-row 14% dice roll for the dark fleck
+      // read as speckle. Two runs per tree read as bough shadow instead.
+      const shadeLobes = [0, 1].map((li) => {
+        const seed = i * 6.1 + li * 4.9;
+        return {
+          from: Math.floor(hash01(seed) * crownH),
+          len: Math.max(2, Math.round(crownH * (0.1 + hash01(seed + 1.1) * 0.12))),
+        };
+      });
       for (let k = 0; k < crownH; k++) {
         const y = crownY - k;
         if (y < -4) break;
         const t = k / crownH;
         const prof = Math.sin(Math.PI * (0.16 + t * 0.8));
-        const notch = Math.round((hash01(i * 9.4 + k * 1.7) - 0.5) * 7);
+        const notch = Math.round(foliageNotchAt(k, crownLobes));
         const half = Math.max(1, Math.round((crownW / 2) * prof) + notch);
         const lx = cx - half;
         const w = half * 2;
@@ -1273,7 +1296,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           ctx.fillStyle = leafLite;
           ctx.fillRect(lx + Math.round(w * 0.58), y, Math.max(1, Math.round(w * 0.42)), 1);
         }
-        if (t < 0.22 || hash01(i * 3.7 + k * 5.3) > 0.86) {
+        if (t < 0.22 || inFoliageLobe(k, shadeLobes)) {
           ctx.fillStyle = leafDark;
           ctx.fillRect(lx, y, Math.max(1, Math.round(w * 0.34)), 1);
         }
@@ -1431,9 +1454,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           drawShadow(x, sprites.rock.width);
           drawSprite(ctx, sprites.rock, x, groundY + 1);
           break;
-        case 'tuft':
-          drawSprite(ctx, sprites.tuftNear, x, groundY + 2);
+        case 'tuft': {
+          // A lone stamped sprite in bare turf reads as pasted-on; a small
+          // clump with its own y jitter reads as a patch of ground cover.
+          const jitter = Math.floor(hash01(prop.at * 3.3 + 50) * 3);
+          const blades = grassClumpBlades(
+            hash01(prop.at * 1.9 + 5),
+            hash01(prop.at * 2.7 + 13),
+            hash01(prop.at * 4.4 + 27),
+          );
+          for (const b of blades) {
+            drawSprite(ctx, sprites.tuftNear, x + b.dx, groundY + 2 + jitter + b.dy);
+          }
           break;
+        }
         case 'flower':
           drawSprite(ctx, sprites.flower, x, groundY + 2);
           break;
