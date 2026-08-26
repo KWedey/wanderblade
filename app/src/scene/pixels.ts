@@ -101,173 +101,224 @@ const MONSTER_LEGEND: Record<string, string> = {
   b: 'body',
   B: 'bodyDark',
   h: 'bodyLight',
+  S: 'bodySpec',
   E: 'eyeGlow',
   t: 'tooth',
-  a: 'sclera',
-  e: 'pupil',
 };
 
-/** 24x30 — the heavy. Half again the hero's height, horned and asymmetric. */
+// Silhouette is the whole job here. Only the shape is authored; sculpt() adds
+// the tone bands, specular edge and variable outline. Creatures lean at the
+// hero with weight on the front foot, and every outline is broken by an
+// asymmetric growth so no two profiles read the same.
+// 'b' body, 'E' lit eye, 't' bared tooth.
+
+/** 24x30 - the heavy. Crag-grown shoulder, head thrust forward, weight on the front foot. */
 export const MON_GOLEM: SpriteMap = {
   rows: [
-    '........oo....oo........',
-    '.......obo....obo.......',
-    '......obbo....obbo......',
-    '......obbooooobbbo......',
-    '.....obbbbbbbbbbbbo.....',
-    '.....obBBBbbbBBBbbo.....',
-    '.....obbEEbbbbEEbbo.....',
-    '.....obbbbbbbbbbbbo.....',
-    '.....obbbtttttbbbbo.....',
-    '.....oobbBBBBBBbboo.....',
-    '......obbbbbbbbbbo......',
-    '...oooobbbbbbbbbboooo...',
-    '..obbbobbbbbbbbbbobbbo..',
-    '.obbbbobbbbbbbbbbobbbbo.',
-    'obbbbbobbbbbbbbbbobbbbbo',
-    'obbbbbobbbBBBBbbbobbbbbo',
-    'obbbbbobbbbbbbbbbobbbbbo',
-    'obbbboobbbbbbbbbboobbbbo',
-    'oobbbo.obbbbbbbbo.obbboo',
-    '.ooobo.obbbbbbbbo.obooo.',
-    '...obo.obbbbbbbbo.obo...',
-    '...ooo.obbbbbbbbo.ooo...',
-    '.......obbbbbbbbo.......',
-    '......oobbbbbbbboo......',
-    '......obbbo..obbbo......',
-    '......obbbo..obbbo......',
-    '......obbbo..obbbo......',
-    '.....obbbbo..obbbbo.....',
-    '.....obbbbo..obbbbo.....',
-    '.....oooooo..oooooo.....',
+    '........b...............',
+    '.....b.bb...............',
+    '.....bbbb...bb.bbbbb....',
+    '.....bbbb....b.bbbbb....',
+    '...bbbbbb.....bbbbbbbb..',
+    '...bbbbbb.....bbbbbbbb..',
+    '..bbbbbbb..bbbbbbbbbbb..',
+    '..bbbbbbb..bbbbbbbbbbbb.',
+    '..bb.bbbbbbbbbbbEEbbEEb.',
+    '..bb.bbbbbbbbbbbbbbbbbb.',
+    '.bbb.bbbbbbbbbbbbbbbbb..',
+    '.bbb.bbbbbbbbbbbtttttt..',
+    '.bbb..bbbbbbbbbbbtbbtb..',
+    '.bbb..bbbbbbbbbb.bbbb...',
+    'bbbb..bbbbbbbbbb...bbb..',
+    'bbbb..bbbbbbbbbb...bbb..',
+    'bbbb..bbbbbbbbbb...bbb..',
+    'bbb....bbbbbbbbb....bbbb',
+    'bbb....bbbbbbbbb....bbbb',
+    'bbb....bbbbbbbbb....bbbb',
+    'bbb...bbbbbbbbbbb..bbbbb',
+    'bbbb..bbbbbbbbbbb..bbbbb',
+    'bbbb..bbbbbbbbbbb..b.b.b',
+    'b.b..bbbb...bbbbb....b..',
+    '.....bbbb...bbbbb.......',
+    '.....bbbb...bbbbb.......',
+    '.....bbbb....bbbbb......',
+    '....bbbbb....bbbbb......',
+    '....bbbbb....bbbbbbb....',
+    '....bbbbb....bbbbbbb....',
   ],
   legend: MONSTER_LEGEND,
 };
 
-/** 30x14 — low and long. Reads as a different animal at a glance. */
-export const MON_HOUND: SpriteMap = {
-  rows: [
-    '........................oo....',
-    '.....................ooobbo...',
-    '....oooooooooooooooooobbbbbo..',
-    '..oobbbbbbbbbbbbbbbbbbbbBBBBo.',
-    '.obbbbbbbbbbbbbbbbbbbbbbEEbo..',
-    'obbbbbbbbbbbbbbbbbbbbbbbbbbbbo',
-    'obbbbbbbbbbbbbbbbbbbbbbbttttbo',
-    'obbbbbbbbbbbbbbbbbbbbbbbbbbbbo',
-    'ooobbbbbbbbbbbbbbbbbbbbbbbbboo',
-    '..obbo..obbo....obbo..obbo....',
-    '..obbo..obbo....obbo..obbo....',
-    '..obbo..obbo....obbo..obbo....',
-    '..obbo..obbo....obbo..obbo....',
-    '..oooo..oooo....oooo..oooo....',
-  ],
-  legend: MONSTER_LEGEND,
-};
-
-/** 14x28 — thin and tall, on long legs. */
+/** 14x28 - stilt-legged and folded forward, one shoulder blade standing proud. */
 export const MON_STALKER: SpriteMap = {
   rows: [
-    '...oo....oo...',
-    '...obo..obo...',
-    '...obboobbo...',
-    '....obbbbbo...',
-    '...obbbbbbbo..',
-    '..obBBbbBBbo..',
-    '..obEEbbEEbo..',
-    '..obbtttbbbo..',
-    '..oobbbbbboo..',
-    '....obbbbo....',
-    '....obbbbo....',
-    '...obbbbbbo...',
-    '..obbbbbbbbo..',
-    '.obbbbbbbbbbo.',
-    'obbbbbbbbbbbbo',
-    'obbbbBBBBbbbbo',
-    'obbbbbbbbbbbbo',
-    '.obbbbbbbbbbo.',
-    '..obbbbbbbbo..',
-    '...obbbbbbo...',
-    '...obbbbbbo...',
-    '...obboobbo...',
-    '...obo..obo...',
-    '...obo..obo...',
-    '...obo..obo...',
-    '...obo..obo...',
-    '..obbo..obbo..',
-    '..oooo..oooo..',
+    '....b..bbbbb..',
+    '.....b.bbbbb..',
+    '......bbbbbbb.',
+    '.....bbEEbEEb.',
+    '..bb.bbbbbbbb.',
+    '..bbbbbbtttt..',
+    '..bbbbbbbbbb..',
+    '...bbbbb......',
+    '.bbbbbbb.bbb..',
+    '.bbbbbbbbbbb..',
+    '.bbbbbbbbbbb..',
+    '.bbbbbbbb.bbb.',
+    'bbbbbbbbb.bbb.',
+    'bbbbbbbbb.bbb.',
+    'bbb.bbbbb.bbbb',
+    'b.b.bbbbb.bbbb',
+    '....bbbbb.b.b.',
+    '...bbbbbbb....',
+    '...bbbbbbb....',
+    '...bbbbbbb....',
+    '...bbb..bbb...',
+    '...bbb..bbb...',
+    '...bbb..bbb...',
+    '...bbb..bbb...',
+    '...bbb...bbb..',
+    '..bbbb...bbb..',
+    '..bbbb...bbbbb',
+    '..bbbb...bbbbb',
   ],
   legend: MONSTER_LEGEND,
 };
 
-/** 10x10 — never alone; the scene spawns these in threes. */
-export const MON_SWARMLING: SpriteMap = {
+/** 30x14 - low and long, head carried down, hackles crested over the shoulders. */
+export const MON_HOUND: SpriteMap = {
   rows: [
-    '...oooo...',
-    '..obbbbo..',
-    '.obbbbbbo.',
-    'obBBbbBBbo',
-    'obEEbbEEbo',
-    'obbttttbbo',
-    'obbbBBbbbo',
-    '.obbbbbbo.',
-    '..obbbbo..',
-    '...oooo...',
+    '..........bb..bb..............',
+    '........bbbbbbbb..............',
+    '......bbbbbbbbbbbb....b.......',
+    '......bbbbbbbbbbbb..b.........',
+    '.bb.bbbbbbbbbbbbbbbbbbbbbbbb..',
+    'bbbbbbbbbbbbbbbbbbbbbbbEEbEE..',
+    'bbbbbbbbbbbbbbbbbbbbbbbbbbbb..',
+    '...bbbbbbbbbbbbbbbbbbb.bbbbbbb',
+    '....bbbbbbbbbbbbbbbbb..bbttttt',
+    '....bbbbbb...bbb.bbb....bbbbb.',
+    '....bbbbbb...bbb.bbb..........',
+    '....bbbbbb...bbb.bbb..........',
+    '...bbbbbbb...bbbbbbb..........',
+    '...bbbbbbb...bbbbbbb..........',
   ],
   legend: MONSTER_LEGEND,
 };
 
-/** 20x14 — lopsided, so it never reads as a circle. */
+/** 20x14 - a crawler hauling itself forward on one knuckled forelimb. */
 export const MON_OOZE: SpriteMap = {
   rows: [
-    '.....oooo...........',
-    '...oobbbboo....oo...',
-    '..obbbbbbbbo..obbo..',
-    '.obbbbbbbbbboobbbbo.',
-    '.obBBbbBBbbbbbbbbbo.',
-    'obbEEbbEEbbbbbbbbbbo',
-    'obbbbbbbbbbbbbbbbbbo',
-    'obbttttttbbbbbbbbbbo',
-    'obbbbBBBBBbbbbbbbbbo',
-    'obbbbbbbbbbbbbbbbbbo',
-    '.obbbbbbbbbbbbbbbbo.',
-    '.oobbbbbbbbbbbbbboo.',
-    '..oobbbbbbbbbbbboo..',
-    '....oooooooooooo....',
+    '.........bb.........',
+    '.....bb..bb..b......',
+    '.....bb..bbbbbbbbb..',
+    '....bbb....bEEbEEb..',
+    '.bbb.bb....bbbbbbb..',
+    '.bbbbbbbbbbbbbbbbbbt',
+    'bbbbbbbbbbbbbbttttt.',
+    '.bbbbbbbbbbbb.bbb...',
+    '..bbbbbbbbbbb.bbb...',
+    '..bbbbbbbbbbb.bbb...',
+    '..bbbbbbbbbb.bbbbb..',
+    '...bbbbbbbbb.bbbbb..',
+    '...bbbbbb....b.b.b..',
+    '...b..bb.......b....',
   ],
   legend: MONSTER_LEGEND,
 };
 
-/** Ordered small to large; the scene picks by kill index. */
+/** 12x12 - never alone; the scene spawns these in threes. All jaw and spine. */
+export const MON_SWARMLING: SpriteMap = {
+  rows: [
+    '...b........',
+    '...b..b.....',
+    '..bb..bb.b..',
+    '.....bbbbbb.',
+    '..bbbbEEbEE.',
+    '..bbbbbbbbb.',
+    'bbbbbbbbbbbb',
+    'bbbbbbbttttt',
+    '..bbbb.....t',
+    '.b.bbb.bbb..',
+    '...bbb.bbb..',
+    '...b.b.b.b..',
+  ],
+  legend: MONSTER_LEGEND,
+};
+
 /**
- * Rim-lights the upper contour of a body so a two-tone creature reads as
- * volume rather than a flat cut-out. Light comes from above: the first body
- * pixel down each column turns light, but only in the sprite's top band, so
- * undersides and limbs stay in shadow.
+ * Turns an authored silhouette into a lit, outlined creature.
+ *
+ * Only the shape is drawn by hand, because the shape is where danger lives.
+ * Tone bands, the specular edge and the variable outline weight are the same
+ * rule for every creature, applied here: three bands stepping away from a
+ * light at upper-left in authored space, which the scene's horizontal flip
+ * puts at upper-right, under the sun it actually draws.
  */
-export function withTopLight(map: SpriteMap, band = 0.45): SpriteMap {
-  const height = map.rows.length;
-  const limit = Math.max(2, Math.round(height * band));
+export function sculpt(map: SpriteMap): SpriteMap {
   const grid = map.rows.map((r) => r.split(''));
-  const width = grid[0]?.length ?? 0;
-  for (let x = 0; x < width; x++) {
-    for (let y = 0; y < limit; y++) {
-      const cell = grid[y]?.[x];
-      if (cell === undefined || cell === '.' || cell === 'o') continue;
-      if (cell === 'b') grid[y]![x] = 'h';
-      break;
+  const h = grid.length;
+  const w = grid[0]?.length ?? 0;
+  const solid = (x: number, y: number): boolean => {
+    const cell = grid[y]?.[x];
+    return cell !== undefined && cell !== '.' && cell !== 'o';
+  };
+
+  // How far a pixel sits inside the form from the two lit faces. Summing the
+  // faces rather than walking the diagonal is what keeps a thin limb from
+  // coming out entirely specular: it stays lit at the top and falls off down
+  // its length, the way a cylinder does.
+  const run = (x: number, y: number, dx: number, dy: number): number => {
+    let n = 0;
+    while (n < 6 && solid(x + dx * (n + 1), y + dy * (n + 1))) n++;
+    return n;
+  };
+  const out = grid.map((r) => [...r]);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (grid[y]![x] !== 'b') continue;
+      const depth = run(x, y, 0, -1) + run(x, y, -1, 0);
+      out[y]![x] = depth === 0 ? 'S' : depth <= 2 ? 'h' : depth <= 6 ? 'b' : 'B';
     }
   }
-  return { rows: grid.map((r) => r.join('')), legend: map.legend };
+
+  // Outline only where the form turns away. A lit edge is separated by its
+  // own specular, and a uniform 1px ring is what read as a sticker.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (out[y]![x] !== '.') continue;
+      const lit = solid(x + 1, y) && solid(x, y + 1);
+      const touches =
+        solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1);
+      if (!touches) continue;
+      // The away side is down and right of the body it wraps.
+      const away = solid(x - 1, y) || solid(x, y - 1);
+      if (away || !lit) out[y]![x] = 'o';
+    }
+  }
+  return { rows: out.map((r) => r.join('')), legend: map.legend };
 }
 
-export const MONSTER_SHAPES = [
+/** Distinct tone values a sculpted body uses, for the shading sweep. */
+export function toneBands(map: SpriteMap): string[] {
+  const seen = new Set<string>();
+  for (const row of map.rows) {
+    for (const ch of row) {
+      if (ch === 'S' || ch === 'h' || ch === 'b' || ch === 'B') seen.add(ch);
+    }
+  }
+  return [...seen].sort();
+}
+
+/** The authored shapes, before sculpt() lights them. */
+export const MONSTER_SILHOUETTES = [
   MON_SWARMLING,
   MON_OOZE,
   MON_HOUND,
   MON_STALKER,
   MON_GOLEM,
-].map((m) => withTopLight(m));
+];
+
+export const MONSTER_SHAPES = MONSTER_SILHOUETTES.map(sculpt);
 
 /** Index into MONSTER_SHAPES of the shape that spawns as a group of three. */
 export const SWARM_SHAPE = 0;

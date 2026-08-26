@@ -602,8 +602,8 @@ export function monsterInk(skin: RealmSkin, shape = 0): InkSet {
     body: toHex(bh + turn, vivid, bl),
     bodyDark: toHex(dh + turn, Math.max(ds, 0.45), dl),
     bodyLight: toHex(bh + turn, Math.max(vivid - 0.1, 0.4), Math.min(0.92, bl + 0.16)),
-    sclera: '#ffffff',
-    pupil: INK.black,
+    // The hard edge on a lit facet. Without it three bands still read as flat.
+    bodySpec: toHex(bh + turn, Math.max(vivid - 0.22, 0.3), Math.min(0.88, bl + 0.24)),
     // A lit eye and bared teeth are what carry menace at 16-30px; two white
     // dots read as friendly at any size.
     eyeGlow: '#df7126',
