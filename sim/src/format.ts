@@ -59,6 +59,29 @@ export function formatSeedReport(r: SeedResult): string {
     }
   }
 
+  const sweep = r.permanentUplift?.sweep ?? [];
+  if (sweep.length > 0) {
+    const cell = (h: (typeof sweep)[number]): string =>
+      h.ratio === null ? `${fmtTime(h.sec)} —` : `${fmtTime(h.sec)} ${h.ratio.toFixed(2)}x`;
+    const rows: string[] = [];
+    for (let i = 0; i < sweep.length; i += 5) {
+      rows.push(sweep.slice(i, i + 5).map(cell).join('   '));
+    }
+    lines.push('');
+    lines.push(`   horizon sweep: active/idle Ascendancy per checkpoint (reported, never banded)`);
+    for (const row of rows) lines.push(`     ${row}`);
+    const blocked = sweep.find((h) => h.blocked !== null);
+    if (blocked) {
+      const why =
+        blocked.blocked === 'content-end'
+          ? `past content end — a run stopped at realm ${r.permanentUplift?.contentEndRealm} ` +
+            `at ${fmtTime(r.permanentUplift?.contentEndSec ?? null)}, so a later ratio would ` +
+            `divide a frozen total by a growing one`
+          : `past the run length — extend --days to measure them`;
+      lines.push(`     — = not measurable: ${why}`);
+    }
+  }
+
   if (r.frontierRealm !== null) {
     const when = r.frontierSec === null ? '' : ` at ${fmtTime(r.frontierSec)}`;
     lines.push('');

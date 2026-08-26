@@ -16,6 +16,7 @@ import { CAP_RATE, SEC_PER_DAY, SEC_PER_HOUR, strikeThrough } from './policy';
 import { clone, runPlayer, timeToKill, totalEarned, type RunOptions } from './simulate';
 import type {
   DeadTime,
+  HorizonPoint,
   PermanentUplift,
   RealmRecord,
   ShopSample,
@@ -286,6 +287,13 @@ export const PERMANENT_RANK_TARGET = 20;
  */
 export const PERMANENT_HORIZON_SEC = 14 * SEC_PER_DAY;
 
+/**
+ * Checkpoints the active/idle multiple is reported at. Reported, never banded:
+ * only `PERMANENT_HORIZON_SEC` carries a band (#39), and a curve that can go red
+ * becomes a thing to tune.
+ */
+export const HORIZON_SWEEP_DAYS = [3, 7, 14, 21, 30, 45, 60, 75, 90];
+
 /** Summarise every look at the upgrade panel taken past the grace window. */
 export function spendDepth(samples: ShopSample[]): SpendDepth {
   const counted = samples.filter((x) => x.sinceRealmStartSec >= SPEND_GRACE_SEC);
@@ -449,6 +457,23 @@ export function permanentUplift(
   const measuredAtSec = Math.min(PERMANENT_HORIZON_SEC, shortest);
   const idleEarned = earnedAt(idle.earnedTrail, idle.state, measuredAtSec);
   const activeEarned = earnedAt(active.earnedTrail, active.state, measuredAtSec);
+
+  // `earnedAt` carries the last trail value forward, so a checkpoint past either
+  // run's end divides a frozen total by a growing one — a hyperbola that reads
+  // like a pacing collapse. Past `shortest` the sweep reports no data instead.
+  const sweep: HorizonPoint[] = [];
+  for (const day of HORIZON_SWEEP_DAYS) {
+    const sec = day * SEC_PER_DAY;
+    if (sec > config.days * SEC_PER_DAY) continue;
+    if (sec > shortest) {
+      const past = firstEnd !== undefined && sec > firstEnd.sec;
+      sweep.push({ sec, ratio: null, blocked: past ? 'content-end' : 'run-length' });
+      continue;
+    }
+    const i = earnedAt(idle.earnedTrail, idle.state, sec);
+    const a = earnedAt(active.earnedTrail, active.state, sec);
+    sweep.push({ sec, ratio: i > 0 ? a / i : null, blocked: i > 0 ? null : 'run-length' });
+  }
   return {
     horizonSec: PERMANENT_HORIZON_SEC,
     reachedHorizon,
@@ -458,6 +483,7 @@ export function permanentUplift(
     ratio: idleEarned > 0 ? activeEarned / idleEarned : Infinity,
     idleFirstAscensionSec: firstWin(idle.realms),
     activeFirstAscensionSec: firstWin(active.realms),
+    sweep,
     contentEndRealm: firstEnd?.realm ?? null,
     contentEndSec: firstEnd?.sec ?? null,
     rankTarget: PERMANENT_RANK_TARGET,

@@ -18,12 +18,13 @@ import {
   spendDepth,
   SPEND_GRACE_SEC,
   SPEND_TARGET,
+  permanentUplift,
   twentyFourHourReturn,
 } from '../src/probes';
 import { runPlayer } from '../src/simulate';
 import { runCorrectness, runPacing } from '../src/validators';
 import { PERMANENT_HORIZON_SEC } from '../src/probes';
-import type { BreachKind, SeedResult, ShopSample, SimConfig } from '../src/types';
+import type { BreachKind, HorizonPoint, SeedResult, ShopSample, SimConfig } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
   days: 1,
@@ -508,26 +509,27 @@ describe('the dead-time and starvation clauses bite', () => {
  * mismatch is what made bare `npm run sim` print a red line meaning "you used
  * the wrong flags", which teaches people to ignore red.
  */
+const uplift = (over: Partial<NonNullable<SeedResult['permanentUplift']>> = {}) => ({
+  horizonSec: PERMANENT_HORIZON_SEC,
+  reachedHorizon: true,
+  measuredAtSec: PERMANENT_HORIZON_SEC,
+  idleEarned: 1000,
+  activeEarned: 1840,
+  ratio: 1.84,
+  idleFirstAscensionSec: 14 * 3600,
+  activeFirstAscensionSec: 11 * 3600,
+  rankTarget: 20,
+  idleRankSec: 4.5 * 86_400,
+  activeRankSec: 3.5 * 86_400,
+  sweep: [],
+  contentEndRealm: null,
+  contentEndSec: null,
+  ...over,
+});
+
 describe('P10 bands at a checkpoint, not at the run length', () => {
   const p10 = (r: SeedResult) =>
     runPacing(r).find((v) => v.id === 'P10') as { pass: boolean; detail: string };
-
-  const uplift = (over: Partial<NonNullable<SeedResult['permanentUplift']>> = {}) => ({
-    horizonSec: PERMANENT_HORIZON_SEC,
-    reachedHorizon: true,
-    measuredAtSec: PERMANENT_HORIZON_SEC,
-    idleEarned: 1000,
-    activeEarned: 1840,
-    ratio: 1.84,
-    idleFirstAscensionSec: 14 * 3600,
-    activeFirstAscensionSec: 11 * 3600,
-    rankTarget: 20,
-    idleRankSec: 4.5 * 86_400,
-    activeRankSec: 3.5 * 86_400,
-    contentEndRealm: null,
-    contentEndSec: null,
-    ...over,
-  });
 
   it('passes on the measured middle of the band', () => {
     expect(p10(stubResult({ permanentUplift: uplift() })).pass).toBe(true);
@@ -581,6 +583,95 @@ describe('P10 bands at a checkpoint, not at the run length', () => {
  * like a pacing collapse. The report has to say the run ran out of ladder, or
  * every future reader re-derives it (docs/DECISIONS.md #48).
  */
+/**
+ * The sweep is the reproducible form of the day-90 finding. Its whole job is
+ * the guard: `earnedAt` carries the last trail value forward, so an unguarded
+ * checkpoint past a run's end reports a frozen numerator over a growing
+ * denominator and reads as a pacing collapse (docs/DECISIONS.md #48).
+ */
+describe('the horizon sweep reports no data rather than a carried value', () => {
+  const pt = (sec: number, ratio: number | null, blocked: HorizonPoint['blocked']) => ({
+    sec,
+    ratio,
+    blocked,
+  });
+
+  it('prints a measurable checkpoint and blanks one past content end', () => {
+    const out = formatSeedReport(
+      stubResult({
+        frontierRealm: 301,
+        frontierSec: 76.31 * 86_400,
+        permanentUplift: uplift({
+          contentEndRealm: 301,
+          contentEndSec: 76.31 * 86_400,
+          sweep: [pt(75 * 86_400, 1.78, null), pt(90 * 86_400, null, 'content-end')],
+        }),
+      }),
+    );
+    expect(out).toContain('horizon sweep');
+    expect(out).toContain('75.00d 1.78x');
+    expect(out).toContain('90.00d —');
+    expect(out).toContain('past content end');
+    expect(out).toContain('realm 301');
+    // The number that misleads must not appear anywhere in the block.
+    expect(out).not.toContain('1.17');
+  });
+
+  it('names a short run differently from a run that ran out of ladder', () => {
+    const short = formatSeedReport(
+      stubResult({
+        frontierRealm: null,
+        frontierSec: null,
+        permanentUplift: uplift({ sweep: [pt(30 * 86_400, null, 'run-length')] }),
+      }),
+    );
+    expect(short).toContain('past the run length');
+    expect(short).not.toContain('past content end');
+  });
+
+  it('says nothing at all when every checkpoint was measurable', () => {
+    const clean = formatSeedReport(
+      stubResult({ permanentUplift: uplift({ sweep: [pt(14 * 86_400, 1.84, null)] }) }),
+    );
+    expect(clean).toContain('14.00d 1.84x');
+    expect(clean).not.toContain('not measurable');
+  });
+
+  it('offers only checkpoints inside the run, and measures every one it offers', () => {
+    const short = cfg({ days: 7 });
+    const main = runPlayer(1, short, { policy: 'road-active', entry: 'prompt' });
+    const pu = permanentUplift(1, short, main);
+    expect(pu).not.toBeNull();
+    // Clipped to the run: 14d and beyond are never offered at --days 7.
+    expect(pu!.sweep.map((h) => h.sec / 86_400)).toEqual([3, 7]);
+    for (const h of pu!.sweep) {
+      expect(h.ratio, `${h.sec / 86_400}d`).not.toBeNull();
+      expect(h.blocked).toBeNull();
+    }
+  });
+
+  it('blocks every checkpoint past a run that stopped early, from the real probe', () => {
+    const short = cfg({ days: 7 });
+    // Stopping at the first victory puts the active run's end well before the
+    // 3d checkpoint, which is the same shape as stopping at content end.
+    const stopped = runPlayer(1, short, {
+      policy: 'road-active',
+      entry: 'prompt',
+      maxVictories: 1,
+    });
+    expect(stopped.state.timeSec).toBeLessThan(3 * 86_400);
+    const pu = permanentUplift(1, short, stopped);
+    expect(pu).not.toBeNull();
+    expect(pu!.sweep.map((h) => h.sec / 86_400)).toEqual([3, 7]);
+    for (const h of pu!.sweep) {
+      expect(h.ratio, `${h.sec / 86_400}d`).toBeNull();
+      expect(h.blocked).toBe('run-length');
+    }
+    // No frontier was met, so it must not be blamed on content end.
+    expect(pu!.contentEndRealm).toBeNull();
+  });
+});
+
 describe('the seed report calls content end what it is', () => {
   it('names the realm, the day, and why no later ratio measures pacing', () => {
     const quiet = formatSeedReport(stubResult({ frontierRealm: null, frontierSec: null }));
