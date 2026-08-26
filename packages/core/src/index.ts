@@ -114,6 +114,10 @@ export {
 } from './formulas';
 export type { AscNodeEffect } from './formulas';
 
+// --- Shop ----------------------------------------------------------------
+export { purchaseOptions, affordableCount, pricedCount } from './shop';
+export type { PurchaseOption, PurchaseKind, PurchaseCurrency } from './shop';
+
 // --- Engine --------------------------------------------------------------
 export {
   EVENT_CAP,
