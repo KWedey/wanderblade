@@ -1252,9 +1252,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /** Stepped contact ellipse. A flat 2px bar left creatures hovering. */
   function drawShadow(x: number, width: number): void {
-    ctx.fillStyle = 'rgba(26, 28, 44, 0.28)';
-    ctx.fillRect(Math.floor(x - width / 2), groundY, width, 2);
+    const rows: readonly (readonly [number, number])[] = [
+      [1, 0.34],
+      [0.72, 0.26],
+      [0.42, 0.17],
+    ];
+    rows.forEach(([scale, alpha], i) => {
+      const w = Math.max(2, Math.round(width * scale));
+      ctx.fillStyle = `rgba(26, 28, 44, ${alpha})`;
+      ctx.fillRect(Math.floor(x - w / 2), groundY + i, w, 1);
+    });
   }
 
   function drawHero(): void {
