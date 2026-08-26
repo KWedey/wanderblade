@@ -183,7 +183,20 @@ export const ARC_MAX_REACH = 1.5;
  * the ground where it peaks — a 100x swing at human reaction speed, on
  * knowledge the game never communicates (docs/DECISIONS.md #35).
  */
-export const ARC_CATCH_SEC = 0.14;
+export const ARC_CATCH_SEC = 0.3;
+
+/**
+ * Half-width of the catch window *across* the coin's path, in arc units.
+ *
+ * One circle at one instant is simultaneously the aim tolerance and the timing
+ * tolerance, so tightening either tightens both — which is why no value of
+ * `ARC_CATCH_SEC` alone could make aim matter without making the mechanic a
+ * reflex-time lottery. Latency displaces a tap *along* the path; a stray tap
+ * scatters in every direction. Splitting the two axes is the shape the physics
+ * implied (`docs/DECISIONS.md` #45), and it is not a cap: the along-path window
+ * stays constant in time at every speed, so #35 is untouched.
+ */
+export const ARC_CATCH_PERP = 0.1;
 
 // --- Portal guardian -----------------------------------------------------
 /** Guardian HP = this * enemyHp(realm, last zone) * BOSS_REALM_GAIN^realm. */

@@ -3,7 +3,9 @@ import {
   advance,
   arcPositionAt,
   ARC_CATCH_MULT,
+  ARC_CATCH_PERP,
   arcCatchRadius,
+  arcHeadingAt,
   ARC_FLIGHT_SEC,
   ARC_STAGGER_SEC,
   ARC_SPLIT_MIN,
@@ -223,24 +225,48 @@ describe('a catch is a hit test, not a queue', () => {
     expect(s.momentum.value).toBeGreaterThan(momentumBefore);
   });
 
-  it('misses just outside the catch radius and hits just inside it', () => {
+  /**
+   * Both axes, because the window is an ellipse aligned to the coin's travel:
+   * generous along the path where lateness lives, tight across it where aim
+   * error lives (#45). Offsetting purely in x tests neither axis cleanly — near
+   * the ground the coin falls, so an x-offset is almost entirely across-path.
+   */
+  it('misses just outside the catch window and hits just inside it', () => {
     const s = roadAt(31, 20, 10);
     advance(s, 10.001);
     const at = 10.5;
     const arc = s.arcs[0] as LootArc;
     const p = aimAt(arc, at) as { x: number; y: number };
-    const r = arcCatchRadius(arc, at);
-    expect(r).toBeGreaterThan(0);
+    const u = arcHeadingAt(arc, at) as { x: number; y: number };
+    const along = arcCatchRadius(arc, at);
+    expect(along).toBeGreaterThan(0);
+    // Only this arc, so a neighbour's window cannot answer for it.
+    const solo = (aim: { x: number; y: number }): number => {
+      const c = clone(s);
+      c.arcs = [c.arcs[0] as LootArc];
+      return advance(c, 0.6, [{ atSec: at, aim }]).filter((e) => e.type === 'arcCatch')
+        .length;
+    };
 
-    const near = advance(clone(s), 0.6, [
-      { atSec: at, aim: { x: p.x + r * 0.9, y: p.y } },
-    ]);
-    expect(near.filter((e) => e.type === 'arcCatch')).toHaveLength(1);
+    expect(solo({ x: p.x + u.x * along * 0.9, y: p.y + u.y * along * 0.9 })).toBe(1);
+    expect(solo({ x: p.x + u.x * along * 1.1, y: p.y + u.y * along * 1.1 })).toBe(0);
 
-    const far = advance(clone(s), 0.6, [
-      { atSec: at, aim: { x: p.x + r * 1.1, y: p.y } },
-    ]);
-    expect(far.filter((e) => e.type === 'arcCatch')).toHaveLength(0);
+    // Across the path the tolerance is a distance, not a share of the flight.
+    const n = { x: -u.y, y: u.x };
+    expect(
+      solo({
+        x: p.x + n.x * ARC_CATCH_PERP * 0.9,
+        y: p.y + n.y * ARC_CATCH_PERP * 0.9,
+      }),
+    ).toBe(1);
+    expect(
+      solo({
+        x: p.x + n.x * ARC_CATCH_PERP * 1.1,
+        y: p.y + n.y * ARC_CATCH_PERP * 1.1,
+      }),
+    ).toBe(0);
+    // And the two axes are genuinely different, which is the whole point.
+    expect(along).toBeGreaterThan(ARC_CATCH_PERP * 2);
   });
 
   it('treats an arc with no recorded reach as uncatchable, never as NaN', () => {
@@ -254,6 +280,9 @@ describe('a catch is a hit test, not a queue', () => {
     delete (arc as Partial<LootArc>).landingX;
     expect(arcPositionAt(arc, at)).toBeNull();
 
+    // Only the broken arc, or a healthy neighbour answers the tap and the
+    // assertion stops being about the broken one at all.
+    s.arcs = [arc];
     const events = advance(s, 0.6, [{ atSec: at, aim: p }]);
     expect(events.filter((e) => e.type === 'arcCatch')).toHaveLength(0);
     expect(Number.isFinite(s.gold)).toBe(true);

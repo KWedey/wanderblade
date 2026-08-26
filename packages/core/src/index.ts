@@ -41,6 +41,7 @@ export {
   ARC_MIN_REACH,
   ARC_MAX_REACH,
   ARC_CATCH_SEC,
+  ARC_CATCH_PERP,
   bossHpMult,
   BOSS_REALM_GAIN,
   ASC_COST_STEP,
@@ -88,6 +89,7 @@ export type {
 // --- Loot arcs -----------------------------------------------------------
 export {
   arcCatchRadius,
+  arcHeadingAt,
   arcHitIndex,
   arcLandingX,
   arcPositionAt,

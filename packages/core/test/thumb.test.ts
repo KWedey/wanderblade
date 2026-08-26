@@ -5,6 +5,7 @@ import {
   ARC_CATCH_SEC,
   ARC_FLIGHT_SEC,
   arcCatchRadius,
+  arcHitIndex,
   arcSpeedAt,
   initialState,
   type ArcPoint,
@@ -92,6 +93,50 @@ function catchRate(target: Target, latencySec: number, scatter = 0): number {
     const at = s.timeSec + 1 / 3.3;
     const arc = pick(s, at, target);
     const aim = arc ? thumbAim(arc, at, latencySec, scatter, i) : null;
+    const events = advance(s, at - s.timeSec, [{ atSec: at, aim }]);
+    if (aim) taps += 1;
+    caught += events.filter((e) => e.type === 'arcCatch').length;
+  }
+  return taps === 0 ? 0 : caught / taps;
+}
+
+/**
+ * Share of catches that were the coin actually aimed at, on a genuinely busy
+ * road. This is the property that separates a skilled tap from a lucky one: in
+ * a field this dense, catching *a* coin while aiming at nothing is the loot
+ * stream working, not the mechanic failing. It read **0%** under a circular
+ * window — the aimed coin sat 1.5 radii away on every sample, so every catch
+ * was incidental (`docs/DECISIONS.md` #45).
+ */
+function intendedShare(target: Target, latencySec: number, scatter = 0): number {
+  const s = liveArcRoad();
+  let caught = 0;
+  let intended = 0;
+  for (let i = 0; i < 400; i++) {
+    const at = s.timeSec + 1 / 3.3;
+    const arc = pick(s, at, target);
+    const aim = arc ? thumbAim(arc, at, latencySec, scatter, i) : null;
+    if (arc && aim) {
+      const hit = arcHitIndex(s.arcs, aim, at);
+      if (hit >= 0) {
+        caught += 1;
+        if (s.arcs[hit] === arc) intended += 1;
+      }
+    }
+    advance(s, at - s.timeSec, [{ atSec: at, aim }]);
+  }
+  return caught === 0 ? 0 : intended / caught;
+}
+
+/** Catch rate on a busy road for a player whose real reaction time is `lat`. */
+function rateAtLatency(lat: number): number {
+  const s = liveArcRoad();
+  let taps = 0;
+  let caught = 0;
+  for (let i = 0; i < 400; i++) {
+    const at = s.timeSec + 1 / 3.3;
+    const arc = pick(s, at, 'landing');
+    const aim = arc ? thumbAim(arc, at, lat, 0, i) : null;
     const events = advance(s, at - s.timeSec, [{ atSec: at, aim }]);
     if (aim) taps += 1;
     caught += events.filter((e) => e.type === 'arcCatch').length;
@@ -214,5 +259,53 @@ describe('the catch window is constant in time, not in distance', () => {
     const wild = catchRate('landing', 0.25, 0.5);
     expect(wild).toBeLessThan(sloppy / 2);
     expect(wild).toBeLessThan(0.2);
+  });
+});
+
+describe('the window separates being late from aiming badly', () => {
+  /**
+   * The catch window is an ellipse aligned to the coin's travel. Latency
+   * displaces a tap *along* the path and is forgiven; a stray tap scatters in
+   * every direction and is not. One circle at one instant was both tolerances
+   * at once, so tightening either tightened both.
+   */
+  it('catches the coin the player aimed at, not a neighbour', () => {
+    const share = intendedShare('landing', 0.25);
+    // 34% measured, against 0% under a circle. Modest, and the honest number:
+    // an earlier harness read 97% because it passed an empty strike array, so
+    // caught coins were never removed and the same coin was re-aimed at.
+    expect(share, `intended ${(share * 100).toFixed(0)}%`).toBeGreaterThan(0.25);
+  });
+
+  /**
+   * ⚠️ The apex is where this shape does **not** work, and the number is the
+   * parabola's own curvature: over a 250 ms window the seen position sits
+   * **0.111** across the tangent at p=0.5, against 0.014-0.047 near the ground.
+   * Widening `ARC_CATCH_PERP` past 0.111 does not rescue it — measured 0% at
+   * 0.10, 0.14, 0.18 and 0.24 — because a neighbour then scores lower than the
+   * aimed coin. Pinned as a known limit rather than left to be rediscovered.
+   */
+  it('cannot yet do the same at the apex, and says so', () => {
+    expect(intendedShare('apex', 0.25)).toBeLessThan(0.1);
+  });
+
+  /**
+   * The trap this shape avoids. Compensating for latency with a constant made
+   * the catch rate a narrow spike around the reaction time the constant
+   * assumed — 0.087 at 150 ms, 1.000 at 250 ms, 0.022 at 300 ms — which
+   * rewards having particular reflexes rather than aiming. A generous
+   * along-path axis is flat across the whole human range instead.
+   */
+  it('does not reward one particular reaction time', () => {
+    const rates = [0.1, 0.15, 0.25, 0.35, 0.45].map(rateAtLatency);
+    for (const r of rates)
+      expect(r, `rates ${rates.map((x) => x.toFixed(2)).join('/')}`).toBeGreaterThan(0.85);
+    const spread = Math.max(...rates) / Math.min(...rates);
+    expect(spread, `spread ${spread.toFixed(2)}`).toBeLessThan(1.3);
+  });
+
+  it('still refuses a tap that is simply in the wrong place', () => {
+    // Across-path error is not forgiven, however well timed the tap is.
+    expect(intendedShare('landing', 0.25, 0.6)).toBeLessThan(0.5);
   });
 });

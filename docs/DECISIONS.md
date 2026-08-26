@@ -645,3 +645,28 @@ The hump survives, and day 14 sits in band on both. **This is not a controlled c
 Four base words — Wyrm, Drake, Revenant, Behemoth — do not appear anywhere in the SRD 5.2.1 text at all (confirmed by full-document search, not just its index), and each is a documented pre-D&D word (Old English/Norse "wyrm," archaic English "drake," gothic-literature "revenant," biblical "behemoth"). Compounds where only the base word is the SRD or folklore term ("Iron Kobold" → kobold) record the base word only; the modifier is original Wanderblade and is never claimed as adapted.
 
 **Count correction.** The task named "17 names"; the list it enumerated, and the actual matching set in `species.ts`, is 18 — Star Wraith and Ember Wraith are two names sharing one SRD base word. All 18 are in the roster, not 17.
+## 50. The catch window separates being late from aiming badly — 2026-08-26
+
+**Status: parked, red by one clause.** `ARC_CATCH_SEC` 0.14 → **0.30** (along the coin's path) and a new `ARC_CATCH_PERP` = **0.10** (across it). `arcHitIndex` scores an ellipse aligned to `arcHeadingAt` instead of a circle.
+
+**Why:** one circle at one instant is simultaneously the aim tolerance and the timing tolerance, so tightening either tightens both. That is why #43 found no value of `ARC_CATCH_SEC` that made aim matter without turning the mechanic into a reflex-time lottery. Latency displaces a tap **along** the path; a stray tap scatters in **every** direction. Splitting the axes is the shape the physics implied, and it is not a cap — the along-path window is still constant in time at every speed, so #35 is untouched.
+
+**Measured with real catches**, `liveArcRoad()`, 250 ms, 400 taps:
+
+| | circle (0.14) | ellipse (0.30 / 0.10) |
+|---|---|---|
+| landing rate | 0.93 | 1.00 |
+| landing `intended` | **0%** | **34%** |
+| apex `intended` | 0% | **0%** |
+| ±0.5 scatter | 0.71 | 0.54 |
+| ±1.0 scatter | 0.125 | 0.12 |
+| rate at 100–450 ms latency | — | **flat 1.00** |
+
+**A correction, because the first number reported was wrong.** An earlier harness read `intended` at 97%. It called `advance(state, dt, [])` with an **empty strike array**, so caught coins were never removed and the same coin was re-aimed at every tap. With real catches it is **34%**. The lesson is the session's own: a harness that does not perform the action it measures will flatter it, and the fix is to drive the real engine path rather than a model of it.
+
+**Where this shape does not work, quantified.** At the apex `intended` stays **0%**, and the number is the parabola's own curvature: over a 250 ms window the seen position sits **0.111** across the tangent at p=0.5, against 0.014–0.047 near the ground. Widening `ARC_CATCH_PERP` past 0.111 does not rescue it — 0% at 0.10, 0.14, 0.18 and 0.24 — because a neighbour then scores lower than the aimed coin. Pinned as a known limit in `thumb.test.ts` rather than left to be rediscovered.
+
+**Lag compensation was tried first and rejected.** Evaluating the aim at `clock − LAG` is deterministic (a constant, no wall clock) and never catches an unthrown coin (`arcPositionAt` is null before launch, measured 0 across every value). It took `intended` to 97% and, with a 0.05 window, passed every acceptance condition. It was rejected on a measurement nobody asked for: catch rate against the player's **actual** reaction time is a narrow spike — **0.087 at 150 ms, 1.000 at 250 ms, 0.022 at 300 ms**. It rewards having the reflexes the constant assumes and punishes a fast player worse than a slow one. Experiment preserved on `exp/catch-lag`.
+
+**Still red: `degrades with aim error` at 0.2308 against its 0.2 bar.** #43 showed that clause is a statement about coin density — it only becomes true at roughly one coin in the air, which contradicts the Loot Arc design. Replacing it is a rewrite of what a test asserts, which is the user's call and not an agent's, so the branch is parked rather than merged.
+
