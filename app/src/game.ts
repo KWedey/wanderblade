@@ -254,6 +254,10 @@ export class Game {
       dps: this.dps,
       momentum,
       momentumMult: momentumMultiplier(momentum),
+      boss:
+        this.state.phase === 'boss'
+          ? { hpFrac: this.state.boss.hpRemaining / Math.max(1, this.state.boss.hpMax) }
+          : null,
       arcs: this.state.arcs,
       timeSec: this.state.timeSec + this.sinceTickSec(),
       paused: this.view.isRecapOpen() || performance.now() < this.hitStopUntilMs,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { MONSTER_SHAPES } from '../src/scene/pixels';
+import { BOSS_SHAPE, MONSTER_SHAPES } from '../src/scene/pixels';
 import { REGION_NAME_COUNT, describeEvent } from '../src/flavor';
-import { GOLEM, ROSTER_COUNT, SWARMLING, speciesAt } from '../src/species';
+import { GOLEM, ROSTER_COUNT, ROSTER_SIZE, SWARMLING, speciesAt } from '../src/species';
 
 function killEvent(realm: number, killIndex: number) {
   return { type: 'kill', timeSec: 1, realm, zone: 3, killIndex, gold: 10 } as const;
@@ -67,7 +67,7 @@ describe('the roster follows the realm', () => {
 describe('every realm fields a varied roster', () => {
   function shapesOf(realm: number): Set<number> {
     return new Set(
-      Array.from({ length: MONSTER_SHAPES.length }, (_, k) => speciesAt(realm, k).shape),
+      Array.from({ length: ROSTER_SIZE }, (_, k) => speciesAt(realm, k).shape),
     );
   }
 
@@ -83,9 +83,19 @@ describe('every realm fields a varied roster', () => {
     }
   });
 
+  // The guardian's silhouette is the boss phase's alone. A road roster naming
+  // it would put the end of the realm in the middle of a zone.
+  it('never puts the Portal guardian on a road roster', () => {
+    for (let realm = 0; realm < ROSTER_COUNT; realm++) {
+      for (let kill = 0; kill < ROSTER_SIZE * 3; kill++) {
+        expect(speciesAt(realm, kill).shape, `realm ${realm} kill ${kill}`).not.toBe(BOSS_SHAPE);
+      }
+    }
+  });
+
   it('cycles the whole roster before repeating a creature', () => {
     for (let realm = 0; realm < ROSTER_COUNT; realm++) {
-      const names = Array.from({ length: MONSTER_SHAPES.length }, (_, k) => speciesAt(realm, k).name);
+      const names = Array.from({ length: ROSTER_SIZE }, (_, k) => speciesAt(realm, k).name);
       expect(new Set(names).size, `realm ${realm}`).toBe(names.length);
     }
   });

@@ -279,6 +279,63 @@ export const MON_SWARMLING: SpriteMap = {
 };
 
 /**
+ * 38x46 - the Portal guardian. Twice a road creature's mass and half again the
+ * hero's height, because it is the end of a realm and was reading as an
+ * encounter. Crowned, four-armed, and planted: it does not walk, it waits.
+ */
+export const MON_WARDEN: SpriteMap = {
+  rows: [
+    '.....b..................b.............',
+    '.....bb...bbb....bbb...bb.............',
+    '....bbbb..bbb....bbb..bbbb............',
+    '....bbbbbbbbbbbbbbbbbbbbbb............',
+    '.....bbbbbbbbbbbbbbbbbbbb.............',
+    '......bbbbbbbbbbbbbbbbbb..............',
+    '......bbbbbbbbbbbbbbbbbbb.............',
+    '.....bbbbEEEbbbbbbEEEbbbbb............',
+    '.....bbbbEEEbbbbbbEEEbbbbbb...........',
+    '.....bbbbbbbbbbbbbbbbbbbbbb...........',
+    '......bbbbtttttttttttttbbbb...........',
+    '......bbbbbtttttttttttbbbbb...........',
+    '.......bbbbbbbbbbbbbbbbbbb............',
+    '........bbbbbbbbbbbbbbbbb.............',
+    '..bb.....bbbbbbbbbbbbbbb.....bb.......',
+    '.bbbb...bbbbbbbbbbbbbbbbb...bbbb......',
+    'bbbbbb.bbbbbbbbbbbbbbbbbbb.bbbbbb.....',
+    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb....',
+    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...',
+    'bbbbbb.bbbbbbbbbbbbbbbbbbb.bbbbbbbb...',
+    '.bbbb..bbbbbbbbbbbbbbbbbbb..bbbbbbb...',
+    '..bb...bbbbbbbbbbbbbbbbbbb...bbbbbb...',
+    '.......bbbbbbbbbbbbbbbbbbb....bbbb....',
+    '......bbbbbbbbbbbbbbbbbbbbb....bb.....',
+    '.....bbbbbbbbbbbbbbbbbbbbbbb..........',
+    '....bbbbbbbbbbbbbbbbbbbbbbbbb.........',
+    '...bbbbbbbbbbbbbbbbbbbbbbbbbbb........',
+    '...bbbbbbbbbbbbbbbbbbbbbbbbbbbb.......',
+    '..bbbbbbbbbbbbbbbbbbbbbbbbbbbbb.......',
+    '..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb......',
+    '..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb......',
+    '...bbbbbbbbbbbbbbbbbbbbbbbbbbbb.......',
+    '....bbbbbbbbbbbbbbbbbbbbbbbbbb........',
+    '.....bbbbbbbbbb..bbbbbbbbbbbb.........',
+    '.....bbbbbbbbb....bbbbbbbbbbb.........',
+    '....bbbbbbbbb......bbbbbbbbbb.........',
+    '....bbbbbbbb.......bbbbbbbbb..........',
+    '...bbbbbbbb.........bbbbbbbb..........',
+    '...bbbbbbbb.........bbbbbbbb..........',
+    '..bbbbbbbb...........bbbbbbb..........',
+    '..bbbbbbbb...........bbbbbbbb.........',
+    '.bbbbbbbb.............bbbbbbb.........',
+    '.bbbbbbbb.............bbbbbbbb........',
+    'bbbbbbbbb.............bbbbbbbb........',
+    'bbbbbbbbbbb.........bbbbbbbbbbb.......',
+    'bbbbbbbbbbb.........bbbbbbbbbbb.......',
+  ],
+  legend: MONSTER_LEGEND,
+};
+
+/**
  * Turns an authored silhouette into a lit, outlined creature.
  *
  * Only the shape is drawn by hand, because the shape is where danger lives.
@@ -360,12 +417,16 @@ export const MONSTER_SILHOUETTES = [
   MON_HOUND,
   MON_STALKER,
   MON_GOLEM,
+  MON_WARDEN,
 ];
 
 export const MONSTER_SHAPES = MONSTER_SILHOUETTES.map(sculpt);
 
 /** Index into MONSTER_SHAPES of the shape that spawns as a group of three. */
 export const SWARM_SHAPE = 0;
+
+/** The Portal guardian. Never on a road roster — the boss phase draws it. */
+export const BOSS_SHAPE = MONSTER_SILHOUETTES.length - 1;
 
 // --- Loot ----------------------------------------------------------------
 

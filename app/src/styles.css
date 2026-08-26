@@ -627,7 +627,15 @@ body {
 .abandon-btn {
   position: relative;
   width: 100%;
+  /* Grows with its label. At the ramp's size "Hold to abandon" wraps, and a
+     fixed height under overflow:hidden simply cut the second line off. */
   min-height: 44px;
+  padding: 7px 10px;
+  line-height: 1.15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   border: 2px solid var(--danger-deep);
   background: var(--panel-sunk);
   color: var(--danger);

@@ -80,6 +80,12 @@ const ROSTERS: Species[][] = [
 /** How many realms have a roster of their own before the list laps. */
 export const ROSTER_COUNT = ROSTERS.length;
 
+/**
+ * Creatures in one realm's roster. Not the silhouette count: the Portal
+ * guardian has a silhouette no road roster is allowed to name.
+ */
+export const ROSTER_SIZE = ROSTERS[0]?.length ?? 0;
+
 const FALLBACK = s('Rift Beast', GOLEM);
 
 /**

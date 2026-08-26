@@ -57,6 +57,7 @@ import {
   NUMERAL_FONT,
   HERO_WALK_A,
   HERO_WALK_B,
+  BOSS_SHAPE,
   MONSTER_SHAPES,
   ROCK,
   SWORD,
@@ -102,6 +103,12 @@ export interface SceneModel {
   /** World frozen behind the recap modal. */
   paused: boolean;
   reduceMotion: boolean;
+  /**
+   * Set only in the Portal (DECISIONS.md #15). `hpFrac` is the guardian's
+   * remaining health [0,1]; the scene swaps the road queue for one guardian
+   * standing in a drawn portal rather than dressing the boss as an encounter.
+   */
+  boss: { hpFrac: number } | null;
   /** Loot arcs in flight, straight off GameState — the scene never owns these. */
   arcs: readonly LootArc[];
   /** Engine clock the arcs are evaluated against. */
@@ -156,6 +163,10 @@ const MIN_BAND_H = 60;
 const BLADE_REACH = 23;
 /** Fraction of the kill spent closing the distance; the rest is the fight. */
 const APPROACH_FRAC = 0.3;
+/** Seconds the guardian spends walking out of its portal. Then it stands: its
+ * health is a ten-minute fight, and marching it in over that reads as a road
+ * approach rather than a duel. */
+const BOSS_ENTRANCE_SEC = 1.1;
 
 const SWINGS_PER_SEC = 1.7;
 const SWING_ANIM_SEC = 0.32;
@@ -426,6 +437,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let clockSec = 0;
   let scrollGround = 0;
   let scrollTrees = 0;
+  /** Scene clock the guardian appeared at, for its one walk out of the rift. */
+  let bossEnteredAtSec = 0;
   let scrollHillNear = 0;
   let scrollHillFar = 0;
   let scrollClouds = 0;
@@ -477,6 +490,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     momentumMult: 1,
     paused: false,
     reduceMotion: false,
+    boss: null,
     arcs: [],
     timeSec: 0,
   };
@@ -800,12 +814,29 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       killMonster(skin);
     }
 
-    while (queue.length < QUEUE_DEPTH) enqueueMonster(model.kills + queue.length);
+    if (model.boss) {
+      // One guardian, and it stays: the road's queue would walk a second
+      // creature into the climax of a realm.
+      if (queue.length !== 1 || queue[0]!.shape !== BOSS_SHAPE) {
+        queue.length = 0;
+        queue.push({ shape: BOSS_SHAPE, x: vw + 30, flash: 0, recoil: 0, bob: 0, spread: 0 });
+        bossEnteredAtSec = clockSec;
+      }
+    } else {
+      if (queue[0]?.shape === BOSS_SHAPE) queue.length = 0;
+      while (queue.length < QUEUE_DEPTH) enqueueMonster(model.kills + queue.length);
+    }
 
     // The engaged monster's position is driven by the engine's kill progress,
     // so it reaches the hero exactly when the kill resolves. Everyone behind it
     // just walks to their slot in the line.
-    const t = Math.min(1, model.killProgress / APPROACH_FRAC);
+    // The guardian walks out of its portal on the first sliver of the fight and
+    // then stands. Driving it by remaining health would march it at the hero
+    // over ten minutes, which is a road approach, not a duel.
+    const closing = model.boss
+      ? Math.min(1, (clockSec - bossEnteredAtSec) / BOSS_ENTRANCE_SEC)
+      : null;
+    const t = closing ?? Math.min(1, model.killProgress / APPROACH_FRAC);
     const eased = 1 - (1 - t) * (1 - t);
     // Stop the creature's near edge at the blade, not its centre: a fixed
     // centre-to-centre gap put a wide crawler inside the hero and a narrow one
@@ -1409,6 +1440,62 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /**
+   * The rift the guardian stepped out of. Taller and wider than the thing in
+   * front of it, because the frame has to read as the end of a realm before
+   * anyone gets to the panel: the boss used to be a road encounter in the same
+   * forest with nothing drawn behind it.
+   */
+  function drawPortal(skin: RealmSkin, cx: number, guardianH: number): void {
+    const h = Math.round(guardianH * 1.42);
+    const halfW = Math.round(guardianH * 0.5);
+    const top = groundY - h;
+    // Lit from the inside out. A dark mouth put a dark creature inside a dark
+    // hole and lost the whole silhouette; against a bright rift the guardian
+    // reads as a shape before it reads as a colour.
+    //
+    // Violet, not the realm accent: on the accent the Greenwood's rift came out
+    // gold and read as a lamplit archway. A tint of the realm keeps ten portals
+    // from being one portal, but the otherworld owns the hue.
+    const rim = mixHex('#76428a', skin.accent, 0.22);
+    const mid = mixHex('#b04ea6', skin.accent, 0.18);
+    const core = mixHex('#d77bba', skin.accent, 0.14);
+    const CROWN = 0.44;
+    for (let y = Math.max(0, top); y < groundY; y++) {
+      const t = (y - top) / h;
+      // A true dome, not a chamfer: the boxy version read as a barn door.
+      const k = t < CROWN ? 1 - t / CROWN : 0;
+      const half = Math.max(1, Math.round(halfW * Math.sqrt(Math.max(0, 1 - k * k))));
+      // Three flat bands, no gradient and no blur (DECISIONS.md #13).
+      ctx.fillStyle = rim;
+      ctx.fillRect(cx - half, y, half * 2, 1);
+      const b2 = Math.round(half * 0.78);
+      ctx.fillStyle = mid;
+      ctx.fillRect(cx - b2, y, b2 * 2, 1);
+      const b3 = Math.round(half * 0.44);
+      ctx.fillStyle = core;
+      ctx.fillRect(cx - b3, y, b3 * 2, 1);
+      // The mouth's own hard edge, one pixel, darker than anything inside it.
+      ctx.fillStyle = OUTLINE_INK;
+      ctx.fillRect(cx - half - 1, y, 1, 1);
+      ctx.fillRect(cx + half, y, 1, 1);
+    }
+    ctx.fillStyle = OUTLINE_INK;
+    ctx.fillRect(cx - halfW - 1, groundY - 1, halfW * 2 + 2, 2);
+
+    if (model.reduceMotion) return;
+    // Embers climbing the throat, so the rift is open rather than painted on.
+    ctx.fillStyle = core;
+    for (let i = 0; i < 16; i++) {
+      const life = (clockSec * 0.32 + hash01(i * 3.7)) % 1;
+      const y = Math.round(groundY - 3 - life * (h - 10));
+      if (y < top + 2) continue;
+      const spread = halfW * 0.9 * (1 - life * 0.5);
+      const x = Math.round(cx + (hash01(i * 8.1) - 0.5) * 2 * spread);
+      ctx.fillRect(x, y, 1, life > 0.6 ? 1 : 2);
+    }
+  }
+
   /** Lanes the engaged monster's health bar is sitting across this frame. */
   let barSpans: LaneSpan[] = [];
 
@@ -1447,7 +1534,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // Only the engaged monster carries a bar, and only while it is alive:
       // a bar over a corpse is the clearest possible "this UI is broken".
       if (i !== 0) continue;
-      const remaining = Math.max(0, 1 - model.killProgress);
+      // The guardian's bar is engine state that persists offline, not a display
+      // estimate of the next kill.
+      const remaining = model.boss
+        ? Math.min(1, Math.max(0, model.boss.hpFrac))
+        : Math.max(0, 1 - model.killProgress);
       if (remaining >= 1 || remaining <= 0.02) continue;
       // Anchored to the creature's mass, not its box: a stalker's antenna
       // put its bar on a shelf of empty air well above the thing being fought.
@@ -1719,6 +1810,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawGround(skin);
     drawFence(sprites, skin);
     drawProps(sprites);
+    if (model.boss) {
+      const lead = queue[0];
+      const guardian = sprites.monsters[BOSS_SHAPE];
+      if (lead && guardian) drawPortal(skin, Math.round(lead.x), guardian.height);
+    }
     drawMonsters(sprites);
     drawHeroGround();
     drawArcs();
