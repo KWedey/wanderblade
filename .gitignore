@@ -28,3 +28,6 @@ sim/out/
 # Scratch probes; see eslint.config.js
 wb_probe*.ts
 *.probe.ts
+
+# Gate and sim logs live in the worktree, never in the tree.
+*.log

@@ -413,3 +413,36 @@ Scatter of ±0.5 — half the whole reach range — costs **12%** of catches at 
 
 *The sim-side acceptance test now averages 8 seeds.* Landing catch rate spans 0.387–0.800 across seeds 1–8 and the apex/landing ratio spans 0.76–2.47, so the single-seed read was an instrument fault of the same shape as #39's horizon. Mean landing 0.542, mean ratio 1.61. Pinning the radius back to a flat 0.12 drops mean landing to **0.019**, so the averaged form has far more margin than the single-seed one it replaces.
 
+## 42. The thumb model may not reach for a coin that will be gone — 2026-08-26
+
+**Decision:** `target()` in `sim/src/thumb.ts` takes the moment the **strike resolves** as its "still in the air" test, not the moment the player aimed. `runThumb` reports `doomed`: aimed taps whose chosen coin had landed before the strike landed. It must be **zero**.
+
+**Why:** `aimAt = sawAt + lead · latency`, so at the default `lead: 0` it *is* `sawAt`, and `target(frame.arcs, sawAt, aimAt, pick)` passed the same timestamp twice. The guard the doc comment describes — "nobody throws at a coin that will have landed" — collapsed into `seenP` evaluated twice and did nothing. Measured at seed 7, 250 ms latency: **148 of 150 aimed taps** committed to a coin already on the ground.
+
+It hid because it is invisible at `lead: 1`, where `aimAt` equals `strikeAt` and the guard was accidentally correct all along. `leaves full prediction exactly where it was` stays green when the bug is reintroduced, which is what pins that.
+
+**Why only the landing pick showed it.** The landing pick chooses the coin nearest the ground as seen 250 ms earlier — by construction the one most likely to be gone. Apex coins sit at mid-flight and survive the latency, so apex read 95–97% throughout and only landing moved. That asymmetry was the tell.
+
+**What it was mistaken for.** `bdd06ba`'s slot weights turned the test red and looked like the cause. They were the trigger, not the fault: they shifted seed 7's kill interval, which changed how often an *incidental* coin happened to sit under the stale aim point. Catches on the landing pick were almost entirely incidental — the intended coin was out of window on every tap (displacement/radius 1.51). Two other hypotheses were measured and are wrong:
+
+| Hypothesis | Measurement | Verdict |
+|---|---|---|
+| More coins airborne per tap | 17.1 → **15.1** after the weights | Backwards |
+| `ARC_STAGGER_SEC` no longer spacing arrivals | landing 0.713 / 0.753 / **0.387** / 0.253 at stagger 0.04 / 0.08 / 0.12 / 0.20 | Real sensitivity, but a symptom |
+| Aliasing against the 5 Hz tap grid | landing 0.376–0.516 across 3–8 taps/s | Too small to explain it |
+
+The stagger sensitivity disappears once the guard is right, because it was setting the spacing of the incidental coins the bot was relying on.
+
+**The sample was never going to converge.** Landing ran 39.3% at 30 s to 72.4% at 960 s and was still climbing, because the run deepens during the sample and incidental catches scale with coin density. Fixed: **0.873 at 30 s to 0.926 at 480 s**, ratio 1.08–1.16. A sample that has to be lengthened to pass is hiding something; this is what it was hiding.
+
+**Result, single seed 7, the test's own config, assertion untouched:**
+
+| | apex | landing | ratio |
+|---|---|---|---|
+| Before | 0.953 | 0.387 | 2.42 |
+| After | 0.987 | 0.873 | **1.13** |
+
+Across seeds 1–8 the ratio was 0.76–2.47 and is now **1.05–1.35** — the spread was the artifact, not the seed.
+
+**Probes proven to fire.** Reverting the guard to `aimAt`: `doomed` 148/150, both new tests red, and the original assertion red at 0.387. Pinning `arcCatchRadius` back to a flat 0.12 (#35's cliff): landing **0.033**, so that test still cannot pass if the cliff returns.
+
