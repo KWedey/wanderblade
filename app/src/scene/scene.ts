@@ -147,11 +147,12 @@ const HERO_X_FRAC = 0.24;
 /** Gap between hero and monster once the monster has closed, as a share of the
  * scene width — a fixed pixel gap crowds a phone and wastes a desktop frame. */
 /**
- * Where the lead monster stops, in scene units. Deliberately not a fraction of
- * the viewport: on a wide screen that put it 57px from a hero whose blade
- * reaches 16, and the frame was judged "a man swinging at nothing".
+ * How much air is left between the blade and the lead monster's near edge.
+ * Deliberately not a fraction of the viewport: on a wide screen that put the
+ * creature 57 units from a hero whose blade reaches 16, and the frame was
+ * judged "a man swinging at nothing".
  */
-const ENGAGE_GAP = 24;
+const BLADE_REACH = 15;
 /** Fraction of the kill spent closing the distance; the rest is the fight. */
 const APPROACH_FRAC = 0.3;
 
@@ -574,9 +575,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /** Half the lead's sprite, plus whatever its group spread pulls forward. */
+  function engageInset(): number {
+    const lead = queue[0];
+    if (!lead) return 12;
+    const sprite = skinnedFor(model.region).monsters[lead.shape];
+    return Math.round((sprite ? sprite.width : 20) / 2) - lead.spread;
+  }
+
   function killMonster(skin: RealmSkin): void {
     const lead = queue[0];
-    const x = lead ? lead.x + lead.spread : heroX + ENGAGE_GAP;
+    const x = lead ? lead.x + lead.spread : heroX + BLADE_REACH;
     const y = groundY;
     burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, '#ffffff', skin.accent], 130);
     impacts.push({ x, y: y - 12, age: 0, life: 0.34 });
@@ -649,7 +658,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     swingAnim = SWING_ANIM_SEC;
     const skin = realmSkin(model.region);
     const lead = queue[0];
-    if (!lead || lead.x > heroX + ENGAGE_GAP + 16) return;
+    if (!lead || lead.x - engageInset() > heroX + BLADE_REACH + 16) return;
 
     const leadSprite = skinnedFor(model.region).monsters[lead.shape];
     const leadHeight = leadSprite ? leadSprite.height : 16;
@@ -755,7 +764,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // just walks to their slot in the line.
     const t = Math.min(1, model.killProgress / APPROACH_FRAC);
     const eased = 1 - (1 - t) * (1 - t);
-    const leadTarget = vw + 20 + (heroX + ENGAGE_GAP - (vw + 20)) * eased;
+    // Stop the creature's near edge at the blade, not its centre: a fixed
+    // centre-to-centre gap put a wide crawler inside the hero and a narrow one
+    // out of reach.
+    const stop = heroX + BLADE_REACH + engageInset();
+    const leadTarget = vw + 20 + (stop - (vw + 20)) * eased;
     for (let i = 0; i < queue.length; i++) {
       const m = queue[i]!;
       const target = i === 0 ? leadTarget : leadTarget + i * QUEUE_GAP;
