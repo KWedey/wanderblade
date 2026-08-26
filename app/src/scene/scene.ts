@@ -169,7 +169,12 @@ const MIN_BAND_H = 60;
  * so the lunge closes the last of it -- at 15 the two bodies touched at rest
  * and the frame collided its fight instead of staging it.
  */
-const BLADE_REACH = 23;
+/**
+ * Where the lead creature stops. Set so the blade's tip crosses its near edge
+ * rather than stopping in front of it: a critic read the fight as not
+ * connecting, with a dotted trail hanging in the gap.
+ */
+const BLADE_REACH = 20;
 /** Fraction of the kill spent closing the distance; the rest is the fight. */
 const APPROACH_FRAC = 0.3;
 /** Seconds the guardian spends walking out of its portal. Then it stands: its
@@ -235,7 +240,6 @@ const RIM_OFFSETS: readonly (readonly [number, number])[] = [
 ];
 /** How long a strike keeps the hero's rim flared. */
 const STRIKE_RIM_SEC = 0.06;
-const IMPACT_GLOW = '#ffffff';
 
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
@@ -506,7 +510,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    * absorbed by the scene, never passed through as arc-space y.
    */
   let arcBaseY = 0;
-  const impacts: { x: number; y: number; age: number; life: number }[] = [];
   let scrollBirds = 0;
 
   let shake = 0;
@@ -743,7 +746,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const x = lead ? lead.x + lead.spread : heroX + BLADE_REACH;
     const y = groundY;
     burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, ...SPARK_COLORS], 130);
-    impacts.push({ x, y: y - 12, age: 0, life: 0.34 });
+    // One burst at the contact pixel. The mark this replaces was two white bars
+    // crossing at 12 units - the brightest object in a 1920px frame, and read
+    // by a critic as a mouse cursor rather than as a hit.
+    burst(x, y - 12, 10, ['#ffffff', ...SPARK_COLORS], 62);
     shake = Math.min(MAX_SHAKE, shake + 2.1);
 
     queue.shift();
@@ -981,16 +987,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     if (swingCooldown <= 0) {
       swingCooldown += 1 / SWINGS_PER_SEC;
       if (queue.length > 0) swing(false);
-    }
-
-    for (let i = impacts.length - 1; i >= 0; i--) {
-
-      const im = impacts[i]!;
-
-      im.age += dtSec;
-
-      if (im.age >= im.life) impacts.splice(i, 1);
-
     }
 
     for (let i = particles.length - 1; i >= 0; i--) {
@@ -1732,26 +1728,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  /**
-   * A tight solid ring on the creature that was struck. The old version was a
-   * dithered shockwave expanding to a 26px radius, which at that size stopped
-   * reading as light and started reading as scattered dots - "an unfinished
-   * particle or a broken alpha mask, not an attack" - draped across the exact
-   * 200 pixels the fight happens in. Small, solid and brief stages the hit
-   * instead of burying it.
-   */
-  function drawImpacts(): void {
-    for (const im of impacts) {
-      const t = im.age / im.life;
-      const r = Math.round(3 + t * 6);
-      if (t > 0.7) continue;
-      ctx.fillStyle = t < 0.35 ? '#ffffff' : IMPACT_GLOW;
-      // Four arms, not a disc: it reads as an impact mark and leaves the
-      // silhouettes either side of it uncovered.
-      ctx.fillRect(Math.floor(im.x - r), Math.floor(im.y), r * 2, 1);
-      ctx.fillRect(Math.floor(im.x), Math.floor(im.y - r), 1, r * 2);
-    }
-  }
 
   function drawRests(): void {
     for (const r of rests) {
@@ -1947,7 +1923,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawHeroGround();
     drawArcs();
     drawParticles();
-    drawImpacts();
     drawRests();
     drawStreaks();
     drawMotes(skin);
