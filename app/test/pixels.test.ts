@@ -61,6 +61,63 @@ describe('bitmap font', () => {
     for (const ch of 'MOMENTUM CATCH') expect(FONT[ch]).toBeDefined();
   });
 
+  // Eleven rounds of frames shipped "9old", "UPgrades" and "Arnor" past a green
+  // gate, because the only font assertion was that a glyph is *defined*. Every
+  // broken character was defined. These are about what the glyph looks like.
+  describe('lowercase is lowercase', () => {
+    const topRow = (ch: string): number => FONT[ch]!.findIndex((r) => r.includes('#'));
+    /** Letters entitled to reach the cap line: risers and the two dotted ones. */
+    const TALL = new Set('bdfhijklt');
+    const XHEIGHT = [...'acegmnopqrsuvwxyz'].filter((ch) => !TALL.has(ch));
+
+    // g and p sat at row 1 - one row off the cap line - so g was a 9 with a
+    // different tail and p was a capital P. Nothing about them said "small".
+    it('starts every x-height letter below the cap line', () => {
+      for (const ch of XHEIGHT) {
+        expect(topRow(ch), `'${ch}' starts at the cap line`).toBeGreaterThanOrEqual(2);
+      }
+    });
+
+    it('draws each one strictly shorter than its own capital', () => {
+      for (const ch of XHEIGHT) {
+        const upper = ch.toUpperCase();
+        expect(topRow(ch), `'${ch}' is as tall as '${upper}'`).toBeGreaterThan(topRow(upper));
+      }
+    });
+
+    // The literal shipped defect: a descender-less g in a 5x7 cell is a 9.
+    it('never draws a letter as one of the digits', () => {
+      for (const ch of 'abcdefghijklmnopqrstuvwxyz') {
+        for (const digit of '0123456789') {
+          expect(
+            FONT[ch]!.join('/'),
+            `'${ch}' is drawn identically to '${digit}'`,
+          ).not.toBe(FONT[digit]!.join('/'));
+        }
+      }
+    });
+
+    // Two characters drawn identically fail no shape check; they just make a
+    // word unreadable, which is the whole reason this face is hand-authored.
+    it('draws no two characters the same', () => {
+      const seen = new Map<string, string>();
+      for (const [ch, rows] of Object.entries(FONT)) {
+        if (ch === ' ') continue;
+        const key = rows.join('/');
+        const clash = seen.get(key);
+        expect(clash, `'${ch}' is drawn identically to '${clash ?? ''}'`).toBeUndefined();
+        seen.set(key, ch);
+      }
+    });
+
+    // "Armor" read as "Arnor": m's middle stem stopped two rows above the
+    // baseline, so the glyph fell apart into r + n at panel scale.
+    it('carries all three of m\'s stems down to the baseline', () => {
+      const baseline = FONT['m']!.at(-1)!;
+      expect(baseline, 'm loses a stem before the baseline').toBe('#.#.#');
+    });
+  });
+
   it('measures text with single-pixel letter gaps', () => {
     expect(textWidth('', 1)).toBe(0);
     expect(textWidth('7', 1)).toBe(GLYPH_W);

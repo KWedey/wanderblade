@@ -260,10 +260,10 @@ body {
   overscroll-behavior: contain;
   touch-action: pan-y;
   width: 100%;
-  padding: 14px 14px calc(20px + env(safe-area-inset-bottom, 0px));
+  padding: 10px 12px calc(14px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   background: var(--panel);
   border-top: 4px solid var(--panel-edge);
   /* Chunky pixel bevel: lit inner edge, dark outer, both hard. A single flat
@@ -683,7 +683,7 @@ body {
 .upgrades {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .upgrade-btn {
@@ -696,7 +696,7 @@ body {
   gap: 0 10px;
   width: 100%;
   min-height: var(--touch);
-  padding: 5px 12px;
+  padding: 4px 12px;
   border: 3px solid #000;
   background: var(--panel-sunk);
   color: var(--parchment);
@@ -824,8 +824,8 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 7px 5px;
-  min-height: 76px;
+  padding: 6px 5px;
+  min-height: 70px;
   border: 3px solid var(--wood-shadow);
   background: rgba(0, 0, 0, 0.25);
   text-align: center;
@@ -882,15 +882,19 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  max-height: 132px;
+  gap: 4px;
+  /* Two whole two-line entries. Sized against the log panel's own min-height
+     rather than the column's, which the panels above it can and do squeeze. */
+  max-height: 100px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .log-line {
-  font-size: var(--num-1);
-  line-height: 1.25;
+  /* One ramp step down from the gear numbers: at --num-1 a single entry ran to
+     three wrapped lines, so the panel showed one event and cut the next in half. */
+  font-size: var(--ui-1);
+  line-height: 24px;
   color: var(--ink-dim);
   padding: 2px 8px;
   border-left: 3px solid transparent;
@@ -1243,7 +1247,7 @@ body {
   justify-content: space-between;
   gap: 10px;
   width: 100%;
-  padding: 6px 12px;
+  padding: 3px 12px;
   font-family: var(--font-ui);
   font-size: var(--ui-1);
   letter-spacing: 0.08em;
