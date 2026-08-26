@@ -123,6 +123,14 @@ silently generous where a coin is slow and near-zero where it is fast, which
 made *which coin you reach for* matter more than how fast you reacted
 (`docs/DECISIONS.md` #35).
 
+**The thumb model may not reach for a coin that will be gone.** `sim/src/thumb.ts`
+picks its target under the moment the strike *resolves*, not the moment the player
+aimed — at the default `lead: 0` those were the same timestamp, so the guard did
+nothing and 148 of 150 aimed taps committed to coins already on the ground. The
+harness reports `doomed` and it must be zero (`docs/DECISIONS.md` #42). A landing
+catch rate that climbs with sample length is the signature of this fault, not of a
+run that needs longer to settle.
+
 ## Determinism
 
 Strikes are explicit timestamped inputs into `advance`, never render-driven. Each is

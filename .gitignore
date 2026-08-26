@@ -29,5 +29,6 @@ sim/out/
 wb_probe*.ts
 *.probe.ts
 
-# Gate logs stay local; agents share /tmp and the names collide.
-.gate.log
+# Gate and sim logs live in the worktree, never in /tmp: agents share /tmp
+# and the names collide.
+*.log

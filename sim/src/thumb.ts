@@ -57,6 +57,8 @@ export interface ThumbResult {
   taps: number;
   /** Taps that had a coin on screen to aim at. */
   aimed: number;
+  /** Aimed taps whose chosen coin had landed before the strike resolved. */
+  doomed: number;
   catches: number;
   /** Catches per aimed tap. */
   catchRate: number;
@@ -97,9 +99,9 @@ export function warmState(seed: number, hours = 6, rounds = 40): GameState {
 }
 
 /**
- * The coin a thumb goes for: seen at `sawAt`, and still in the air at `hitAt`.
- * Nobody throws at a coin that will have landed — requiring both is what stops
- * the model punishing a player for anticipating well.
+ * The coin a thumb goes for: seen at `sawAt`, and still in the air at `hitAt` —
+ * which must be when the strike *resolves*, not when the player aimed. Nobody
+ * throws at a coin that will have landed by the time their thumb lands.
  */
 function target(
   arcs: readonly LootArc[],
@@ -152,6 +154,7 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
   let taps = 0;
   let aimed = 0;
   let catches = 0;
+  let doomed = 0;
   const gold0 = state.gold;
   const t0 = state.timeSec;
 
@@ -167,13 +170,17 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
     const frame = seen[0]!;
     const sawAt = strikeAt - latency;
     const aimAt = sawAt + thumb.lead * latency;
-    const mark = target(frame.arcs, sawAt, aimAt, thumb.pick);
+    // `strikeAt`, never `aimAt`: at the default `lead: 0` they are the same
+    // number, which collapsed this guard into `seenP` twice and let the bot
+    // commit to coins already on the ground by the time the strike resolved.
+    const mark = target(frame.arcs, sawAt, strikeAt, thumb.pick);
     let aim: ArcPoint | null = null;
     if (mark) {
       const p = arcPositionAt(mark, aimAt);
       if (p) {
         aim = { x: p.x + gaussian(rng) * scatter, y: p.y + gaussian(rng) * scatter };
         aimed += 1;
+        if (!arcPositionAt(mark, strikeAt)) doomed += 1;
       }
     }
     const strikes: Strike[] = [{ atSec: strikeAt, aim }];
@@ -189,6 +196,7 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
     thumb,
     taps,
     aimed,
+    doomed,
     catches,
     catchRate: aimed > 0 ? catches / aimed : 0,
     goldPerSec,
@@ -226,6 +234,7 @@ function averaged(thumb: Thumb, opts: SweepOptions, warms: GameState[]): ThumbRe
     thumb,
     taps: runs.reduce((n, r) => n + r.taps, 0),
     aimed: runs.reduce((n, r) => n + r.aimed, 0),
+    doomed: runs.reduce((n, r) => n + r.doomed, 0),
     catches: runs.reduce((n, r) => n + r.catches, 0),
     catchRate: mean((r) => r.catchRate),
     goldPerSec: mean((r) => r.goldPerSec),

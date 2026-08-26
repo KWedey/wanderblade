@@ -52,28 +52,68 @@ describe('what the thumb costs', () => {
   // it is highest. DECISIONS.md #35 made the window constant in time instead,
   // so the mercy is the same number of milliseconds everywhere on the arc.
   // Subsumed by packages/core/test/thumb.test.ts, which holds both tables.
-  // Averaged over seeds, because one seed cannot measure this. Per-seed landing
-  // rate spans 0.387 to 0.800 across seeds 1-8 and the ratio spans 0.76 to 2.47
-  // on one constant set — seed 7 alone sits near the bottom of both. Reading a
-  // single draw of that spread is the same instrument fault as #39's horizon.
   it('forgives lag near landing as readily as at the apex', () => {
-    const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
-    const mean = (pick: 'landing' | 'apex'): number =>
-      SEEDS.reduce(
-        (t, seed) =>
-          t +
-          runThumb(thumb({ latencyMs: 250, pick }), { ...OPTS, seed }, warmState(seed))
-            .catchRate,
-        0,
-      ) / SEEDS.length;
-    const apex = mean('apex');
-    const landing = mean('landing');
-    expect(apex, `apex ${apex.toFixed(3)}`).toBeGreaterThan(0.5);
-    expect(landing, `landing ${landing.toFixed(3)}`).toBeGreaterThan(0.5);
-    // Measured 1.61 here. The assertion this replaces required apex > 0.5 and
+    const warm = warmState(OPTS.seed);
+    const at = (pick: 'landing' | 'apex'): number =>
+      runThumb(thumb({ latencyMs: 250, pick }), OPTS, warm).catchRate;
+    const apex = at('apex');
+    const landing = at('landing');
+    expect(apex).toBeGreaterThan(0.5);
+    expect(landing).toBeGreaterThan(0.5);
+    // Measured 1.65 here. The assertion this replaces required apex > 0.5 and
     // landing < 0.2, so the fixed radius could not do better than 2.5x. The bar
     // sits between the two: it cannot pass if the cliff returns.
     expect(apex / landing).toBeLessThan(2);
+  });
+});
+
+describe('the bot never reaches for a coin that is already down', () => {
+  // The guard `target` applies — seen when the player looked, still in the air
+  // when the strike resolves — was evaluated at `aimAt`. At the default
+  // `lead: 0` that is the same number as `sawAt`, so it tested `seenP` twice
+  // and did nothing. The landing pick then committed, every tap, to the coin
+  // closest to the ground as seen 250 ms earlier: by definition the one most
+  // likely to be gone. Apex was untouched, which is why only landing moved.
+  it('commits to nothing that lands before the strike, at any lead', () => {
+    const warm = warmState(OPTS.seed);
+    for (const lead of [0, 0.5, 1]) {
+      const r = runThumb(thumb({ latencyMs: 250, lead, pick: 'landing' }), OPTS, warm);
+      expect(r.aimed).toBeGreaterThan(50);
+      expect(r.doomed, `lead ${lead}: ${r.doomed}/${r.aimed} already down`).toBe(0);
+    }
+  });
+
+  it('holds for the apex pick too, and across seeds', () => {
+    for (const seed of [1, 4, 7]) {
+      for (const pick of ['landing', 'apex'] as const) {
+        const r = runThumb(
+          thumb({ latencyMs: 250, pick }),
+          { ...OPTS, seed },
+          warmState(seed),
+        );
+        expect(r.aimed, `seed ${seed} ${pick} aimed`).toBeGreaterThan(50);
+        expect(r.doomed, `seed ${seed} ${pick}`).toBe(0);
+      }
+    }
+  });
+
+  // The bug hid at lead 1 because `aimAt` equals `strikeAt` there, so that path
+  // was accidentally right all along and must stay bit-identical.
+  it('leaves full prediction exactly where it was', () => {
+    const warm = warmState(OPTS.seed);
+    const slow = runThumb(thumb({ latencyMs: 400, lead: 1 }), OPTS, warm);
+    const instant = runThumb(thumb({ latencyMs: 0, lead: 0 }), OPTS, warm);
+    expect(slow.catchRate).toBeCloseTo(instant.catchRate, 6);
+  });
+
+  it('replays exactly, doomed count included', () => {
+    const warm = warmState(OPTS.seed);
+    const a = runThumb(thumb({ latencyMs: 250, scatterPx: 6, pick: 'landing' }), OPTS, warm);
+    const b = runThumb(thumb({ latencyMs: 250, scatterPx: 6, pick: 'landing' }), OPTS, warm);
+    expect(a.catches).toBe(b.catches);
+    expect(a.doomed).toBe(b.doomed);
+    expect(a.aimed).toBe(b.aimed);
+    expect(a.goldPerSec).toBe(b.goldPerSec);
   });
 });
 
