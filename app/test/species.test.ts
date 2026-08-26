@@ -183,14 +183,50 @@ describe('a creature wears its own colour, not its realm\'s', () => {
 
   it('stands every creature clear of the ground it walks on', () => {
     for (const realm of realms) {
-      const ground = realmSkin(realm % REALM_SKIN_COUNT).turf;
-      const turf = lightnessOf(ground);
+      const skin = realmSkin(realm % REALM_SKIN_COUNT);
+      const turf = lightnessOf(skin.turf);
       for (const sp of rosterAt(realm)) {
-        const body = lightnessOf(monsterInk(sp.body, ground).body!);
+        const body = lightnessOf(monsterInk(sp.body, skin.turf, skin.rock).body!);
         expect(
           Math.abs(body - turf),
           `${sp.name} sits ${body.toFixed(2)} against turf ${turf.toFixed(2)}`,
         ).toBeGreaterThanOrEqual(MIN_BODY_CONTRAST - 0.005);
+      }
+    }
+  });
+
+  // "The enemy's dark grey lower mass merges with the grey rock cluster and
+  // reads as an outcrop the hero happens to be standing next to." The turf is
+  // not the only thing a creature is seen against, and the Ashen Wolf sat 0.045
+  // from the boulder behind it while clearing the grass by a comfortable 0.173.
+  it('stands every creature clear of the rock it stands beside', () => {
+    for (const realm of realms) {
+      const skin = realmSkin(realm % REALM_SKIN_COUNT);
+      const rock = lightnessOf(skin.rock);
+      for (const sp of rosterAt(realm)) {
+        const body = lightnessOf(monsterInk(sp.body, skin.turf, skin.rock).body!);
+        expect(
+          Math.abs(body - rock),
+          `${sp.name} sits ${body.toFixed(2)} against rock ${rock.toFixed(2)}`,
+        ).toBeGreaterThanOrEqual(MIN_BODY_CONTRAST - 0.005);
+      }
+    }
+  });
+
+  // Light and specular had a ceiling each, and above mid 0.76 they crossed: the
+  // facet meant to catch the light came out darker than the band under it.
+  it('ramps every creature\'s four inks in one direction', () => {
+    for (const realm of realms) {
+      const skin = realmSkin(realm % REALM_SKIN_COUNT);
+      for (const sp of rosterAt(realm)) {
+        const ink = monsterInk(sp.body, skin.turf, skin.rock);
+        const ramp = ['bodyDark', 'body', 'bodyLight', 'bodySpec'].map((k) =>
+          lightnessOf(ink[k]!),
+        );
+        for (let i = 1; i < ramp.length; i++) {
+          expect(ramp[i]!, `${sp.name} ramp ${ramp.map((v) => v.toFixed(2)).join(' < ')}`)
+            .toBeGreaterThan(ramp[i - 1]!);
+        }
       }
     }
   });

@@ -684,3 +684,25 @@ The rise is a sample collapse, not skill. Catches by scatter: **398 / 343 / 315 
 
 **Still red: `degrades with aim error` at 0.2308 against its 0.2 bar.** #43 showed that clause is a statement about coin density — it only becomes true at roughly one coin in the air, which contradicts the Loot Arc design. Replacing it is a rewrite of what a test asserts, which is the user's call and not an agent's, so the branch is parked rather than merged.
 
+## 51. Value answers every surface a creature is seen against, not just the turf — 2026-08-26
+
+**Decision:** `monsterInk` takes the realm's rock as well as its turf and pushes the mid tone clear of both. The hue premium of #38 is charged against the turf only; a rock gets the flat `MIN_BODY_CONTRAST`.
+
+**Why:** "The enemy's dark grey lower mass merges with the grey rock cluster and reads as an outcrop the hero happens to be standing next to." Measured, the Ashen Wolf sat **0.045** in lightness from the boulder behind it while clearing the grass by a comfortable 0.173 — #38's rule was right and was being applied to one of the two surfaces.
+
+**Charging the hue premium twice is what made this expensive.** With the full `MIN_BODY_CONTRAST + hue` demanded of both surfaces, **19 of 35 species moved** and several bright ones flipped to near-black — a Thornback Lynx at 0.178. The turf fills the frame under the creature, so sharing its hue is fatal there; a rock is a prop it happens to stand beside, and value alone separates it. Flat demand on the rock: **6 of 35 move**, worst gap against either surface **0.169**.
+
+| | before | after | vs turf | vs rock |
+|---|---|---|---|---|
+| Ashen Wolf | 0.618 | 0.273 | 0.173 | 0.390 |
+| Thornback Lynx | 0.712 | 0.833 | 0.388 | 0.171 |
+| Iron Kobold | 0.545 | 0.204 | 0.171 | 0.459 |
+| Cragfang Bat | 0.651 | 0.833 | 0.459 | 0.171 |
+
+**A pale creature only kept its identity because the reach widened.** At `REACH_PALE` 0.82 the Lynx could not clear the rock on the bright side and the nearest solution was 0.178 — an orange cat rendered near-black. 0.84 puts the bright answer in range, and the rule picks the value closest to the species' own.
+
+**Widening it exposed an older fault.** `bodyLight` and `bodySpec` had a ceiling each, 0.92 and 0.88, and above mid 0.76 they crossed: the facet meant to be catching the light came out **darker** than the band beneath it. `bodySpec` is now built off `bodyLight`, so the ramp is ordered by construction. The Anvil Ogre had been shipping at 0.69 < 0.84 < 0.92 < 0.88 since it was authored.
+
+**Both probes fire.** Dropping the rock from the reference list turns `stands every creature clear of the rock it stands beside` red naming the Ashen Wolf at 0.045; restoring the two independent ceilings turns `ramps every creature's four inks in one direction` red naming the Anvil Ogre.
+
+**Judged at the size it ships at.** Rendered at the phone's own `pixelScale` of 2 — the roster at ~40px beside a rock of the realm's own colour — rather than magnified. Magnification is what hid the lowercase `g` for two rounds.

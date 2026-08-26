@@ -403,9 +403,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // silhouette twice, and those are two species wearing two colours.
       monsters: [
         ...rosterAt(key).map((sp) =>
-          bakeSprite(MONSTER_SHAPES[sp.shape] ?? MONSTER_SHAPES[0]!, monsterInk(sp.body, skin.turf)),
+          bakeSprite(MONSTER_SHAPES[sp.shape] ?? MONSTER_SHAPES[0]!, monsterInk(sp.body, skin.turf, skin.rock)),
         ),
-        bakeSprite(MONSTER_SHAPES[BOSS_SHAPE]!, monsterInk(GUARDIAN_BODY, skin.turf)),
+        bakeSprite(MONSTER_SHAPES[BOSS_SHAPE]!, monsterInk(GUARDIAN_BODY, skin.turf, skin.rock)),
       ],
       trees: [TREE, TREE_TALL, TREE_WIDE].map((t) => bakeSprite(t, bInk)),
       rock: bakeSprite(ROCK, sInk),

@@ -631,6 +631,10 @@ export const MIN_BODY_CONTRAST = 0.17;
 /** Added back on top when the creature shares the ground's hue as well. */
 export const SAME_HUE_CONTRAST = 0.16;
 
+/** How dark and how pale a creature's mid tone may be pushed to answer a realm. */
+const REACH_DARK = 0.13;
+const REACH_PALE = 0.84;
+
 /** 0 for opposite hues, 1 for the same one. */
 function hueCloseness(a: number, b: number): number {
   const d = Math.abs(((a - b) % 1) + 1) % 1;
@@ -644,26 +648,53 @@ function hueCloseness(a: number, b: number): number {
  * stands on, and pushed further when it shares that ground's hue — the medium
  * separates a figure with value and a hard outline (DECISIONS.md #38).
  */
-export function monsterInk(body: string, ground = '#000000'): InkSet {
+export function monsterInk(body: string, ground = '#000000', prop = ground): InkSet {
   const [h, sat, l] = toHsl(body);
-  const [gh, , gl] = toHsl(ground);
   // Saturation is the species' too. A floor here manufactured colour: an Ashen
   // Wolf's near-grey has a faint violet cast, and forcing it to 0.42 fielded a
   // vivid purple wolf.
-  let mid = Math.min(0.72, Math.max(0.24, l));
-  const need = MIN_BODY_CONTRAST + hueCloseness(h, gh) * SAME_HUE_CONTRAST;
-  const gap = mid - gl;
-  if (Math.abs(gap) < need) {
-    // Away on the side it already leans, so a pale creature stays pale.
-    mid = Math.min(0.82, Math.max(0.13, gl + (gap >= 0 ? need : -need)));
+  const want = Math.min(0.72, Math.max(0.24, l));
+  // Both surfaces a creature is seen against, each with its own demand: the
+  // turf it stands on and the rock it stands beside. Clearing only the turf is
+  // what let an Ashen Wolf sit 0.045 from the boulder behind it and read as an
+  // outcrop.
+  const against = [ground, prop].map((ref, i) => {
+    const [rh, , rl] = toHsl(ref);
+    // The turf fills the frame under the creature, so sharing its hue is fatal
+    // and costs extra value. A rock is a prop it happens to stand beside; value
+    // alone is enough there, and charging the hue premium twice drove half the
+    // roster to near-black.
+    const hue = i === 0 ? hueCloseness(h, rh) * SAME_HUE_CONTRAST : 0;
+    return { at: rl, need: MIN_BODY_CONTRAST + hue };
+  });
+  const slack = (v: number): number =>
+    Math.min(...against.map((r) => Math.abs(v - r.at) - r.need));
+  let mid = want;
+  if (slack(mid) < 0) {
+    // Every value that just clears one surface, plus the ends of the range.
+    // The nearest one that clears both keeps the species as close to its own
+    // value as the realm allows; when nothing clears both, the least bad wins.
+    const tries = [REACH_DARK, REACH_PALE];
+    for (const r of against) tries.push(r.at - r.need, r.at + r.need);
+    const reach = tries.map((v) => Math.min(REACH_PALE, Math.max(REACH_DARK, v)));
+    mid = reach.reduce((best, v) => {
+      const bs = slack(best);
+      const vs = slack(v);
+      if (bs >= 0 && vs >= 0) return Math.abs(v - want) < Math.abs(best - want) ? v : best;
+      return vs > bs ? v : best;
+    }, reach[0]!);
   }
+  const light = Math.min(0.92, mid + 0.16);
   return {
     outline: INK.black,
     body: toHex(h, sat, mid),
     bodyDark: toHex(h, Math.min(1, sat + 0.06), Math.max(0.1, mid - 0.15)),
-    bodyLight: toHex(h, Math.max(0, sat - 0.06), Math.min(0.92, mid + 0.16)),
+    bodyLight: toHex(h, Math.max(0, sat - 0.06), light),
     // The hard edge on a lit facet. Without it three bands still read as flat.
-    bodySpec: toHex(h, Math.max(0, sat - 0.14), Math.min(0.88, mid + 0.24)),
+    // Built off the lit band rather than off the mid: two independent ceilings
+    // crossed above mid 0.76 and handed a pale creature a specular darker than
+    // the band it is meant to be catching light against.
+    bodySpec: toHex(h, Math.max(0, sat - 0.14), Math.min(0.94, light + 0.08)),
     // A lit eye and bared teeth are what carry menace at 16-30px; two white
     // dots read as friendly at any size.
     eyeGlow: '#df7126',
