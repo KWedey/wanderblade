@@ -7,6 +7,7 @@ import { REALM_SKIN_COUNT } from '../src/scene/palette';
 import { describe, expect, it } from 'vitest';
 import {
   formatDuration,
+  NO_ESTIMATE,
   formatGold,
   formatNumber,
   formatRate,
@@ -102,8 +103,15 @@ describe('suffixFor', () => {
 
 describe('formatDuration overflow', () => {
   it('does not render NaN or Infinity as a duration', () => {
-    expect(formatDuration(Number.NaN)).toBe('—');
-    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('—');
+    expect(formatDuration(Number.NaN)).toBe(NO_ESTIMATE);
+    expect(formatDuration(Number.POSITIVE_INFINITY)).toBe(NO_ESTIMATE);
+  });
+
+  // Deep realms overflow boss HP past a double. A bare dash under "Estimated"
+  // read as an empty field rather than as a value the game cannot know.
+  it('says something a player can read, not a placeholder glyph', () => {
+    expect(NO_ESTIMATE.length).toBeGreaterThan(1);
+    expect(NO_ESTIMATE).toMatch(/^[a-z ]+$/);
   });
 });
 
