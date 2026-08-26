@@ -32,6 +32,7 @@ port they used, defaulting to 5173 or `$WB_QA_PORT`):
 npm run qa:capture -- --label round17   # a judged desktop frame, mid-swing
 npm run qa:mobile                       # six phone/desktop viewports: layout, type grid, safe areas
 npm run qa:pixels -- <png> <x> <y> <w> <h>   # colour of a crop, in numbers
+npm run qa:speckle -- <png> --right 1456     # which colour is speckling the world
 ```
 
 Single test file / single test:
@@ -57,9 +58,16 @@ npx vitest packages/core/test           # watch mode
 **The gate exits 1 under load without a single failing test.** `Errors N`
 alongside `Tests <all> passed` is `[vitest-worker]: Timeout calling
 "onTaskUpdate"` — the reporter's RPC starving, not an assertion. Several agents
-share this machine; load average 74 on 10 cores is normal here. Read the `Test
-Files` and `Tests` lines, and say which you are quoting. Do not change the
-reporter to quiet it: that hides a real signal from every other agent.
+share this machine. Read the `Test Files` and `Tests` lines, and say which you
+are quoting. Do not change the reporter to quiet it: that hides a real signal
+from every other agent.
+
+**High load here is usually leaked browsers, not agents.** Run `uptime` and
+`pgrep -f chrome-headless-shell | wc -l` *before* forming any theory. The QA
+tools drive Playwright constantly and strand it; 41 of them once held load at
+42, and `pkill -f chrome-headless-shell` took the same gate from 65 s and exit 1
+to 13 s and exit 0 with no config change. A/B-ing a suspect change against a
+clean tree without pinning load proves nothing.
 
 **Never merge, rebase or checkout in a worktree while its gate is running
 there.** Vitest reads from disk as it goes, so a mid-run merge collects new

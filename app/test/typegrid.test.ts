@@ -244,6 +244,22 @@ describe('the panel type grid', () => {
       ).toBeLessThanOrEqual(nameBox);
     });
 
+    // "The first ON THE ROAD entry is faded to near-invisible." It was not an
+    // age-out fade - it was the entry animation caught in flight. Kills land
+    // every few hundred ms, so an opacity ramp on arrival makes the newest
+    // line, the one worth reading, the faintest thing in the panel at most
+    // instants a frame can be taken at.
+    it(`never animates a road-log entry in from transparent at ${vp.name}`, () => {
+      const name = /animation:[^;]*?\b([A-Za-z][\w-]*)\b\s+[\d.]+m?s/.exec(
+        blocksFor('.log-line', vp).join(''),
+      )?.[1];
+      expect(name, '.log-line has no named entry animation').toBeTruthy();
+      const frames = new RegExp(`@keyframes\\s+${name!}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(CSS)?.[1] ?? '';
+      for (const [, value] of frames.matchAll(/opacity:\s*([\d.]+)/g)) {
+        expect(Number(value), `${name!} starts at opacity ${value}`).toBe(1);
+      }
+    });
+
     // The log holds whole entries or none. A pixel cap cannot be a whole number
     // of entries when an entry may wrap, and the one that was here bisected the
     // last line on the box border - the judge named it two rounds running.

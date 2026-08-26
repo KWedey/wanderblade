@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  backdropSkin,
-  MIN_ACCENT_LIGHTNESS,
-  groundBladeOf,
   MAX_TEXTURE_CONTRAST,
-  MIN_SPRITE_BACKDROP_GAP,
+  MIN_ACCENT_LIGHTNESS,
   MIN_SKY_LIGHTNESS,
+  MIN_SPRITE_BACKDROP_GAP,
   MIN_VALUE_SPREAD,
   REALM_SKIN_COUNT,
+  backdropSkin,
+  groundBladeOf,
   lightnessOf,
+  glowRingRadii,
+  momentumLift,
   realmSkin,
   skinValueSpread,
 } from '../src/scene/palette';
@@ -106,5 +108,34 @@ describe('ground texture never fights the sprites', () => {
     if (Math.abs(lightnessOf(skin.grassBlade) - lightnessOf(skin.turf)) <= MAX_TEXTURE_CONTRAST) {
       expect(groundBladeOf(skin)).toBe(skin.grassBlade);
     }
+  });
+});
+
+describe('momentumLift', () => {
+  it('is zero at rest and clamped at full', () => {
+    expect(momentumLift(0)).toBe(0);
+    expect(momentumLift(1)).toBeCloseTo(0.22);
+    expect(momentumLift(3)).toBeCloseTo(0.22);
+  });
+});
+
+describe('a glow carries intensity as ring count, not as dither', () => {
+  it('spends more rings as gain rises, and never more than three', () => {
+    expect(glowRingRadii(40, 0.1)).toHaveLength(1);
+    expect(glowRingRadii(40, 0.5)).toHaveLength(2);
+    expect(glowRingRadii(40, 1)).toHaveLength(3);
+    expect(glowRingRadii(40, 9)).toHaveLength(3);
+  });
+
+  it('draws the outermost ring first and steps inward', () => {
+    const radii = glowRingRadii(40, 1);
+    expect(radii[0]).toBe(40);
+    for (let i = 1; i < radii.length; i++) expect(radii[i]!).toBeLessThan(radii[i - 1]!);
+  });
+
+  it('draws nothing at no radius, no gain, or a ring under a pixel', () => {
+    expect(glowRingRadii(0, 1)).toEqual([]);
+    expect(glowRingRadii(40, 0)).toEqual([]);
+    expect(glowRingRadii(1, 1)).not.toContain(0);
   });
 });
