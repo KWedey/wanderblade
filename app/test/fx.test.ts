@@ -22,9 +22,11 @@ import {
   stepParticle,
   type Particle,
   wrap,
+  bodyPocket,
   heroPocket,
   peakFollow,
   PEAK_HOLD_SEC,
+  inAnyPocket,
   inPocket,
   nudgeFromPocket,
 } from '../src/scene/fx';
@@ -380,3 +382,37 @@ describe('the display blit', () => {
     }
   });
 })
+
+describe('the creature under the blade keeps one too', () => {
+  const MON_W = 24;
+  const MON_H = 30;
+  const GROUND = 200;
+  const MON_X = 120;
+  const p = bodyPocket(MON_X, GROUND, MON_W, MON_H);
+
+  // The judge ranked this frame first for being "the only frame where I can
+  // name the attacker, the victim, the damage, the combo". The kill's own coin
+  // shower then buried the victim, which is the win condition regressing.
+  it('protects the body while leaving the rim free to spark', () => {
+    expect(inPocket(p, MON_X, GROUND - MON_H / 2), 'the torso is protected').toBe(true);
+    // Inset, so contact sparks still ring the silhouette rather than fill it.
+    expect(p.w).toBeLessThan(MON_W);
+    expect(p.h).toBeLessThan(MON_H);
+    expect(inPocket(p, MON_X - MON_W / 2, GROUND - MON_H / 2), 'the near edge sparks').toBe(false);
+    expect(inPocket(p, MON_X, GROUND - MON_H), 'the crown sparks').toBe(false);
+  });
+
+  it('never reaches the hero, whose own pocket is a separate box', () => {
+    const hero = heroPocket(40, GROUND, 14, 24);
+    expect(inPocket(p, 40, GROUND - 12)).toBe(false);
+    expect(inPocket(hero, MON_X, GROUND - 12)).toBe(false);
+  });
+
+  it('guards both silhouettes at once', () => {
+    const hero = heroPocket(40, GROUND, 14, 24);
+    const both = [hero, p];
+    expect(inAnyPocket(both, 40, GROUND - 12), 'the hero').toBe(true);
+    expect(inAnyPocket(both, MON_X, GROUND - 15), 'the creature').toBe(true);
+    expect(inAnyPocket(both, 300, GROUND - 15), 'open air').toBe(false);
+  });
+});

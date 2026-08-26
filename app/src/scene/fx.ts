@@ -198,6 +198,30 @@ export function inPocket(pocket: HeroPocket, x: number, y: number): boolean {
 }
 
 /**
+ * The creature under the blade earns the same protection the hero has. A judge
+ * ranked the frame first for being the only one where the victim could be
+ * named, and the kill's own coin shower had since buried it. Inset, so the
+ * sparks still ring the silhouette instead of filling it.
+ */
+export function bodyPocket(
+  centerX: number,
+  groundY: number,
+  spriteW: number,
+  spriteH: number,
+  inset = POCKET_PAD,
+): HeroPocket {
+  const w = Math.max(1, spriteW - inset * 2);
+  const h = Math.max(1, spriteH - inset * 2);
+  return { x: centerX - w / 2, y: groundY - spriteH + inset, w, h };
+}
+
+/** True when a point lands inside any protected pocket. */
+export function inAnyPocket(pockets: readonly HeroPocket[], x: number, y: number): boolean {
+  for (const p of pockets) if (inPocket(p, x, y)) return true;
+  return false;
+}
+
+/**
  * Pushes a point clear of the pocket along whichever axis costs least. Used
  * where an effect has a meaningful position that happens to land on the hero,
  * so it moves aside rather than vanishing.

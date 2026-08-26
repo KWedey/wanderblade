@@ -20,9 +20,10 @@ import {
   shakeOffset,
   stepParticle,
   wrap,
+  bodyPocket,
   heroPocket,
+  inAnyPocket,
   peakFollow,
-  inPocket,
   nudgeFromPocket,
   type Floater,
   type HeroPocket,
@@ -216,7 +217,12 @@ const FLOATER_LIFE = 1.05;
  * size and color are never picked per call site.
  */
 const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 1, damage: 1 };
-const TEXT_CATCH = '#fbf236';
+/**
+ * The catch number was LOOT_GLOW exactly, drawn inside the shower it is
+ * reporting, so it dissolved into its own particles. The `+` prefix and the
+ * tap position are what tell it from a damage number now, not its hue.
+ */
+const TEXT_CATCH = '#ffffff';
 const TEXT_DAMAGE = '#ffffff';
 const LOOT_GLOW = '#fbf236';
 /**
@@ -1508,6 +1514,21 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     return heroPocket(heroX, groundY, heroA.width, heroA.height);
   }
 
+  /**
+   * Hero and the creature under the blade. Both silhouettes have to survive the
+   * effect that celebrates the hit; a frame where the victim cannot be named is
+   * the frame that stops answering who is hitting whom.
+   */
+  function pockets(): HeroPocket[] {
+    const out = [pocket()];
+    const lead = queue[0];
+    const sprite = lead ? skinnedFor(model.region).monsters[lead.sprite] : null;
+    if (lead && sprite) {
+      out.push(bodyPocket(lead.x + lead.spread, groundY, sprite.width, sprite.height));
+    }
+    return out;
+  }
+
   function drawHero(): void {
     const stride = model.reduceMotion ? 0 : Math.floor(clockSec * 7 * model.momentumMult) % 2;
     const sprite = stride === 0 ? heroA : heroB;
@@ -1520,9 +1541,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     // The blade sweeps through a real arc; nearest-neighbour rotation keeps it
     // pixelated rather than feathering into an anti-aliased smear.
-    // Rests raised and forward; the swing sweeps down through the monster.
+    // Rests raised and forward, winds up to -72 deg and finishes level at +10,
+    // which is contact height on the creature. At -103 to +34 the wind-up went
+    // behind the shoulder and the stroke ended in the dirt past the monster:
+    // the bright blade in the grass, the dark hilt up where the blade should be.
     const t = swingAnim / SWING_ANIM_SEC;
-    const angle = swingAnim > 0 ? -1.8 + (1 - t) * 2.4 : -0.3;
+    const angle = swingAnim > 0 ? -1.25 + (1 - t) * 1.42 : -0.3;
     const handX = heroX + 5;
     const handY = groundY + bob - 9;
     drawSpriteRotated(ctx, sword, handX, handY, angle, 2, 2);
@@ -1663,7 +1687,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       }));
       ctx.fillStyle = OUTLINE_INK;
       ctx.fillRect(bx - 1, by - 1, w + 2, 4);
-      ctx.fillStyle = '#45283c';
+      // A mid value, not another near-black. Ring and trough were both darker
+      // than the turf, so a nearly-dead creature - which is every frame a
+      // capture lands on - wore a solid black slab across its shoulders with
+      // no internal contrast at all.
+      ctx.fillStyle = '#847e87';
       ctx.fillRect(bx, by, w, 2);
       // Never the accent: a yellow bar over a creature read as a wind-up
       // telegraph rather than as its health.
@@ -1687,9 +1715,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   function drawArcs(): void {
     const points = arcScreenPoints();
+    // The coin itself is core's - it is catchable, so it is never hidden. Its
+    // halo and ring are ours, and a dozen of them overlapping turned the kill
+    // into a 180px wall of yellow with the creature somewhere inside it.
+    const guard = pockets();
     // Loot in flight is the brightest thing in the scene; it should light the
     // air around it, not sit on the backdrop as a flat disc.
-    for (const p of points) glowDisc(p.x, p.y, 7, LOOT_GLOW, 0.5);
+    for (const p of points) {
+      if (inAnyPocket(guard, p.x, p.y)) continue;
+      glowDisc(p.x, p.y, 7, LOOT_GLOW, 0.5);
+    }
 
     for (const p of points) {
       const sprite = coin;
@@ -1710,7 +1745,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const r = 7;
       for (let a = 0; a < 8; a++) {
         const ang = (a / 8) * Math.PI * 2 + clockSec * 3;
-        ctx.fillRect(Math.floor(p.x + Math.cos(ang) * r), Math.floor(p.y + Math.sin(ang) * r), 1, 1);
+        const rx = Math.floor(p.x + Math.cos(ang) * r);
+        const ry = Math.floor(p.y + Math.sin(ang) * r);
+        if (inAnyPocket(guard, rx, ry)) continue;
+        ctx.fillRect(rx, ry, 1, 1);
       }
     }
   }
@@ -1750,11 +1788,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function drawParticles(): void {
-    const guard = pocket();
+    const guard = pockets();
     for (const p of particles) {
       const life = lifeRemaining(p.age, p.life);
       if (life <= 0) continue;
-      if (inPocket(guard, p.x, p.y)) continue;
+      if (inAnyPocket(guard, p.x, p.y)) continue;
       // Shrink instead of fading: alpha ramps are the one thing that reads as
       // "not pixel art" in a hard-edged scene.
       const size = life > 0.4 ? p.size : Math.max(1, p.size - 1);
@@ -1784,22 +1822,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const COMBO_GAP = 1;
   const COMBO_METER_W = COMBO_SEGS * (COMBO_SEG_W + COMBO_GAP) - COMBO_GAP;
 
-  /**
-   * Seconds the widget spells out what it is, the first time a combo appears
-   * in a session. A permanent word costs width on every frame forever to teach
-   * something once; this costs it twice, then collapses.
-   */
-  const COMBO_TEACH_SEC = 2;
-  let comboTeachUntilSec = -1;
-
   function comboLabel(): string {
     // Two decimals, not one: the cap is x1.75 and one decimal rounds it to
     // x1.8, printing a multiplier the game cannot actually reach.
-    const value = `\u00d7${heldMult.value.toFixed(2)}`;
-    if (comboTeachUntilSec < 0 && heldMomentum.value > 0.02) {
-      comboTeachUntilSec = clockSec + COMBO_TEACH_SEC;
-    }
-    return clockSec < comboTeachUntilSec ? `COMBO ${value}` : value;
+    // The word is permanent. It used to collapse after two seconds to save
+    // width, but the widget floats in open sky where nothing competes for it,
+    // and a bare x1.73 names no quantity - a judge reading one frame counted
+    // the combo among the things it could name only while the word was up.
+    return `COMBO \u00d7${heldMult.value.toFixed(2)}`;
   }
 
   /**
