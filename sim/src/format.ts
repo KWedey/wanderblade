@@ -59,6 +59,20 @@ export function formatSeedReport(r: SeedResult): string {
     }
   }
 
+  const w = r.witnessed;
+  if (w !== null && w.beats.some((b) => b.total > 0)) {
+    const cells = w.beats
+      .filter((b) => b.total > 0)
+      .map((b) => `${b.name} ${((100 * b.inSession) / b.total).toFixed(0)}% (${b.inSession}/${b.total})`);
+    lines.push('');
+    lines.push(`   witnessed beats: how often a milestone happens while the player is there`);
+    lines.push(`     ${cells.join('   ')}`);
+    lines.push(
+      `     chance alone would be ${(100 * w.baseline).toFixed(1)}% — a session is that share of the ` +
+        `day. Reported, never banded (docs/DECISIONS.md #47).`,
+    );
+  }
+
   const sweep = r.permanentUplift?.sweep ?? [];
   if (sweep.length > 0) {
     const cell = (h: (typeof sweep)[number]): string =>

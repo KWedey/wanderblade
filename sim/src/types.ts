@@ -131,6 +131,13 @@ export interface PermanentUplift {
   contentEndSec: number | null;
 }
 
+/** How often a realm's milestone beats happen while the player is actually there. */
+export interface WitnessedBeats {
+  /** Session share of wall clock — where beats land by chance alone. */
+  baseline: number;
+  beats: { name: string; inSession: number; total: number }[];
+}
+
 /** Time spent on a realm whose portal is open but not yet entered. */
 export interface DeadTime {
   /** Longest single portal-ready wait, in seconds. */
@@ -200,6 +207,8 @@ export interface SeedResult {
   deadTime: DeadTime;
   /** What active play bought in permanent currency. */
   permanentUplift: PermanentUplift | null;
+  /** Which milestone beats the player was present for. Reported, never banded. */
+  witnessed: WitnessedBeats | null;
   totalKills: number;
   finalRealm: number;
   victories: number;
