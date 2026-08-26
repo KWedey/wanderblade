@@ -110,11 +110,6 @@ export interface LifetimeStats {
   bossDamage: number;
 }
 
-/**
- * The complete serializable game state. Every field is a plain number/string/
- * boolean or a nested plain object or array of them, so `JSON.stringify`
- * round-trips it exactly.
- */
 /** Why a portal did not open. `unwinnable` means the guardian's HP is not finite. */
 export type PortalRefusal = 'not-ready' | 'unwinnable';
 
@@ -124,6 +119,11 @@ export interface PortalEntry {
   events: GameEvent[];
 }
 
+/**
+ * The complete serializable game state. Every field is a plain number/string/
+ * boolean or a nested plain object or array of them, so `JSON.stringify`
+ * round-trips it exactly.
+ */
 export interface GameState {
   /** Seed the run was created from (kept for reference/debugging). */
   seed: number;

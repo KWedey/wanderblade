@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  advance,
   affordableCount,
   ASC_NODE_IDS,
   ascNodeCost,
@@ -18,7 +19,6 @@ import {
   type PurchaseOption,
 } from '../src/index';
 import { clone, portalReady } from './helpers';
-import { advance } from '../src/index';
 
 /** Execute `row` through the engine, so the shop's price and the charge agree. */
 function buyFrom(s: GameState, row: PurchaseOption): boolean {

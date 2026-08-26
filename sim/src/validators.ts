@@ -259,7 +259,6 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
     ),
   );
 
-
   // P6 measures the fight and cannot see the wait before it. The capped-tree
   // game parked the player on an open portal for 76 hours earning no
   // Ascendancy at all, with realm cadence degrading 1.0 -> 3.5 days, while P6

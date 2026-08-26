@@ -150,7 +150,7 @@ export const ASC_PER_ZONE = 1;
 export const ASC_BOSS_PAYOUT = 8;
 /**
  * Catching a loot arc pays Ascendancy worth this fraction of a zone clear —
- * one caught coin is 1/250th of a zone. Expressed against the zone rate rather
+ * one caught coin is 1/125th of a zone. Expressed against the zone rate rather
  * than as a flat number so it inherits the realm scaling for free.
  *
  * Active play has to buy the *permanent* currency, not a bigger pile of the

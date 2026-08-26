@@ -221,6 +221,8 @@ The cost curve is the shape that matters. Ascendancy income per realm grows line
 
 ## 31. Active play is banded in Ascendancy, not gold — 2026-08-25
 
+> Superseded in part by #33: the shipped band is **1.6–2.4×** with first ascension **≥1.20× sooner** (`PERMANENT_RATIO_MIN` / `PERMANENT_RATIO_MAX` / `PERMANENT_SOONER_MIN` in `sim/src/probes.ts`), re-derived from six seeds — 2.16 / 1.96 / 1.81 / 1.63 / 1.93 / 1.97, mean 1.91. The 1.8–2.4× and ≥1.25× below were measured on three seeds before #33 gave the five skills five price curves.
+
 **Decision:** The headline pacing band is **1.8–2.4× lifetime Ascendancy** over a 30-day horizon plus **first ascension ≥1.25× sooner** (validator P10). The 1.8–2.2× Road gold band survives as P1, a supporting band, not the claim that active play matters. `docs/ACTIVE-PLAY.md` carries the superseded note.
 
 **Why:** A playtest reported 5,144 → 391M gold across eight hours of sleep. Our constants hit the gold band exactly — 2.07× measured, P1 green on every seed — and the result was still that one night dwarfed a 30-minute session. That is not a tuning miss; it is the band measuring the wrong quantity. Gold is wiped by every ascension and idle accrues it for as many hours as there are in a night, so **no** multiplier on gold survives the comparison. Ascendancy per realm is bounded by realms completed, which is the one axis where 20 attended minutes and 8 unattended hours are commensurable.

@@ -7,14 +7,13 @@ import {
   advance,
   bossEtaSec,
   enterPortal,
-  ascSpent,
   gearPower,
   GEAR_SLOTS,
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
 import { CAP_RATE, SEC_PER_DAY, SEC_PER_HOUR, strikeThrough } from './policy';
-import { clone, runPlayer, timeToKill, type RunOptions } from './simulate';
+import { clone, runPlayer, timeToKill, totalEarned, type RunOptions } from './simulate';
 import type {
   DeadTime,
   PermanentUplift,
@@ -161,11 +160,9 @@ export function promptVsOverfarm(
   if (prompt.state.timeSec <= 0) return null;
   // Total earned, not the leftover balance: the tree is an uncapped sink, so a
   // balance comparison measures who spent less, not who earned more.
-  const earned = (s: GameState): number =>
-    s.ascendancy.banked + s.ascendancy.pending + ascSpent(s.ascendancy);
   return {
-    promptBanked: earned(prompt.state),
-    overfarmBanked: earned(over.state),
+    promptBanked: totalEarned(prompt.state),
+    overfarmBanked: totalEarned(over.state),
     horizonSec: Math.min(prompt.state.timeSec, over.state.timeSec),
   };
 }
@@ -279,7 +276,7 @@ export const PERMANENT_RANK_TARGET = 20;
 /**
  * The horizon the Ascendancy band is stated at, and it has to be stated: the
  * ratio decays with run length because both players saturate the same realm
- * ladder. Measured 2.09x at 30 days and 1.17x at 90, where 302 of the 301
+ * ladder. Measured 1.91x at 30 days and 1.17x at 90, where 302 of the 301
  * winnable realms are already behind both of them. Thirty days is one full
  * arc of the tree, and long past the point where a session's worth of
  * Ascendancy stops being noise.
@@ -394,9 +391,10 @@ export function deadTime(realms: RealmRecord[]): DeadTime {
   };
 }
 
-/** Total Ascendancy a run earned, spent ranks included. */
-export function totalEarned(s: GameState): number {
-  return s.ascendancy.banked + s.ascendancy.pending + ascSpent(s.ascendancy);
+/** First sample at which the tree has reached `target` total ranks. */
+function secToRanks(samples: { timeSec: number; treeRanks: number }[], target: number): number | null {
+  for (const x of samples) if (x.treeRanks >= target) return x.timeSec;
+  return null;
 }
 
 /**
@@ -405,12 +403,6 @@ export function totalEarned(s: GameState): number {
  * idle has all night. Ascendancy per realm is bounded, so this is the question
  * that actually distinguishes the two players.
  */
-/** First sample at which the tree has reached `target` total ranks. */
-function secToRanks(samples: { timeSec: number; treeRanks: number }[], target: number): number | null {
-  for (const x of samples) if (x.treeRanks >= target) return x.timeSec;
-  return null;
-}
-
 export function permanentUplift(
   seed: number,
   config: SimConfig,

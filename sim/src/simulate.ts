@@ -5,6 +5,7 @@ import {
   advance,
   affordableCount,
   ASC_NODE_IDS,
+  ascSpent,
   attackSpeedMultiplier,
   bossEtaSec,
   deserialize,
@@ -22,7 +23,6 @@ import {
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
-import { totalEarned } from './probes';
 import { CAP_RATE, runActive, runIdle, SEC_PER_DAY, strikeTimes, type RunHooks } from './policy';
 import type {
   BreachKind,
@@ -93,6 +93,11 @@ export interface RunResult {
 
 export function clone(s: GameState): GameState {
   return deserialize(serialize(s));
+}
+
+/** Total Ascendancy a run earned, spent ranks included. */
+export function totalEarned(s: GameState): number {
+  return s.ascendancy.banked + s.ascendancy.pending + ascSpent(s.ascendancy);
 }
 
 function blankRealm(realm: number, startSec: number): RealmRecord {
@@ -358,17 +363,15 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
       current().treePurchasesTotal += bought.tree;
     },
     onSlice: () => {
-      noteRanks();
       // `prompt` means the moment it opens. Checking only at session boundaries
       // would time every realm to the session schedule instead of the economy.
       if (opts.entry === 'prompt') maybeEnter();
+      noteRanks(); // after maybeEnter: its botTouch buys ranks at this instant
       const r = current();
       if (state.gold > r.goldPeak) r.goldPeak = state.gold;
       if (state.timeSec >= nextSampleAt) {
         earnedTrail.push({ timeSec: state.timeSec, earned: totalEarned(state) });
-      }
-      if (state.timeSec >= nextSampleAt && samples.length < 5000) {
-        samples.push(sampleOf(state));
+        if (samples.length < 5000) samples.push(sampleOf(state));
         nextSampleAt = state.timeSec + sampleEvery;
       }
       if (

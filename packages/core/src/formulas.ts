@@ -146,7 +146,7 @@ export function skillRankMult(id: string, rank: number): number {
 }
 
 /**
- * skillMult = Π over realm-local skills of `skillRankMult(rank)`, walked in
+ * skillMult = Π over realm-local skills of `skillRankMult(id, rank)`, walked in
  * SKILL_IDS order so the float product cannot depend on a save's key order.
  */
 export function skillMult(skills: Record<string, number>): number {
