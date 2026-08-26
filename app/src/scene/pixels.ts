@@ -41,7 +41,9 @@ const HERO_LEGEND: Record<string, string> = {
 // warm rust-and-blue is the palette we were ranked #1 for and does not move;
 // the silhouette does. A peaked travelling hood replaces the brim, and squared
 // pauldrons replace the rails, so the outline says swordfighter at thumbnail
-// size where none of the colour is legible yet.
+// size where none of the colour is legible yet. The blue was a four-column
+// patch inside a red torso, which is a bib: it now runs the full chest, so the
+// red is hood, collar and pauldrons and the blue is the gambeson under them.
 const HERO_UPPER = [
   '.....oooo.....',
   '....oKKKKo....',
@@ -52,10 +54,10 @@ const HERO_UPPER = [
   '..oKseessseo..',
   '...osssssso...',
   '..occcccccco..',
-  'oKKoccttttoHHo',
-  'oKKocctTTtoHHo',
-  '.oKoccttttoHo.',
-  '..KoccttBtoH..',
+  'oKKottttttoHHo',
+  'oKKottTTTtoHHo',
+  '.oKottttttoHo.',
+  '..KottttBtoH..',
   '..oBBBBBBBBo..',
   '..oppppppppo..',
   '..oppppppppo..',

@@ -232,14 +232,6 @@ const LOOT_GLOW = '#fbf236';
  * impact without competing for the eye or for the thing worth aiming at.
  */
 const SPARK_COLORS = ['#9badb7', '#696a6a', '#847e87'];
-const RIM_OFFSETS: readonly (readonly [number, number])[] = [
-  [-1, 0],
-  [1, 0],
-  [0, -1],
-  [0, 1],
-];
-/** How long a strike keeps the hero's rim flared. */
-const STRIKE_RIM_SEC = 0.06;
 
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
@@ -515,7 +507,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let shake = 0;
   let swingCooldown = 0;
   let swingAnim = 0;
-  let heroFlash = 0;
   let dustCooldown = 0;
   let damageTextCooldown = 0;
 
@@ -832,7 +823,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null {
-    heroFlash = 0.12;
     // Restart the auto-attack cadence rather than zeroing it — zero would go
     // negative on the very next step() and fire an immediate duplicate swing.
     swingCooldown = 1 / SWINGS_PER_SEC;
@@ -909,7 +899,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     shake = decayTo(shake, 0, SHAKE_DECAY, dtSec);
     damageTextCooldown = Math.max(0, damageTextCooldown - dtSec);
-    heroFlash = Math.max(0, heroFlash - dtSec);
     swingAnim = Math.max(0, swingAnim - dtSec);
 
     // A kill landed in the engine — the scene never decides this.
@@ -1520,15 +1509,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const stride = model.reduceMotion ? 0 : Math.floor(clockSec * 7 * model.momentumMult) % 2;
     const sprite = stride === 0 ? heroA : heroB;
     const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(clockSec * 14) * 0.6);
-    // Rim first, sprite over it: a one-pixel halo of the sky's own light so the
-    // figure never sinks into whatever value the ground happens to be.
-    // A strike flares the rim and never touches the body — a white wash over a
-    // figure reads as "this one got hit", and the hero is the one swinging.
-    ctx.globalAlpha = heroFlash > STRIKE_RIM_SEC ? 1 : 0.85;
-    for (const [dx, dy] of RIM_OFFSETS) {
-      drawSprite(ctx, sprite, heroX + dx, groundY + bob + dy, false, true);
-    }
-    ctx.globalAlpha = 1;
+    // No rim pass. It drew the sprite's own black outline offset four ways, so
+    // the "halo of the sky's own light" its comment promised was a second ring
+    // of the darkest ink in the frame - the hero read as a blob at thumbnail
+    // size, which is the opposite of the job.
     drawSprite(ctx, sprite, heroX, groundY + bob, false);
 
     // The blade sweeps through a real arc; nearest-neighbour rotation keeps it
