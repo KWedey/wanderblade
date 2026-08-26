@@ -588,7 +588,15 @@ Across five seeds every run reaches realm 301: active stops at days 74.80 / 74.9
 
 **P10 never read the number.** `PERMANENT_HORIZON_SEC = 14 * SEC_PER_DAY` (`sim/src/probes.ts:287`) and `measuredAtSec = Math.min(PERMANENT_HORIZON_SEC, shortest)` (`:438`) — the fixed checkpoint of #39. A run that meets the frontier stops there, so `shortest` already caps the reading at content end and the band can never be applied past it. Day 90 is outside the band's *numeric range* and is not a band reading.
 
-**What this changes about #39, and what it does not.** #39 already reached the right cause — *"the day-90 collapse is the realm-300 wall of #34 seen from the economy side, not a property of the horizon"* — and this ADR does not overturn that. What it adds is proof and a date, and one correction: **#39's day-90 cell should not sit in a row of pacing ratios.** `1.17` is a true statement about who holds more Ascendancy at day 90; it is not a statement about what active play buys per unit time, which is what every other cell in that row measures and what the band is stated in. Printed beside them it reads as the same kind of number, and that is how it was misread. #39's table stands as history; the sweep is where the live reading now comes from, and it blanks that checkpoint.
+**This supersedes one sentence of #39.** `docs/DECISIONS.md:357` ends:
+
+> *"It falls again only when the leader runs out of ladder: both converge on realm 301, the active player stops earning first, and the idle player closes to 1.17 by day 90."*
+
+**That reading is superseded.** Nothing *converges* and the idle player does not *close*: the active player's total stops moving at the frontier and the idle player's keeps growing against a fixed number. A convergence is two rates meeting; this is one rate against zero. The same sentence's mechanism — the leader running out of ladder — is right, and stays.
+
+Superseded with it: the `1.17` in the day-90 column of the table at `:352`. Per the log's own rule that history is superseded rather than edited, that row stands as written; the live reading now comes from the sweep, which blanks the checkpoint instead of filling it.
+
+**What #39 got right, and this ADR does not overturn.** #39 already named the cause — *"the day-90 collapse is the realm-300 wall of #34 seen from the economy side, not a property of the horizon"*. What this adds is proof, a date, and the narrower correction above: **a day-90 cell does not belong in a row of pacing ratios.** `1.17` is a true statement about who holds more Ascendancy at day 90; it is not a statement about what active play buys per unit time, which is what every other cell in that row measures and what the band is stated in. Printed beside them it reads as the same kind of number, and that is how it was misread — twice.
 
 **Why no constant moves.** Tuning here would fit the economy to a comparison taken fourteen days after one side ran out of content — the same error class #39 was written to prevent. The lever would also be aimed at the wrong layer: the ceiling is an artifact of float64 range, not a designed stopping point, and the big-number work that addresses it is parked for M4 by #34.
 
@@ -606,7 +614,7 @@ The guard is the point of it. `earnedAt` carries the last trail value forward, s
 
 Reported and never banded, for the reason #47 gives: a curve that can go red becomes a thing to tune, and this one is evidence.
 
-**The curve that prompted this ADR is #39's own table**, not a lost generator — three seeds averaged, where the block above is one. `npm run sim -- --days 90 --seeds 3` now prints the live version, and every seed blanks day 90 at its own frontier (76.31d / 78.90d / 74.80d):
+**The curve that prompted this ADR is #39's own table**, not a lost generator — **three** seeds averaged (`:348`, and its per-seed list at `:356` names three), where the block above is one seed. `npm run sim -- --days 90 --seeds 3` now prints the live version, and every seed blanks day 90 at its own frontier (76.31d / 78.90d / 74.80d):
 
 | day | 3 | 7 | **14** | 21 | 30 | 45 | 60 | 75 | 90 |
 |---|---|---|---|---|---|---|---|---|---|
