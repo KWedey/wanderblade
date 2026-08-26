@@ -166,7 +166,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  padding: 10px 14px calc(10px + env(safe-area-inset-top, 0px));
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: start;
@@ -235,7 +235,7 @@ body {
 .strike-hint {
   position: absolute;
   left: 22px;
-  bottom: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   z-index: 4;
   pointer-events: none;
   padding: 5px 12px;
@@ -322,6 +322,9 @@ body {
     flex: 1 1 auto;
     min-height: 0;
     max-height: none;
+    /* Stacked above the road, the panel's bottom edge is mid-screen, so the
+       home-indicator inset it carries in landscape is dead space here. */
+    padding-bottom: 14px;
   }
 
   .hud {
@@ -947,7 +950,7 @@ body {
 .toast {
   position: fixed;
   left: 50%;
-  top: 18px;
+  top: calc(18px + env(safe-area-inset-top, 0px));
   transform: translateX(-50%);
   z-index: 40;
   padding: 12px 22px;
