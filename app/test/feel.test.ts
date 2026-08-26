@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createFeel, type Cue } from '../src/feel';
+import { createFeel, detuneFor, type Cue } from '../src/feel';
 
 const CUES: Cue[] = ['strike', 'kill', 'catch', 'buy', 'victory'];
 
@@ -85,5 +85,26 @@ describe('muting', () => {
     expect(vibrate).not.toHaveBeenCalled();
     feel.dispose();
     vi.unstubAllGlobals();
+  });
+});
+
+describe('strikes are detuned per hit', () => {
+  // "Every strike is the identical synth voice... at 6+ taps/sec it is a drone."
+  it('gives twenty consecutive hits at least fifteen distinct pitches', () => {
+    const seen = new Set(Array.from({ length: 20 }, (_, i) => detuneFor(i).toFixed(6)));
+    expect(seen.size).toBeGreaterThanOrEqual(15);
+  });
+
+  it('never detunes far enough to read as a different instrument', () => {
+    for (let i = 0; i < 500; i++) {
+      const d = detuneFor(i);
+      expect(d, `hit ${i}`).toBeGreaterThan(0.82);
+      expect(d, `hit ${i}`).toBeLessThan(1.22);
+    }
+  });
+
+  it('is a hash, not a clock: the same hit index always sounds the same', () => {
+    expect(detuneFor(7)).toBe(detuneFor(7));
+    expect(detuneFor(0)).not.toBe(detuneFor(1));
   });
 });

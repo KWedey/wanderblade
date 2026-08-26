@@ -674,6 +674,27 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     return arcSpaceFromScene(px, py, heroX, arcBaseY, arcApexHeight(ARC_FLIGHT_SEC));
   }
 
+  /**
+   * Arc-space point of the live arc nearest the hero, if any. A keyboard or
+   * held strike has no pointer to aim with, and an unaimed strike can never
+   * catch: keyboard play was hard-capped at x1.43 against touch's x2.0 while
+   * ACTIVE-PLAY.md promises holding reaches the same ceiling as tapping.
+   */
+  function autoAim(): ArcPoint | null {
+    let best: { x: number; y: number } | null = null;
+    let bestD = Infinity;
+    for (const p of arcScreenPoints()) {
+      const dx = p.x - heroX;
+      const dy = p.y - arcBaseY;
+      const d = dx * dx + dy * dy;
+      if (d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    return best ? toArcSpace(best.x, best.y) : null;
+  }
+
   function strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null {
     heroFlash = 0.12;
     // Restart the auto-attack cadence rather than zeroing it — zero would go
@@ -681,7 +702,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     swingCooldown = 1 / SWINGS_PER_SEC;
     swing(true);
 
-    if (clientX === null || clientY === null) return null;
+    if (clientX === null || clientY === null) {
+      const aim = autoAim();
+      if (aim) lastAim = sceneFromArcSpace(aim.x, aim.y, heroX, arcBaseY, arcApexHeight(ARC_FLIGHT_SEC));
+      return aim;
+    }
     const { x: sx, y: sy } = toScene(clientX, clientY);
     lastAim = { x: sx, y: sy };
     return toArcSpace(sx, sy);

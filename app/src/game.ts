@@ -160,7 +160,7 @@ export class Game {
       if (dtSec > SUSPEND_TICK_SEC) {
         this.applyOfflineReturn(dtSec);
       } else {
-        this.ingestEvents(advance(this.state, dtSec, strikes));
+        this.ingestEvents(advance(this.state, dtSec, strikes), strikes.length > 0);
       }
     }
 
@@ -386,7 +386,7 @@ export class Game {
 
   // --- Events → log + flourishes ----------------------------------------
 
-  private ingestEvents(events: GameEvent[]): void {
+  private ingestEvents(events: GameEvent[], playerActed = false): void {
     const lines: LogEntry[] = [];
     let kills = 0;
     for (const e of events) {
@@ -401,8 +401,10 @@ export class Game {
       const line = describeEvent(e);
       if (line) lines.push(line);
     }
-    // One cue for the whole batch: an offline return resolves thousands.
-    if (kills > 0) this.cue('kill');
+    // Only a kill the player caused gets a beat. Cueing every tick that
+    // happened to contain an auto-swing kill froze ~30% of frames behind a
+    // 75ms hit-stop and buzzed the phone continuously while it sat idle.
+    if (kills > 0 && playerActed) this.cue('kill');
     this.view.pushLog(lines);
   }
 

@@ -8,6 +8,12 @@
 const MASTER_GAIN = 0.22;
 /** Floor on the gap between two identical cues, so a burst does not buzz. */
 const RETRIGGER_SEC = 0.035;
+/**
+ * Semitone spread either side of a voice's written pitch. Every strike being
+ * the identical 320Hz square read as a drone past about six taps a second -
+ * the same reason the noise burst exists at all.
+ */
+const DETUNE_SEMITONES = 2.5;
 
 export type Cue = 'strike' | 'kill' | 'catch' | 'buy' | 'victory';
 
@@ -72,6 +78,20 @@ function makeNoiseBuffer(ctx: AudioContext): AudioBuffer {
   return buffer;
 }
 
+/**
+ * Deterministic per-hit detune as a frequency multiplier. A counter hash, not
+ * Math.random: two runs of the same session sound identical, and nothing here
+ * can ever be mistaken for a source of game randomness.
+ */
+export function detuneFor(index: number): number {
+  let h = (index + 1) * 0x9e3779b1;
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  const unit = ((h >>> 0) / 0x100000000) * 2 - 1;
+  return Math.pow(2, (unit * DETUNE_SEMITONES) / 12);
+}
+
 export function createFeel(options: FeelOptions = {}): Feel {
   let ctx: AudioContext | null = null;
   let master: GainNode | null = null;
@@ -79,6 +99,7 @@ export function createFeel(options: FeelOptions = {}): Feel {
   let muted = options.muted ?? false;
   const canBuzz = options.haptics !== false && typeof navigator !== 'undefined' && 'vibrate' in navigator;
   const lastAt: Partial<Record<Cue, number>> = {};
+  let hits = 0;
 
   /**
    * Built on the first cue, never at load: a context created before a user
@@ -124,10 +145,11 @@ export function createFeel(options: FeelOptions = {}): Feel {
     env.gain.exponentialRampToValueAtTime(0.0001, now + voice.decay);
     env.connect(master);
 
+    const detune = detuneFor(hits++);
     const osc = audio.createOscillator();
     osc.type = voice.type;
-    osc.frequency.setValueAtTime(voice.from, now);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(20, voice.to), now + voice.decay);
+    osc.frequency.setValueAtTime(voice.from * detune, now);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, voice.to * detune), now + voice.decay);
     osc.connect(env);
     osc.start(now);
     osc.stop(now + voice.decay);
