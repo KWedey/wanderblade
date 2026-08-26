@@ -254,9 +254,9 @@ describe('the catch window is constant in time, not in distance', () => {
 
   /**
    * Asserted on `intended` because catch rate in a field this dense partly
-   * measures how many coins are in the air. Stops at ±0.5: `intended` rises
-   * again at ±1.0 (0.10 → 0.29) where only the short scatters still catch, and
-   * asserting across that would pin the sampling artifact.
+   * measures how many coins are in the air. Stops at ±0.5: at ±1.0 the sample
+   * collapses to 35 catches against 230, and 10-of-35 reads as 0.29 beside
+   * 24-of-230 at 0.10. That ratio is not comparable, so nothing is asserted on it.
    */
   it('degrades with aim error instead of handing out free catches', () => {
     const perfect = intendedShare('landing', 0.25, 0);

@@ -657,7 +657,9 @@ Four base words — Wyrm, Drake, Revenant, Behemoth — do not appear anywhere i
 |---|---|---|---|---|---|
 | `intended` | 0.339 | 0.233 | 0.121 | 0.104 | **0.286** |
 
-`thumbAim` scatters at 0.5–1.0× the radius, so at ±1.0 the only wild taps still catching anything are the short ones — which are the ones still near the aimed coin. The rise is selection, not skill. Asserting across it would have replaced one clause that measured an artifact with another that did, so the test stops at ±0.5 and says why.
+The rise is a sample collapse, not skill. Catches by scatter: **398 / 343 / 315 / 230 / 35**. The 0.286 is **10 catches out of 35**, sitting beside 24-out-of-230 at ±0.5 — a ratio on a seventh of the sample, not a comparable measurement. Asserting across it would have replaced one clause that measured an artifact with another that did, so the test stops at ±0.5 and says why.
+
+**One wrong mechanism was published here and is corrected.** The first version of this ADR and its test comment said `thumbAim` scatters at 0.5–1.0× the radius, so only short scatters still catch. It does not: `thumb.test.ts:82-83` offsets by exactly `scatter` and varies only the angle. There are no short scatters. The bound was right for a reason nobody had established — the number was measured, the explanation was assumed.
 
 **Proven able to fail.** Widening `ARC_CATCH_PERP` to 0.30 — the circle this ADR replaced — drops `intended` at perfect aim from **0.339 to 0.013** and reds the first assertion by name.
 
