@@ -726,3 +726,11 @@ export function lighten(hex: string, t: number): string {
 }
 
 export const OUTLINE_INK = INK.black;
+
+/**
+ * Palette ramp for momentum. At rest the world sits at its authored colour;
+ * at full momentum every lit surface climbs one step brighter.
+ */
+export function momentumLift(momentum: number, max = 0.22): number {
+  return Math.max(0, Math.min(1, momentum)) * max;
+}

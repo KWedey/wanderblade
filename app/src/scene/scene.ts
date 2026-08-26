@@ -9,7 +9,6 @@
 
 import { formatNumber } from '../format';
 import { GUARDIAN_BODY, rosterAt, speciesIndexAt } from '../species';
-import { ditherAt, falloff, momentumLift } from './light';
 import {
   arcApexHeight,
   arcSpaceFromScene,
@@ -37,14 +36,15 @@ import {
   HERO_INK,
   LOOT_INK,
   OUTLINE_INK,
-  backdropSkin,
-  groundBladeOf,
   REALM_SKIN_COUNT,
+  backdropSkin,
+  foregroundInk,
+  groundBladeOf,
   lighten,
   mixHex,
+  momentumLift,
   monsterInk,
   realmSkin,
-  foregroundInk,
   sceneryInk,
   type RealmSkin,
 } from './palette';
@@ -1213,17 +1213,27 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
       // Tapered trunk with a root flare, a sunward lit edge and bark streaks.
       // Uniform grey-mauve columns with dead-straight sides were named outright.
+      const barkH = Math.max(1, footY - crownY);
+      // A streak runs. The first version rolled a dot per row at a fresh x and
+      // left 38% of every trunk carrying a lone dark pixel with nothing beside
+      // it - which is a scatter of 36px blocks at 6x, not grain.
+      const streaks = [0, 1].map((k) => ({
+        dx: 1 + Math.floor(hash01(i * 4.3 + k * 2.1) * Math.max(1, trunkW - 2)),
+        from: Math.floor(hash01(i * 7.9 + k * 3.3) * barkH * 0.5),
+        len: Math.round(barkH * (0.22 + hash01(i * 2.7 + k * 5.9) * 0.34)),
+      }));
       for (let y = crownY; y < footY; y++) {
-        const f = (y - crownY) / Math.max(1, footY - crownY);
+        const f = (y - crownY) / barkH;
         const flare = f > 0.9 ? Math.round((f - 0.9) * 10 * 2) : 0;
         const w = trunkW + flare;
         ctx.fillStyle = bark;
         ctx.fillRect(x - flare, y, w, 1);
         ctx.fillStyle = barkLit;
         ctx.fillRect(x + w - flare - 1, y, 1, 1);
-        if (hash01(i * 3.1 + y * 0.37) > 0.62) {
-          ctx.fillStyle = barkDark;
-          ctx.fillRect(x + 1 + Math.floor(hash01(y * 1.7 + i) * Math.max(1, w - 2)), y, 1, 1);
+        ctx.fillStyle = barkDark;
+        for (const st of streaks) {
+          const into = y - crownY - st.from;
+          if (into >= 0 && into < st.len) ctx.fillRect(x + st.dx, y, 1, 1);
         }
       }
 
@@ -1325,6 +1335,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const size = depth > 0.66 ? 2 : 1;
       ctx.fillStyle = depth > 0.5 ? skin.leaf : mixHex(skin.leafDark, skin.skyHaze, 0.35);
       ctx.fillRect(x, y, size, size);
+      // A leaf is a shape with a tip, not a dot. See drawMotes.
+      ctx.fillRect(x + size, y + size, 1, 1);
     }
   }
 
@@ -1341,6 +1353,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       );
       ctx.fillStyle = m.size > 1 ? skin.petal : skin.turfLip;
       ctx.fillRect(x, y, m.size, m.size);
+      // Never one pixel alone: a lone mark at 6x is a 36px square of a colour
+      // nothing beside it shares, which reads as damage rather than as pollen.
+      ctx.fillRect(x + m.size, y + 1, 1, 1);
     }
   }
 
@@ -1428,42 +1443,52 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /**
-   * A dithered disc of light. Every pixel is either painted or not -- the
-   * share painted carries the intensity, which is how you get real light
-   * without the blur DECISIONS.md #13 forbids.
+   * Concentric hard rings, not a dither. An ordered dither carries intensity
+   * in the share of pixels lit, which only reads as light while the pattern is
+   * finer than the eye can separate. The world is drawn at 1/pixelScale and
+   * upscaled, so one world pixel is a 36px block at desktop size and a 34%
+   * dither is a scatter of them - a judge read the sun's corona as "a ring of
+   * loose yellow dots ... pixels that failed to fill". At this scale intensity
+   * has to be shape.
    */
   function glowDisc(cx: number, cy: number, r: number, color: string, gain = 1): void {
     if (r <= 0 || gain <= 0) return;
-    const x0 = Math.max(0, Math.floor(cx - r));
-    const x1 = Math.min(vw - 1, Math.ceil(cx + r));
-    const y0 = Math.max(0, Math.floor(cy - r));
-    const y1 = Math.min(sceneBottomY - 1, Math.ceil(cy + r));
+    const rings = Math.max(1, Math.min(3, Math.ceil(gain * 4)));
     ctx.fillStyle = color;
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const d = Math.hypot(x - cx, y - cy);
-        if (!ditherAt(x, y, falloff(d, r) * gain)) continue;
-        ctx.fillRect(x, y, 1, 1);
+    for (let k = 0; k < rings; k++) {
+      const rr = Math.round(r * (1 - (k * 0.42) / rings));
+      if (rr < 1) continue;
+      for (let dy = -rr; dy <= rr; dy++) {
+        const y = cy + dy;
+        if (y < 0 || y >= sceneBottomY) continue;
+        const half = Math.round(Math.sqrt(Math.max(0, rr * rr - dy * dy)));
+        for (const x of [cx - half, cx + half]) {
+          if (x >= 0 && x < vw) ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+        }
       }
     }
   }
 
 
 
-  /** A lit pool on the turf: flattened, so it sits on the ground plane. */
+  /**
+   * A lit pool on the turf: flattened, so it sits on the ground plane. Solid,
+   * and sized by the gain rather than dithered at a fixed size - see glowDisc.
+   * A 16% dither on grass is four lit pixels scattered through a hundred, which
+   * is the note "white read as salt scattered on the grass" without the white.
+   */
   function litPool(cx: number, r: number, color: string, gain: number): void {
     if (gain <= 0) return;
     const cy = groundY + 1;
-    const x0 = Math.max(0, Math.floor(cx - r));
-    const x1 = Math.min(vw - 1, Math.ceil(cx + r));
-    const y1 = Math.min(sceneBottomY - 1, Math.ceil(cy + r * 0.4));
+    const rx = Math.round(r * (0.4 + Math.min(1, gain) * 0.6));
+    const ry = Math.max(1, Math.round(rx * 0.42));
     ctx.fillStyle = color;
-    for (let y = cy; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const d = Math.hypot((x - cx) * 0.42, y - cy);
-        if (!ditherAt(x, y, falloff(d, r * 0.42) * gain)) continue;
-        ctx.fillRect(x, y, 1, 1);
-      }
+    for (let dy = 0; dy <= ry; dy++) {
+      const y = cy + dy;
+      if (y >= sceneBottomY) break;
+      const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / ry) ** 2)));
+      const x0 = Math.max(0, cx - half);
+      ctx.fillRect(x0, y, Math.min(vw - x0, half * 2 + 1), 1);
     }
   }
 

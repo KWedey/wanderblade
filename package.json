@@ -21,6 +21,7 @@
     "build": "npm run -w app build",
     "qa:capture": "node tools/qa/capture.mjs",
     "qa:pixels": "node tools/qa/pixels.mjs",
+    "qa:speckle": "node tools/qa/speckle.mjs",
     "qa:mobile": "node tools/qa/mobile.mjs",
     "qa:wiring": "node tools/qa/wiring.mjs",
     "qa:loop": "node tools/qa/loop.mjs"

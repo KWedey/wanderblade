@@ -32,6 +32,7 @@ port they used, defaulting to 5173 or `$WB_QA_PORT`):
 npm run qa:capture -- --label round17   # a judged desktop frame, mid-swing
 npm run qa:mobile                       # six phone/desktop viewports: layout, type grid, safe areas
 npm run qa:pixels -- <png> <x> <y> <w> <h>   # colour of a crop, in numbers
+npm run qa:speckle -- <png> --right 1456     # which colour is speckling the world
 ```
 
 Single test file / single test:

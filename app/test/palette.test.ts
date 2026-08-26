@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  backdropSkin,
-  MIN_ACCENT_LIGHTNESS,
-  groundBladeOf,
   MAX_TEXTURE_CONTRAST,
-  MIN_SPRITE_BACKDROP_GAP,
+  MIN_ACCENT_LIGHTNESS,
   MIN_SKY_LIGHTNESS,
+  MIN_SPRITE_BACKDROP_GAP,
   MIN_VALUE_SPREAD,
   REALM_SKIN_COUNT,
+  backdropSkin,
+  groundBladeOf,
   lightnessOf,
+  momentumLift,
   realmSkin,
   skinValueSpread,
 } from '../src/scene/palette';
@@ -106,5 +107,13 @@ describe('ground texture never fights the sprites', () => {
     if (Math.abs(lightnessOf(skin.grassBlade) - lightnessOf(skin.turf)) <= MAX_TEXTURE_CONTRAST) {
       expect(groundBladeOf(skin)).toBe(skin.grassBlade);
     }
+  });
+});
+
+describe('momentumLift', () => {
+  it('is zero at rest and clamped at full', () => {
+    expect(momentumLift(0)).toBe(0);
+    expect(momentumLift(1)).toBeCloseTo(0.22);
+    expect(momentumLift(3)).toBeCloseTo(0.22);
   });
 });
