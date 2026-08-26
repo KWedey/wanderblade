@@ -306,7 +306,7 @@ function processKill(
   if (rng.next() < dropChance * kind.dropMult) {
     const slot = pickSlot(rng.next());
     const rarity = pickRarity(rng.next());
-    const power = gearPower(realm, z, rarity);
+    const power = gearPower(realm, z, rarity, slot);
     recap.drops += 1;
     state.collection.gearFound += 1;
     const equipped = tryEquip(state, events, recap, clock, slot, rarity, power);
@@ -464,7 +464,7 @@ function processStrike(
         clock,
         arc.gear.slot,
         rarity,
-        gearPower(arc.gear.realm, arc.gear.zone, rarity),
+        gearPower(arc.gear.realm, arc.gear.zone, rarity, arc.gear.slot),
       );
     }
   }

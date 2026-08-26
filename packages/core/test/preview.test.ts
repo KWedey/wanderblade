@@ -19,8 +19,8 @@ function readyIn(realm: number, gearZone = zonesPerRealm - 1): GameState {
   s.killsInZone = 0;
   s.portalReady = true;
   s.hero.level = 120;
-  const power = gearPower(realm, gearZone, 'epic');
   for (const slot of GEAR_SLOTS) {
+    const power = gearPower(realm, gearZone, 'epic', slot);
     s.gear[slot] = { power, rarity: 'epic', realm, zone: gearZone };
   }
   s.ascendancy.nodes = { edge: realm, heft: realm, fury: realm };

@@ -49,7 +49,7 @@ function deepState(realm: number, level = levelAt(realm)): GameState {
   s.killsInZone = 0;
   s.portalReady = true;
   s.hero.level = level;
-  const power = gearPower(realm, zonesPerRealm - 1, 'epic');
+  const power = gearPower(realm, zonesPerRealm - 1, 'epic', 'weapon');
   s.gear.weapon = { power, rarity: 'epic', realm, zone: s.zone };
   s.gear.armor = { power, rarity: 'epic', realm, zone: s.zone };
   s.gear.trinket = { power, rarity: 'epic', realm, zone: s.zone };
@@ -141,7 +141,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
     const frontier = {
       bossHp: firstNonFinite((r) => bossHp(r)),
       enemyHp: firstNonFinite((r) => enemyHp(r, zonesPerRealm - 1)),
-      gearPower: firstNonFinite((r) => gearPower(r, zonesPerRealm - 1, 'epic')),
+      gearPower: firstNonFinite((r) => gearPower(r, zonesPerRealm - 1, 'epic', 'weapon')),
       enemyGold: firstNonFinite((r) => enemyGold(r, zonesPerRealm - 1)),
       levelCost: firstNonFinite((r) => levelCost(0, r)),
       realmScale: firstNonFinite((r) => realmScale(r)),
@@ -149,7 +149,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
     expect(frontier).toEqual({
       bossHp: 301,
       enemyHp: 330,
-      gearPower: 331,
+      gearPower: 330,
       enemyGold: 333,
       levelCost: 341,
       realmScale: 342,

@@ -3,7 +3,7 @@
 //
 // Naming: terse math symbols (hp0, rH, ...) mirror ECONOMY.md's formulas.
 
-import type { Rarity } from './types';
+import type { GearSlot, Rarity } from './types';
 
 // --- Realm scaling -------------------------------------------------------
 /**
@@ -90,6 +90,22 @@ export const RARITY_MULTIPLIERS: Record<Rarity, number> = {
 export const RARITIES: readonly Rarity[] = ['common', 'uncommon', 'rare', 'epic'];
 
 export const GEAR_SLOTS = ['weapon', 'armor', 'trinket'] as const;
+
+/**
+ * What a slot contributes to the same drop. Without it `gearPower` is purely
+ * positional, so two items rolled in the same zone at the same rarity are
+ * bit-identical — measured on 43.2% of looks — and a player reading two
+ * different names beside one number correctly infers the names are decoration.
+ *
+ * The weights sum to exactly `GEAR_SLOTS.length`, so `gearPowerTotal` is
+ * unchanged in expectation and no pacing band moves. Same construction as
+ * `SPECIES` (docs/DECISIONS.md #37, #40).
+ */
+export const SLOT_POWER: Record<GearSlot, number> = {
+  weapon: 1.15,
+  armor: 1.0,
+  trinket: 0.85,
+};
 
 // --- Realm structure -----------------------------------------------------
 export const killsPerZone = 1200;

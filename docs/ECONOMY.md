@@ -125,6 +125,7 @@ These are the shipped values, each carrying a passing sim run (`docs/DECISIONS.m
 | Realm scale | `REALM_STEP^realm`, `REALM_STEP` = 8 |
 | Enemy HP | `10 · realmScale · 1.55^z` |
 | Enemy gold | `1 · realmScale · 1.48^z · SPECIES[i].goldMult` — roster mean exactly 1 |
+| Gear power | `2 · realmScale · 1.55^z · RARITY_MULTIPLIERS[rarity] · SLOT_POWER[slot]` — weapon 1.15 / armor 1.00 / trinket 0.85, mean exactly 1 |
 | Hero base damage | `25 · 1.12^level · realmScale` |
 | Hero level cost | `10 · 1.15^level · realmScale` |
 | Skill rank cost | `def.costBase · def.costRate^rank · realmScale` — **per skill**: 35/1.12, 60/1.19, 110/1.15, 190/1.13, 300/1.21 |
@@ -146,7 +147,7 @@ Two of those shapes are load-bearing rather than tuning, and `docs/DECISIONS.md`
 
 ⚠️ **This is an arithmetic wall, not a designed ending, and the game must reach a designed ending or a defined endless mode before it reaches this.** That is M4 realm-sequence work — `docs/VISION.md` sells "World's Edge" as the long-horizon destination — and it is recorded here so nobody rediscovers the wall by accident.
 
-The rest of the economy follows close behind: `enemyHp` overflows at realm 330, `gearPower` at 331, `enemyGold` at 333, `levelCost` at 341. Carrying `bossHp` alone in a wider representation buys 30 realms and leaves the wall standing, so a representation that survives means a big-number layer through the whole economy with its own determinism contract.
+The rest of the economy follows close behind: `enemyHp` overflows at realm 330, `gearPower` at 330, `enemyGold` at 333, `levelCost` at 341. Carrying `bossHp` alone in a wider representation buys 30 realms and leaves the wall standing, so a representation that survives means a big-number layer through the whole economy with its own determinism contract.
 
 Every client-facing scalar is finite and exact at realm 199, and the hero level ladder tops out at 2102 at realm 199 and 659 at realm 296. `packages/core/test/magnitude.test.ts` pins every frontier above — including entry succeeding at realm 300 and refusing at 301 — so a constant change cannot quietly move them.
 
@@ -157,7 +158,7 @@ The current code still implements the M0/M1a economy until the redesign is built
 - `hp(z) = 10 · 1.55^z`
 - `gold(z) = 1 · 1.48^z`
 - Hero base damage `= 25 · 1.12^level`
-- Gear power tracks `1.55^z`
+- Gear power tracks `1.55^z`, one formula for all three slots (superseded by `SLOT_POWER`, `docs/DECISIONS.md` #40)
 - Hero level cost `= 10 · 1.15^level`
 - Skill cost `= 50 · 1.15^skillLevel`
 - Drop chance `= 0.006` per kill (the earlier 5% value was the untuned v0 guess)
