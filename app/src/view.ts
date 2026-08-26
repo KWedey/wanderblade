@@ -14,6 +14,7 @@ import { HOLD_STRIKE_INTERVAL_SEC } from './active';
 import { formatDuration, formatGold, formatNumber, formatPercent, formatRate } from './format';
 import type { LogEntry } from './flavor';
 import { panelVars, realmSkin } from './scene/palette';
+import { repaintPixelText } from './pixeltext';
 import { createScene, type SceneModel, type StrikeOutcome } from './scene/scene';
 
 const LOG_LIMIT = 40;
@@ -200,7 +201,7 @@ function template(): string {
     <section class="panel upgrades">
       <h2 class="panel-title">Upgrades</h2>
       <button class="upgrade-btn hero-btn" type="button" data-role="hero-btn">
-        <span class="upgrade-name">Hero Lv <span data-role="hero-level">1</span></span>
+        <span class="upgrade-name" data-role="hero-level">Hero Lv 1</span>
         <span class="upgrade-detail">Level up your blade</span>
         <span class="upgrade-cost" data-role="hero-cost"></span>
       </button>
@@ -451,6 +452,8 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   // sweep stays smooth; DPS is tracked across paints to punch on increases.
   let lastDps = -1;
 
+  const panelRoot = q(root, '.screen');
+
   function renderPanels(vm: ViewModel): void {
     regionEl.textContent = vm.regionName;
     zoneEl.textContent = vm.boss
@@ -510,7 +513,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
     // Hero level — the button names the level being BOUGHT (the reward),
     // matching the goal chip's "Hero Lv N" framing.
-    heroLevelEl.textContent = String(vm.heroLevel + 1);
+    heroLevelEl.textContent = `Hero Lv ${vm.heroLevel + 1}`;
     heroCostEl.textContent = `${formatNumber(vm.levelCost)} g`;
     heroBtn.disabled = !vm.canAffordLevel;
     heroBtn.classList.toggle('affordable', vm.canAffordLevel);
@@ -562,6 +565,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
         refs.power.textContent = 'empty';
       }
     }
+    repaintPixelText(panelRoot);
   }
 
   // Per-frame path: only touch the DOM when the rendered string/scale actually

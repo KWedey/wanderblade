@@ -152,8 +152,7 @@ export function drawText(
   outline: string | null = '#1a1c2c',
   align: TextAlign = 'center',
 ): void {
-  const upper = text.toUpperCase();
-  const startX = Math.floor(align === 'center' ? x - textWidth(upper, scale) / 2 : x);
+  const startX = Math.floor(align === 'center' ? x - textWidth(text, scale) / 2 : x);
   const startY = Math.floor(y);
   const advance = (GLYPH_W + 1) * scale;
 
@@ -169,8 +168,8 @@ export function drawText(
 
   for (const [ox, oy, color] of passes) {
     ctx.fillStyle = color;
-    for (let i = 0; i < upper.length; i++) {
-      const rows = FONT[upper[i]!] ?? FONT[text[i]!];
+    for (let i = 0; i < text.length; i++) {
+      const rows = FONT[text[i]!] ?? FONT[text[i]!];
       if (!rows) continue;
       blitGlyph(ctx, rows, startX + i * advance + ox, startY + oy, scale);
     }
