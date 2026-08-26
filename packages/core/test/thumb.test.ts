@@ -11,6 +11,7 @@ import {
   type GameState,
   type LootArc,
 } from '../src/index';
+import { roadAt } from './helpers';
 
 // The acceptance test for the constant-time catch window (docs/DECISIONS.md
 // #35). A fixed-distance radius is generous where a coin is slow and near-zero
@@ -24,12 +25,27 @@ function progress(arc: LootArc, atSec: number): number {
   return 1 - (arc.expiresAtSec - atSec) / ARC_FLIGHT_SEC;
 }
 
-/** A Road with a build that keeps several coins in the air at once. */
+/**
+ * ⚠️ Not actually busy. Setting `hero.level` and `zone` by hand leaves the kill
+ * schedule untouched, so this lands exactly **one** kill and then idles 27 s.
+ * Before #41 pruned landed coins, the three it left behind were all already
+ * down — the geometry assertions below read real numbers off dead coins.
+ *
+ * `liveArcRoad()` is the honest version. Swapping every use over strengthens
+ * five tests and turns 'degrades with aim error' red on a true measurement, so
+ * it is a re-calibration of what that test asserts rather than a fixture fix,
+ * and is Kyle's call. See the finding reported with #41.
+ */
 function busyRoad(): GameState {
   const s = initialState(17);
   s.hero.level = 40;
   s.zone = 20;
   return s;
+}
+
+/** A Road whose schedule matches its build: ~13 coins genuinely in the air. */
+function liveArcRoad(): GameState {
+  return roadAt(17, 20, 0.3);
 }
 
 /** The arc nearest the apex, or nearest landing, among those in flight. */
@@ -102,14 +118,26 @@ function soloCatch(p: number, latencySec: number, landingX: number): boolean {
   return events.some((e) => e.type === 'arcCatch');
 }
 
+/**
+ * Any coin currently in the air, for probing geometry. `advance` prunes landed
+ * coins at its own clock (#41), so a fixed advance can legitimately end with an
+ * empty list — stepping until one exists is what makes this independent of
+ * where the kill schedule happens to fall.
+ */
+function airborneArc(s: GameState): LootArc {
+  for (let i = 0; i < 400 && s.arcs.length === 0; i++) advance(s, 0.05);
+  const arc = s.arcs[0];
+  expect(arc).toBeTruthy();
+  return arc as LootArc;
+}
+
 const REACHES = [0.5, 0.7, 0.9, 1.1, 1.3, 1.5];
 
 describe('the catch window is constant in time, not in distance', () => {
   it('gives every point of the flight the same forgiveness in milliseconds', () => {
-    const s = busyRoad();
+    const s = liveArcRoad();
     advance(s, 3);
-    const arc = s.arcs[0] as LootArc;
-    expect(arc).toBeTruthy();
+    const arc = airborneArc(s);
 
     const launch = arc.expiresAtSec - ARC_FLIGHT_SEC;
     for (const p of [0.1, 0.3, 0.5, 0.7, 0.9]) {
@@ -122,9 +150,9 @@ describe('the catch window is constant in time, not in distance', () => {
   });
 
   it('opens wider where the coin moves faster, which is near the ground', () => {
-    const s = busyRoad();
+    const s = liveArcRoad();
     advance(s, 3);
-    const arc = s.arcs[0] as LootArc;
+    const arc = airborneArc(s);
     const launch = arc.expiresAtSec - ARC_FLIGHT_SEC;
     expect(arcCatchRadius(arc, launch + 0.95 * ARC_FLIGHT_SEC)).toBeGreaterThan(
       arcCatchRadius(arc, launch + 0.5 * ARC_FLIGHT_SEC) * 2,
