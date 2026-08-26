@@ -470,3 +470,24 @@ Across seeds 1–8 the ratio was 0.76–2.47 and is now **1.05–1.35** — the 
 
 **Probes proven to fire.** Reverting the guard to `aimAt`: `doomed` 148/150, both new tests red, and the original assertion red at 0.387. Pinning `arcCatchRadius` back to a flat 0.12 (#35's cliff): landing **0.033**, so that test still cannot pass if the cliff returns.
 
+## 44. A kill's coins are not all worth the same — 2026-08-26
+
+**Decision:** `arcsForKill` weights each coin's share by `coinWeight(killIndex · ARC_SPLIT_MAX + i)`, an irrational-indexed sequence spanning `1 ± COIN_SHARE_SPREAD` (**0.45**), then normalises by the kill's own weight sum. Derived, not rolled — no RNG draw, indexed exactly like `arcLandingX`, so a save reconstructs the coins and the kill-keyed stream is untouched.
+
+**Why:** a blind judge filed the log repeating `Snatched it mid-air – +19.0M gold` verbatim two rows apart and called it a bug. It was not a display fault and not a coincidence. With an even split, a coin is worth `goldPerKill × SPECIES[i].goldMult ÷ splitCount`, and `goldPerKill` is constant inside a zone — so the entire payout vocabulary of a zone is **5 species × 3 split counts = 15 numbers**, cycled forever. The judge inferred something true about the model.
+
+**Measured as displayed, not exactly** — two coins differing by 0.01% print the same string, so the exact count is not the acceptance criterion. 5 seeds, 2000 catches, values through `formatNumber`:
+
+| | even split | weighted |
+|---|---|---|
+| distinct exact values | 19 | 400 |
+| **distinct as displayed** | **15** | **284** |
+| adjacent rows identical | 5.8% | **0.0%** |
+| a repeat within 5 rows | 23.2% | **1.0%** |
+
+**The kill total is unchanged exactly, not in expectation.** Normalising by the weight sum means a kill pays precisely what it paid before — stronger than #40's gear case, and asserted exactly in `arcs.test.ts` rather than sampled. The catch payout is the part that could have drifted, since `ARC_CATCH_MULT` applies per coin and a fat coin pays more: mean bonus over 2000 catches is **502.73 → 501.95, a 0.155% difference**, so catches are not drawn to the fat coins. **Reach does not predict worth, measured rather than argued** — if it did, a player could farm fat coins by aiming at one spot and P1 would drift. Over 899,998 coins, Pearson *r* between `landingX` and share is **0.000013**, and the mean share in every reach decile is **1.000** to three places. There is no spot on the road worth aiming at.
+
+**It survives rounding.** Over 200,000 kills / 599,996 coins, **zero** kills have two coins printing the same at three significant figures, and the closest adjacent pair differs by **2.24%** — three significant figures need about 0.5%, so the margin is real rather than a value that happens to round apart.
+
+**One arithmetic trap, recorded because the first draft got it backwards.** Normalising can push a share slightly *outside* the raw `1 ± spread` band, not inside it: a fat coin beside two lean ones divides by a sum below `n`. Measured envelope is **0.5544 … 1.4528** over 500k kills, and the test pins that rather than the constant.
+

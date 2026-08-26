@@ -125,6 +125,7 @@ These are the shipped values, each carrying a passing sim run (`docs/DECISIONS.m
 | Realm scale | `REALM_STEP^realm`, `REALM_STEP` = 8 |
 | Enemy HP | `10 · realmScale · 1.55^z` |
 | Enemy gold | `1 · realmScale · 1.48^z · SPECIES[i].goldMult` — roster mean exactly 1 |
+| Coin share | `gold · coinWeight(i) / Σ coinWeight` over the kill's coins, `COIN_SHARE_SPREAD` 0.45 — the kill total is exactly unchanged |
 | Gear power | `2 · realmScale · 1.55^z · RARITY_MULTIPLIERS[rarity] · SLOT_POWER[slot]` — weapon 1.15 / armor 1.00 / trinket 0.85, mean exactly 1 |
 | Hero base damage | `25 · 1.12^level · realmScale` |
 | Hero level cost | `10 · 1.15^level · realmScale` |

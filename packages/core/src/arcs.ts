@@ -10,12 +10,25 @@ import {
   ARC_SPLIT_MAX,
   ARC_SPLIT_MIN,
   ARC_STAGGER_SEC,
+  COIN_SHARE_SPREAD,
 } from './constants';
 import type { ArcPoint, LootArc } from './types';
 
 const GOLDEN_FRACTION = 0.618_033_988_749_894_9;
 /** A second irrational, so a kill's coin count does not track its reach. */
 const SPLIT_FRACTION = 0.414_213_562_373_095_1;
+/** A third irrational, so a coin's worth tracks neither its reach nor its count. */
+const COIN_FRACTION = 0.517_638_090_205_041_5;
+
+/**
+ * How large a share the coin at `index` takes, before normalising. Mean 1 over
+ * the sequence, indexed like `arcLandingX` so it costs no RNG draw and a save
+ * reconstructs it exactly.
+ */
+function coinWeight(index: number): number {
+  const u = (index * COIN_FRACTION) % 1;
+  return 1 - COIN_SHARE_SPREAD + 2 * COIN_SHARE_SPREAD * u;
+}
 
 /**
  * How far the arc thrown by `killIndex` flies. The golden ratio spreads
@@ -48,12 +61,14 @@ export function arcsForKill(
   gear: LootArc['gear'] = null,
 ): LootArc[] {
   const n = arcSplitCount(killIndex);
-  const share = gold / n;
+  const base = killIndex * ARC_SPLIT_MAX;
+  let weightSum = 0;
+  for (let i = 0; i < n; i++) weightSum += coinWeight(base + i);
   const out: LootArc[] = [];
   let credited = 0;
   for (let i = 0; i < n; i++) {
     const last = i === n - 1;
-    const value = last ? gold - credited : share;
+    const value = last ? gold - credited : gold * (coinWeight(base + i) / weightSum);
     credited += value;
     out.push({
       gold: value,
