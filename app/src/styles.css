@@ -1166,13 +1166,14 @@ body {
   }
 }
 
+/* Arrives by moving, never by materialising. Kills land every few hundred ms,
+   so an opacity ramp meant the newest entry - the one worth reading - was the
+   faintest thing in the panel at most instants a frame could be taken. */
 @keyframes logIn {
   from {
-    opacity: 0;
     transform: translateY(-4px);
   }
   to {
-    opacity: 1;
     transform: translateY(0);
   }
 }
