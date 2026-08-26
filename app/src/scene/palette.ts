@@ -750,3 +750,57 @@ export function glowRingRadii(r: number, gain: number): number[] {
   }
   return out;
 }
+
+/** One foliage clump: a run of rows a crown's silhouette bulges out over. */
+export interface FoliageLobe {
+  from: number;
+  len: number;
+  depth: number;
+}
+
+/**
+ * A pine crown's silhouette offset at one row, summed from lobes that hold a
+ * start row and a run rather than a fresh value every row. A per-row
+ * independent roll jumped the edge up to 7px between adjacent rows and read
+ * as dithering; a lobe tapers to zero at both ends of its own run instead.
+ */
+export function foliageNotchAt(row: number, lobes: readonly FoliageLobe[]): number {
+  let notch = 0;
+  for (const lobe of lobes) {
+    if (lobe.len <= 1) continue;
+    const into = row - lobe.from;
+    if (into < 0 || into >= lobe.len) continue;
+    const mid = (lobe.len - 1) / 2;
+    notch += lobe.depth * (1 - Math.abs(into - mid) / mid);
+  }
+  return notch;
+}
+
+/**
+ * Whether a row falls inside any shade lobe's run. Same idiom as
+ * `foliageNotchAt`: a contiguous patch instead of an independent per-row
+ * dice roll, which read as fleck noise rather than a shadow mass.
+ */
+export function inFoliageLobe(row: number, lobes: readonly Pick<FoliageLobe, 'from' | 'len'>[]): boolean {
+  return lobes.some((lobe) => row >= lobe.from && row < lobe.from + lobe.len);
+}
+
+export interface GrassBlade {
+  dx: number;
+  dy: number;
+}
+
+/**
+ * A tuft's neighbours within its own clump, so one stamped sprite overlaps
+ * the next instead of standing alone in a gap of bare turf. Takes three
+ * already-rolled [0,1) values rather than a seed, keeping the hash itself
+ * (and its determinism guarantee) owned by the caller.
+ */
+export function grassClumpBlades(r1: number, r2: number, r3: number): GrassBlade[] {
+  const blades: GrassBlade[] = [
+    { dx: 0, dy: 0 },
+    { dx: Math.round((r1 - 0.5) * 6), dy: -Math.round(r2 * 3) },
+  ];
+  if (r3 > 0.35) blades.push({ dx: Math.round((r3 - 0.5) * 9), dy: -Math.round(r1 * 2) });
+  return blades;
+}

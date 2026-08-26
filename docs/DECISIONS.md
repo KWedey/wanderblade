@@ -706,3 +706,32 @@ The rise is a sample collapse, not skill. Catches by scatter: **398 / 343 / 315 
 **Both probes fire.** Dropping the rock from the reference list turns `stands every creature clear of the rock it stands beside` red naming the Ashen Wolf at 0.045; restoring the two independent ceilings turns `ramps every creature's four inks in one direction` red naming the Anvil Ogre.
 
 **Judged at the size it ships at.** Rendered at the phone's own `pixelScale` of 2 — the roster at ~40px beside a rock of the realm's own colour — rather than magnified. Magnification is what hid the lowercase `g` for two rounds.
+
+## 52. Pine crowns and grass tufts carry their texture as runs, not a fresh roll per unit — 2026-08-26
+
+**Decision:** `foliageNotchAt`/`inFoliageLobe` (`palette.ts`) replace the crown's per-row `hash01` silhouette notch and per-row 14% dark-fleck roll with 4 silhouette lobes and 2 shadow lobes per tree — each a `{from, len}` run, same idiom as the bark streaks in #d0a6427. `grassClumpBlades` gives each `tuft` prop 2-3 overlapping blades plus y jitter instead of one stamped sprite on a fixed baseline.
+
+**Why:** Gauntlet round 34 (`.gauntlet/verdict34.md`, img-2, ranked #1/4) named two flaws in the same family already fixed once: "pine canopies have a jagged, notched silhouette edge — reads as dithering noise, not foliage," and "grass tufts look like isolated pasted blades, not a continuous ground texture." Both were an independent random value drawn every row or every instance, with no run connecting neighbours — the exact defect shape #d0a6427 fixed in bark and glow.
+
+**Two canopy defects, not one.** The silhouette notch (`scene.ts`, was `(hash01(i*9.4+k*1.7)-0.5)*7`) could jump the edge up to 7px between adjacent rows. A second, separate per-row roll (`hash01(i*3.7+k*5.3) > 0.86`) painted a dark fleck on ~14% of rows independently — the same disease, one row further down in the same loop. Fixing only the first left `qa:speckle` nearly flat; fixing both moved it.
+
+**Measured with `qa:speckle --right 1456`** on a static `?stage=mid&seed=7` frame, own dev server, `visual/canopy@ca0c337`:
+
+| | lone marks | % of frame | y540-810 band |
+|---|---|---|---|
+| before | 785 | 1.84% | 480 (4.44%) |
+| after silhouette fix only | 779 | 1.82% | 489 (4.53%) |
+| after both canopy fixes | **746** | **1.75%** | **463 (4.29%)** |
+
+**`qa:speckle` is the wrong instrument for the grass claim, and says so itself** — its help text disclaims discrete sprite instances as expected-lone. Confirmed: after the clump fix the count rose to 781 (1.83%), because each added blade is another sprite edge with no same-colour neighbour under the tool's own per-pixel metric. That is the tool's documented limitation, not a regression.
+
+**Grass measured geometrically instead**, replaying the exact deterministic prop math (`hash01`, `PROP_SPAN`, `grassClumpBlades`) the renderer uses, over one full 1400-unit prop cycle, 100 tuft instances:
+
+| | coverage | isolated islands | max gap |
+|---|---|---|---|
+| before (1 stamp/instance) | 35.2% | 68 | 44 |
+| after (clumped) | **46.5%** | **56** | 42 |
+
+Fewer, larger islands at higher coverage is the "isolated blades → continuous patch" claim, made without depending on animation-phase-sensitive screenshot diffing (two same-code captures of the live dev server differ by ~488k of 1.57M pixels from animation/scroll state alone — raw pixel diffing between captures is not a valid before/after instrument here).
+
+**Both probes fire.** Reverting `foliageNotchAt` to the old per-row roll fails `never jumps between adjacent rows the way an independent roll did` (max delta ≥3.5 vs the lobe version's bound). Reverting `grassClumpBlades` to a single stamp drops the coverage/island computation back to the "before" row above.
