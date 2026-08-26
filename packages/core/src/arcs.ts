@@ -3,6 +3,7 @@
 // maps this onto its own scene; it never decides a catch.
 
 import {
+  ARC_CATCH_PERP,
   ARC_CATCH_SEC,
   ARC_FLIGHT_SEC,
   ARC_MAX_REACH,
@@ -110,10 +111,26 @@ export function arcCatchRadius(arc: LootArc, atSec: number): number {
   return ARC_CATCH_SEC * arcSpeedAt(arc, atSec);
 }
 
+/** Unit vector along `arc`'s travel at `atSec`, or null once it is down. */
+export function arcHeadingAt(arc: LootArc, atSec: number): ArcPoint | null {
+  if (!Number.isFinite(arc.landingX)) return null;
+  const p = 1 - (arc.expiresAtSec - atSec) / ARC_FLIGHT_SEC;
+  if (!(p >= 0) || p >= 1) return null;
+  const dx = arc.landingX / ARC_FLIGHT_SEC;
+  const dy = (4 - 8 * p) / ARC_FLIGHT_SEC;
+  const mag = Math.hypot(dx, dy);
+  if (!(mag > 0)) return null;
+  return { x: dx / mag, y: dy / mag };
+}
+
 /**
  * Index of the arc a strike landing on `aim` catches, or -1 for a clean miss.
- * Compared as a fraction of each arc's own radius, so the coin the strike is
- * most clearly inside wins; an exact tie goes to the older arc.
+ *
+ * The window is an ellipse aligned to the coin's own travel: `ARC_CATCH_SEC` of
+ * its flight along the path, `ARC_CATCH_PERP` across it. Being late is an error
+ * along the path and is forgiven generously; aiming at the wrong place is an
+ * error across it and is not. Scored as a fraction of each coin's own window,
+ * so the coin the strike is most clearly inside wins; a tie goes to the older.
  */
 export function arcHitIndex(
   arcs: readonly LootArc[],
@@ -127,11 +144,15 @@ export function arcHitIndex(
     if (!arc) continue;
     const p = arcPositionAt(arc, atSec);
     if (!p) continue;
-    const r = arcCatchRadius(arc, atSec);
-    if (!(r > 0)) continue;
+    const along = arcCatchRadius(arc, atSec);
+    if (!(along > 0)) continue;
+    const u = arcHeadingAt(arc, atSec);
+    if (!u) continue;
     const dx = p.x - aim.x;
     const dy = p.y - aim.y;
-    const score = (dx * dx + dy * dy) / (r * r);
+    const l = dx * u.x + dy * u.y;
+    const q = dy * u.x - dx * u.y;
+    const score = (l * l) / (along * along) + (q * q) / (ARC_CATCH_PERP * ARC_CATCH_PERP);
     if (score < bestScore) {
       bestScore = score;
       best = i;
