@@ -803,3 +803,18 @@ Fewer, larger islands at higher coverage is the "isolated blades → continuous 
 - Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 704 passed (704)**.
 
 **Not touched:** the blade/tuft/strata texture loops (already varied, out of scope this round) and the sun halo — the last surface from the same verdict, addressed in the following commit.
+
+## 57. Sun halo gets two more steps and fades toward sky colour at its edge — 2026-08-26
+
+**Decision:** `sunHaloBands` (`palette.ts`) grows from 3 stacked discs to 5, and the outermost band's `skyMix` rises from 0.72 to 0.82 — closer to pure sky colour, so the last visible step is subtler instead of stopping on one hard-edged ring. `drawSun`/`fillDisc` (`scene.ts`) are unchanged; the loop already iterated over whatever `sunHaloBands` returned. The `sunY` clearance margin moves from `sunR * 2.15` to `sunR * 2.45` to match the new widest band (`2.3x` core radius, was `2x`).
+
+**Why:** Gauntlet round 36 (`.gauntlet/verdict36.md`, img-4) named the sun as "3 flat value steps with a hard outer edge — a ring sticker pasted on the sky, not light falling off into the sky around it."
+
+**Still no gradients** (DECISIONS.md #13) — five hard flat discs, same idiom as three, one step closer to sky colour at the edge instead of a blend.
+
+**Evidence:**
+- Deterministic: `sunHaloBands`'s existing pure-function tests in `palette.test.ts` are widened to loop over all 5 bands (radius and `skyMix` both strictly decreasing outward-to-inward) instead of the 3 hardcoded pairs, plus a new assertion that the outermost `skyMix` is at least 0.8.
+- Draw-loop coverage carries over from ADR #53 without a new fake-context test: `drawSun`'s loop (`for (const band of sunHaloBands(sunR))`) makes no assumption about band count, so it was already proven correct for any array length the pure function returns.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 704 passed (704)**.
+
+**Not touched:** `glowDisc`/`glowRingRadii` (loot-pickup glow, deliberately left alone per ADR #53). All four surfaces named in round 36's verdict — trees (#54), background hill (#55), turf (#56), sun (#57) — are now addressed.

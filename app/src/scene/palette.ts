@@ -830,14 +830,18 @@ export interface HaloBand {
  * Sun halo as solid stacked discs, outermost first — mass and a value step
  * carry the glow, same as a hill's lit cap, rather than a ring of gaps in the
  * sky. A ring of separated pixels only reads as light while it is finer than
- * the eye can resolve; upscaled pixel art never is (DECISIONS.md #53).
+ * the eye can resolve; upscaled pixel art never is (DECISIONS.md #53). Five
+ * bands instead of three, and an outermost mix close enough to sky colour
+ * that the last step fades rather than stopping on a hard edge.
  */
 export function sunHaloBands(coreR: number): HaloBand[] {
   if (coreR <= 0) return [];
   return [
-    { r: Math.round(coreR * 2), skyMix: 0.72 },
-    { r: Math.round(coreR * 1.6), skyMix: 0.48 },
-    { r: Math.round(coreR * 1.3), skyMix: 0.24 },
+    { r: Math.round(coreR * 2.3), skyMix: 0.82 },
+    { r: Math.round(coreR * 2.0), skyMix: 0.66 },
+    { r: Math.round(coreR * 1.7), skyMix: 0.48 },
+    { r: Math.round(coreR * 1.4), skyMix: 0.3 },
+    { r: Math.round(coreR * 1.15), skyMix: 0.14 },
   ];
 }
 

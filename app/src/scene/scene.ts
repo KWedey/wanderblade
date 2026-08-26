@@ -1127,8 +1127,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     sunX = Math.floor(vw * 0.6);
     sunR = Math.max(5, Math.floor(vw / 26));
-    // Far enough down that the widest halo band (sunHaloBands' 2x) clears the top edge.
-    sunY = Math.max(Math.ceil(sunR * 2.15), Math.floor(skyH * 0.13));
+    // Far enough down that the widest halo band (sunHaloBands' 2.3x) clears the top edge.
+    sunY = Math.max(Math.ceil(sunR * 2.45), Math.floor(skyH * 0.13));
   }
 
   /** A filled circle, scanline by scanline — mass, not an outline. */

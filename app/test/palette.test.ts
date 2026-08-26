@@ -234,18 +234,21 @@ describe('coherentRange keeps the horizon in the hill own hue family', () => {
 });
 
 describe('sunHaloBands draws the sun as solid mass, not a ring', () => {
-  it('steps three bands outward from the core, largest first', () => {
+  it('steps five bands outward from the core, largest first', () => {
     const bands = sunHaloBands(20);
-    expect(bands).toHaveLength(3);
-    expect(bands[0]!.r).toBeGreaterThan(bands[1]!.r);
-    expect(bands[1]!.r).toBeGreaterThan(bands[2]!.r);
+    expect(bands).toHaveLength(5);
+    for (let i = 1; i < bands.length; i++) {
+      expect(bands[i - 1]!.r, `band ${i - 1} vs ${i}`).toBeGreaterThan(bands[i]!.r);
+    }
     for (const band of bands) expect(band.r).toBeGreaterThan(20);
   });
 
-  it('mixes the outermost band furthest toward sky, the innermost least', () => {
+  it('mixes each band further toward sky than the one inside it, ending close to sky colour', () => {
     const bands = sunHaloBands(20);
-    expect(bands[0]!.skyMix).toBeGreaterThan(bands[1]!.skyMix);
-    expect(bands[1]!.skyMix).toBeGreaterThan(bands[2]!.skyMix);
+    for (let i = 1; i < bands.length; i++) {
+      expect(bands[i - 1]!.skyMix, `band ${i - 1} vs ${i}`).toBeGreaterThan(bands[i]!.skyMix);
+    }
+    expect(bands[0]!.skyMix).toBeGreaterThanOrEqual(0.8);
   });
 
   it('draws nothing at no core radius', () => {
