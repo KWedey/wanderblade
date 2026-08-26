@@ -276,3 +276,17 @@ The gap was a **shape** problem, not a level one. It widened ~1.29× per realm, 
 **Why a horizon rather than a representation that survives.** `bossHp` overflows at realm 301, but `enemyHp` follows at 330, `gearPower` at 331, `enemyGold` at 333 and `levelCost` at 341. Carrying `bossHp` in a mantissa/exponent pair buys 30 realms and leaves the wall standing, so a real fix is a big-number representation through the whole economy — an M2+ project with its own determinism contract, not a guard. The guard is what makes the wall a defined edge instead of a hang.
 
 **It is reachable.** A 90-day run at 3 seeds reaches **realm 302**. This is a real endgame boundary at roughly three months of steady play, not a theoretical one. `packages/core/test/magnitude.test.ts` pins entry succeeding at realm 300 and refusing at 301, 302, 400 and 5000, with the Road left untouched by the refusal.
+
+## 35. Creature colour belongs to the species; the realm identifies itself in the backdrop — 2026-08-25
+
+**Decision:** `monsterInk(body, ground)` takes the **species' own** hex. Hue and saturation come from it and never move. Only **value** answers the realm: the mid tone is pushed off the ground's lightness by `MIN_BODY_CONTRAST` (0.17), plus `SAME_HUE_CONTRAST` (0.16) more when the creature shares that ground's hue. Sprites bake per **roster slot**, not per silhouette, so a realm that fields one silhouette twice gets two species in two colours.
+
+**Why:** colour was previously derived from `RealmSkin.monBody` and hue-turned by silhouette index, so one creature was purple in Greenwood and orange in Ember Wastes. A Bestiary needs stable identities, and a player learns a threat by sight or not at all. Realm identity is already carried by sky, hills, foliage, ground and rock — five layers that own the frame's area.
+
+**How separation is kept without hue.** The medium's own answer: value and a hard outline. A hue-blind contrast rule fielded a dark-teal Green Sprite on green grass at 0.17 apart that still read as a smear, which is why the rule is hue-aware.
+
+**No saturation floor.** A `Math.max(sat, 0.42)` floor manufactured colour that was not in the species: the Ashen Wolf's near-grey carries a faint violet cast, and the floor fielded a vivid purple wolf under a log line reading *Ashen Wolf*. Saturation is the species' exactly.
+
+**Realm floors are untouched.** `MIN_VALUE_SPREAD` 0.42, `MIN_SKY_LIGHTNESS` 0.58 and `MIN_ACCENT_LIGHTNESS` 0.55 are backdrop rules and still run over 500 realms. `RealmSkin.monBody` / `monBodyDark` now feed only the kill burst.
+
+**Tests:** `app/test/species.test.ts` — one species is byte-identical across every realm it appears in; hue holds from a 0.1 ground to a 0.9 one; every creature clears its own turf by `MIN_BODY_CONTRAST`; no realm fields two creatures of one colour. Each was proved to fail against the behaviour it replaces.

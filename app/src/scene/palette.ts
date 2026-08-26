@@ -43,7 +43,7 @@ export interface RealmSkin {
 }
 
 // DB32 anchors, used verbatim so the scene and the CSS chrome share a palette.
-const INK = {
+export const INK = {
   black: '#1a1c2c',
   night: '#222034',
   plum: '#45283c',
@@ -623,27 +623,47 @@ function toHex(h: number, s: number, l: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
-/** Hue offsets per roster slot, so five creatures share one realm skin
- *  without three identically-coloured bodies standing in the same frame. */
 /**
- * Hue turns kept on the cold/sour side of the realm's monster colour. Positive
- * turns walked the palette into magenta, and a critic read the result as
- * friendly: pink is a reward colour, not a threat colour.
+ * How far a creature's mid tone must sit from the ground it stands on. Below
+ * this the outline is doing all the work and the fight reads as two blobs.
  */
-const SHAPE_HUE = [0, -0.05, -0.09, 0.04, -0.13];
+export const MIN_BODY_CONTRAST = 0.17;
+/** Added back on top when the creature shares the ground's hue as well. */
+export const SAME_HUE_CONTRAST = 0.16;
 
-export function monsterInk(skin: RealmSkin, shape = 0): InkSet {
-  const turn = SHAPE_HUE[((shape % SHAPE_HUE.length) + SHAPE_HUE.length) % SHAPE_HUE.length] ?? 0;
-  const [bh, bs, bl] = toHsl(skin.monBody);
-  const [dh, ds, dl] = toHsl(skin.monBodyDark);
-  const vivid = Math.max(bs, 0.5);
+/** 0 for opposite hues, 1 for the same one. */
+function hueCloseness(a: number, b: number): number {
+  const d = Math.abs(((a - b) % 1) + 1) % 1;
+  return 1 - Math.min(d, 1 - d) * 2;
+}
+
+/**
+ * A creature's inks. Hue and saturation are the species' own and never move:
+ * one that changed colour every seventh realm could never become a thing a
+ * player recognises. Only value answers the realm, pushed off the ground it
+ * stands on, and pushed further when it shares that ground's hue — the medium
+ * separates a figure with value and a hard outline (DECISIONS.md #35).
+ */
+export function monsterInk(body: string, ground = '#000000'): InkSet {
+  const [h, sat, l] = toHsl(body);
+  const [gh, , gl] = toHsl(ground);
+  // Saturation is the species' too. A floor here manufactured colour: an Ashen
+  // Wolf's near-grey has a faint violet cast, and forcing it to 0.42 fielded a
+  // vivid purple wolf.
+  let mid = Math.min(0.72, Math.max(0.24, l));
+  const need = MIN_BODY_CONTRAST + hueCloseness(h, gh) * SAME_HUE_CONTRAST;
+  const gap = mid - gl;
+  if (Math.abs(gap) < need) {
+    // Away on the side it already leans, so a pale creature stays pale.
+    mid = Math.min(0.82, Math.max(0.13, gl + (gap >= 0 ? need : -need)));
+  }
   return {
     outline: INK.black,
-    body: toHex(bh + turn, vivid, bl),
-    bodyDark: toHex(dh + turn, Math.max(ds, 0.45), dl),
-    bodyLight: toHex(bh + turn, Math.max(vivid - 0.1, 0.4), Math.min(0.92, bl + 0.16)),
+    body: toHex(h, sat, mid),
+    bodyDark: toHex(h, Math.min(1, sat + 0.06), Math.max(0.1, mid - 0.15)),
+    bodyLight: toHex(h, Math.max(0, sat - 0.06), Math.min(0.92, mid + 0.16)),
     // The hard edge on a lit facet. Without it three bands still read as flat.
-    bodySpec: toHex(bh + turn, Math.max(vivid - 0.22, 0.3), Math.min(0.88, bl + 0.24)),
+    bodySpec: toHex(h, Math.max(0, sat - 0.14), Math.min(0.88, mid + 0.24)),
     // A lit eye and bared teeth are what carry menace at 16-30px; two white
     // dots read as friendly at any size.
     eyeGlow: '#df7126',

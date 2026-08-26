@@ -8,7 +8,7 @@
 // pixels square and identical everywhere instead of resolution-dependent mush.
 
 import { formatNumber } from '../format';
-import { speciesAt } from '../species';
+import { GUARDIAN_BODY, rosterAt, speciesIndexAt } from '../species';
 import { ditherAt, falloff, momentumLift } from './light';
 import {
   arcApexHeight,
@@ -264,7 +264,8 @@ interface Streak {
 }
 
 interface Monster {
-  shape: number;
+  /** Slot in the realm's baked roster; the last slot is the Portal guardian. */
+  sprite: number;
   /** Scene x of the monster's feet. */
   x: number;
   /** Seconds of white-flash left from the last hit. */
@@ -285,6 +286,9 @@ interface Monster {
 const QUEUE_GAP = 55;
 /** Monsters visible at once: the one being fought, plus the queue behind it. */
 const QUEUE_DEPTH = 5;
+
+/** The guardian is baked after the realm's roster, so it owns the last slot. */
+const bossSlot = (region: number): number => rosterAt(region).length;
 
 interface Prop {
   kind: 'tree' | 'rock' | 'tuft' | 'flower';
@@ -384,7 +388,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const bInk = sceneryInk(backdropSkin(skin));
     const fgInk = foregroundInk(skin);
     const built: SkinnedSprites = {
-      monsters: MONSTER_SHAPES.map((m, i) => bakeSprite(m, monsterInk(skin, i))),
+      // Baked per roster slot, not per silhouette: a realm may field one
+      // silhouette twice, and those are two species wearing two colours.
+      monsters: [
+        ...rosterAt(key).map((sp) =>
+          bakeSprite(MONSTER_SHAPES[sp.shape] ?? MONSTER_SHAPES[0]!, monsterInk(sp.body, skin.turf)),
+        ),
+        bakeSprite(MONSTER_SHAPES[BOSS_SHAPE]!, monsterInk(GUARDIAN_BODY, skin.turf)),
+      ],
       trees: [TREE, TREE_TALL, TREE_WIDE].map((t) => bakeSprite(t, bInk)),
       rock: bakeSprite(ROCK, sInk),
       fence: bakeSprite(FENCE, sInk),
@@ -699,7 +710,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    */
   function enqueueMonster(killIndex: number): void {
     queue.push({
-      shape: speciesAt(model.region, killIndex).shape,
+      sprite: speciesIndexAt(model.region, killIndex),
       x: worldRightX + 30,
       flash: 0,
       recoil: 0,
@@ -712,7 +723,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function engageInset(): number {
     const lead = queue[0];
     if (!lead) return 12;
-    const sprite = skinnedFor(model.region).monsters[lead.shape];
+    const sprite = skinnedFor(model.region).monsters[lead.sprite];
     return Math.round((sprite ? sprite.width : 20) / 2) - lead.spread;
   }
 
@@ -740,7 +751,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const lead = queue[0];
     if (!lead || lead.x - engageInset() > heroX + BLADE_REACH + 16) return;
 
-    const leadSprite = skinnedFor(model.region).monsters[lead.shape];
+    const leadSprite = skinnedFor(model.region).monsters[lead.sprite];
     const leadHeight = leadSprite ? leadSprite.height : 16;
     // On the creature's body, past its near edge. Six pixels back toward the
     // swinger put the brightest thing in the frame in the hero's neighbourhood,
@@ -900,13 +911,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     if (model.boss) {
       // One guardian, and it stays: the road's queue would walk a second
       // creature into the climax of a realm.
-      if (queue.length !== 1 || queue[0]!.shape !== BOSS_SHAPE) {
+      if (queue.length !== 1 || queue[0]!.sprite !== bossSlot(model.region)) {
         queue.length = 0;
-        queue.push({ shape: BOSS_SHAPE, x: worldRightX + 30, flash: 0, recoil: 0, bob: 0, spread: 0 });
+        queue.push({ sprite: bossSlot(model.region), x: worldRightX + 30, flash: 0, recoil: 0, bob: 0, spread: 0 });
         bossEnteredAtSec = clockSec;
       }
     } else {
-      if (queue[0]?.shape === BOSS_SHAPE) queue.length = 0;
+      if (queue[0]?.sprite === bossSlot(model.region)) queue.length = 0;
       while (queue.length < QUEUE_DEPTH) enqueueMonster(model.kills + queue.length);
     }
 
@@ -1260,7 +1271,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    */
   function fightBand(): { x0: number; x1: number } {
     const lead = queue[0];
-    const sprite = lead ? skinnedFor(model.region).monsters[lead.shape] : undefined;
+    const sprite = lead ? skinnedFor(model.region).monsters[lead.sprite] : undefined;
     const w = sprite ? sprite.width : 20;
     const cx = lead ? lead.x + lead.spread : heroX + BLADE_REACH;
     return { x0: heroX - 12, x1: cx + w / 2 + 6 };
@@ -1613,7 +1624,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // Back to front, so the one being fought overlaps the line behind it.
     for (let i = queue.length - 1; i >= 0; i--) {
       const m = queue[i]!;
-      const sprite = sprites.monsters[m.shape] ?? sprites.monsters[0]!;
+      const sprite = sprites.monsters[m.sprite] ?? sprites.monsters[0]!;
       const bob = model.reduceMotion ? 0 : Math.round(Math.sin(m.bob) * 1.2);
       // The engaged creature lunges at the hero rather than standing and
       // waiting to be hit; a struck one is kicked back. Both come off the
@@ -1921,7 +1932,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawProps(sprites);
     if (model.boss) {
       const lead = queue[0];
-      const guardian = sprites.monsters[BOSS_SHAPE];
+      const guardian = sprites.monsters[bossSlot(model.region)];
       if (lead && guardian) drawPortal(skin, Math.round(lead.x), guardian.height);
     }
     drawMonsters(sprites);
