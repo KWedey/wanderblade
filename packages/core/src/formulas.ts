@@ -205,12 +205,21 @@ export function damagePerSwing(state: GameState): number {
   return heroDps(state) * bossSwingSec;
 }
 
-/** Estimated seconds to fell the guardian from here at `momentum`. */
+/**
+ * Estimated seconds to fell the guardian at `momentum` — the fight in progress
+ * while in the boss phase, and the fight the portal would start when on the
+ * Road. Reading `boss.hpRemaining` on a Road state answers a question nobody
+ * asked: it is 0 until entry, so the preview a player commits on read `0s`.
+ *
+ * An unknown answer is `Infinity`, never 0. Zero is the one wrong value that
+ * looks like an invitation.
+ */
 export function bossEtaSec(state: GameState, momentum: number): number {
+  const hp = state.phase === 'boss' ? state.boss.hpRemaining : bossHp(state.realm);
   const dps = damagePerSwing(state) / swingInterval(state, momentum);
-  if (!(dps > 0) || !Number.isFinite(state.boss.hpRemaining)) return Infinity;
-  const eta = state.boss.hpRemaining / dps;
-  return Number.isFinite(eta) ? eta : 0;
+  if (!(dps > 0) || !Number.isFinite(hp) || !Number.isFinite(dps)) return Infinity;
+  const eta = hp / dps;
+  return Number.isFinite(eta) ? eta : Infinity;
 }
 
 /** Pending Ascendancy granted for clearing one zone of `realm`. */

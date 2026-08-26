@@ -6,7 +6,6 @@ import {
   affordableCount,
   attackSpeedMultiplier,
   bossEtaSec,
-  bossHp,
   deserialize,
   earningsMultiplier,
   enterPortal,
@@ -46,9 +45,7 @@ const PREPARE_PATIENCE_SEC = 3 * SEC_PER_DAY;
 
 /** The duration the portal preview would show, at sustained full momentum. */
 export function previewEtaSec(state: GameState): number {
-  const dps = heroDps(state) * attackSpeedMultiplier(state, 1);
-  if (!(dps > 0)) return Infinity;
-  return bossHp(state.realm) / dps;
+  return bossEtaSec(state, 1);
 }
 
 /** Portal-entry timing. `prompt` commits at the first chance after it opens. */
