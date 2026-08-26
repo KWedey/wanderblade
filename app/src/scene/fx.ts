@@ -240,3 +240,59 @@ export function sceneFromArcSpace(
   const k = Math.max(1, apex);
   return { x: heroX + ax * k, y: groundY - ay * k };
 }
+
+/**
+ * The one region of the frame that must always read. A blind art director
+ * ranked our world above the bar's and still placed us second: "at the exact
+ * moment it shows me combat, it hides the character I am playing under its own
+ * effect." Nothing bright is drawn inside this box.
+ */
+export interface HeroPocket {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Empty pixels demanded around the silhouette before an effect may show. */
+export const POCKET_PAD = 3;
+
+export function heroPocket(
+  heroX: number,
+  groundY: number,
+  spriteW: number,
+  spriteH: number,
+): HeroPocket {
+  return {
+    x: heroX - spriteW / 2 - POCKET_PAD,
+    y: groundY - spriteH - POCKET_PAD,
+    w: spriteW + POCKET_PAD * 2,
+    // Down to the contact shadow: a spark at his feet breaks the silhouette
+    // against the ground as readily as one across his chest.
+    h: spriteH + POCKET_PAD * 2,
+  };
+}
+
+/** True when a point would land inside the protected pocket. */
+export function inPocket(pocket: HeroPocket, x: number, y: number): boolean {
+  return x >= pocket.x && x <= pocket.x + pocket.w && y >= pocket.y && y <= pocket.y + pocket.h;
+}
+
+/**
+ * Pushes a point clear of the pocket along whichever axis costs least. Used
+ * where an effect has a meaningful position that happens to land on the hero,
+ * so it moves aside rather than vanishing.
+ */
+export function nudgeFromPocket(
+  pocket: HeroPocket,
+  x: number,
+  y: number,
+): { x: number; y: number } {
+  if (!inPocket(pocket, x, y)) return { x, y };
+  const left = x - pocket.x;
+  const right = pocket.x + pocket.w - x;
+  const up = y - pocket.y;
+  const best = Math.min(left, right, up);
+  if (best === up) return { x, y: pocket.y - 1 };
+  return { x: best === left ? pocket.x - 1 : pocket.x + pocket.w + 1, y };
+}

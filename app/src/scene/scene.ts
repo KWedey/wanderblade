@@ -19,7 +19,11 @@ import {
   shakeOffset,
   stepParticle,
   wrap,
+  heroPocket,
+  inPocket,
+  nudgeFromPocket,
   type Floater,
+  type HeroPocket,
   type FloaterTier,
   type Particle,
 } from './fx';
@@ -163,6 +167,12 @@ const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 1, damage: 1
 const TEXT_CATCH = '#fbf236';
 const TEXT_DAMAGE = '#ffffff';
 const LOOT_GLOW = '#fbf236';
+/**
+ * Hit sparks are cold steel, never gold. Sharing the realm accent with loot
+ * made a coin indistinguishable from the shower it spawned inside, so the one
+ * thing worth aiming at looked like the thing you were told to ignore.
+ */
+const SPARK_INK = '#9badb7';
 const RIM_OFFSETS: readonly (readonly [number, number])[] = [
   [-1, 0],
   [1, 0],
@@ -580,7 +590,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const lead = queue[0];
     const x = lead ? lead.x + lead.spread : heroX + BLADE_REACH;
     const y = groundY;
-    burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, '#ffffff', skin.accent], 130);
+    burst(x, y - 10, 14, [skin.monBody, skin.monBodyDark, '#ffffff', SPARK_INK], 130);
     impacts.push({ x, y: y - 12, age: 0, life: 0.34 });
     shake = Math.min(MAX_SHAKE, shake + 2.1);
 
@@ -604,7 +614,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const contactY = groundY - Math.round(leadHeight * 0.55);
     lead.flash = 0.05;
     lead.recoil = fromStrike ? 5 : 3;
-    burst(contactX, contactY, fromStrike ? 9 : 5, ['#ffffff', skin.accent, skin.monBody], 105);
+    burst(contactX, contactY, fromStrike ? 9 : 5, ['#ffffff', SPARK_INK, skin.monBody], 105);
     shake = Math.min(MAX_SHAKE, shake + (fromStrike ? 1.5 : 0.7));
 
     // Only the player's own strikes get a number. Auto-swings land several a
@@ -645,19 +655,28 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     if (clientX === null || clientY === null) return null;
     const rect = canvas.getBoundingClientRect();
-    return toArcSpace((clientX - rect.left) / pixelScale, (clientY - rect.top) / pixelScale);
+    const sx = (clientX - rect.left) / pixelScale;
+    const sy = (clientY - rect.top) / pixelScale;
+    lastAim = { x: sx, y: sy };
+    return toArcSpace(sx, sy);
   }
+
+  /** Scene coords of the last aimed strike, so a catch pays out where it was earned. */
+  let lastAim: { x: number; y: number } | null = null;
 
   /**
    * The engine caught an arc. The number is the bonus it actually paid, and it
-   * is anchored to the hero: a figure floating at the point in open sky where
-   * the tap landed belongs to nothing on screen.
+   * lands where the player tapped: paying it out at the hero meant tapping A
+   * and reading the reward at B, so the loop never visibly closed.
    */
   function catchArc(bonusGold: number, upgraded: boolean): void {
     const skin = realmSkin(model.region);
+    const guard = pocket();
+    const aim = lastAim ?? { x: heroX + 24, y: groundY - 30 };
+    const at = nudgeFromPocket(guard, aim.x, aim.y);
     addFloater({
-      x: heroX + 6,
-      y: groundY - 30,
+      x: at.x,
+      y: at.y,
       age: 0,
       life: FLOATER_LIFE,
       text: `+${formatShort(bonusGold)}`,
@@ -667,8 +686,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     });
     if (upgraded) {
       addFloater({
-        x: heroX + 6,
-        y: groundY - 44,
+        x: at.x,
+        y: at.y - 14,
         age: 0,
         life: FLOATER_LIFE,
         text: 'UPGRADED',
@@ -677,7 +696,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         owned: false,
       });
     }
-    burst(heroX + 6, groundY - 26, 12, ['#ffffff', skin.accent, '#fbf236'], 150);
+    burst(at.x, at.y + 4, 12, ['#ffffff', skin.accent, LOOT_GLOW], 150);
     shake = Math.min(MAX_SHAKE, shake + 1.2);
   }
 
@@ -1226,7 +1245,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     });
   }
 
-  function drawHero(): void {
+  /** The hero's own light and contact shadow. Ground decals, so they stay under everything. */
+  function drawHeroGround(): void {
     // The hero stands in his own light. White read as salt scattered on the
     // grass, so the pool is a lit tone of the turf itself.
     const lit = realmSkin(model.region);
@@ -1236,11 +1256,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       lighten(lit.turf, 0.42),
       Math.min(0.6, 0.16 + momentumLift(model.momentum) * 1.5),
     );
+    drawShadow(heroX, 12);
+  }
 
+  /** The box no spark, coin, mote or number may be drawn inside. */
+  function pocket(): HeroPocket {
+    return heroPocket(heroX, groundY, heroA.width, heroA.height);
+  }
+
+  function drawHero(): void {
     const stride = model.reduceMotion ? 0 : Math.floor(clockSec * 7 * model.momentumMult) % 2;
     const sprite = stride === 0 ? heroA : heroB;
     const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(clockSec * 14) * 0.6);
-    drawShadow(heroX, 12);
     // Rim first, sprite over it: a one-pixel halo of the sky's own light so the
     // figure never sinks into whatever value the ground happens to be.
     ctx.globalAlpha = 0.85;
@@ -1435,9 +1462,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function drawParticles(): void {
+    const guard = pocket();
     for (const p of particles) {
       const life = lifeRemaining(p.age, p.life);
       if (life <= 0) continue;
+      if (inPocket(guard, p.x, p.y)) continue;
       // Shrink instead of fading: alpha ramps are the one thing that reads as
       // "not pixel art" in a hard-edged scene.
       const size = life > 0.4 ? p.size : Math.max(1, p.size - 1);
@@ -1461,6 +1490,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /** Segments, cells and label on one row: a widget, not a banner. */
+  const COMBO_MARGIN = 4;
   const COMBO_SEGS = 6;
   const COMBO_SEG_W = 3;
   const COMBO_GAP = 1;
@@ -1490,7 +1520,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function comboBox(): { x: number; w: number; top: number; height: number } {
     const w = textWidth(comboLabel(), 1, BODY_FONT) + 3 + COMBO_METER_W;
     return {
-      x: Math.floor(heroX + 3 - w / 2) - 2,
+      // Docked to the left margin, off the centre line. Centred over the hero
+      // it was named twice as the thing competing with the action, and the
+      // action is all to the hero's right, where the road brings the monsters.
+      x: COMBO_MARGIN,
       w: w + 4,
       top: laneBaseline(COMBO_LANE, groundY) - 2,
       height: GLYPH_H + 4,
@@ -1575,13 +1608,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawFence(sprites, skin);
     drawProps(sprites);
     drawMonsters(sprites);
-    drawHero();
+    drawHeroGround();
     drawArcs();
     drawParticles();
     drawImpacts();
     drawRests();
     drawStreaks();
     drawMotes(skin);
+    // Last of the world layers, so nothing bright can ever be painted over the
+    // one figure that must always read. The pocket test below is the second
+    // line: it keeps effects from crowding the silhouette even from behind.
+    drawHero();
     drawFloaters();
     drawForeground(sprites);
     drawMomentumMeter(skin);

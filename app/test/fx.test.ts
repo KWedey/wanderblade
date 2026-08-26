@@ -17,6 +17,9 @@ import {
   stepParticle,
   type Particle,
   wrap,
+  heroPocket,
+  inPocket,
+  nudgeFromPocket,
 } from '../src/scene/fx';
 
 function coin(spanX = 60, lift = 150) {
@@ -241,5 +244,55 @@ describe('level-flight arcs', () => {
     const arc = launchArc(0, base, -50, base, liftForFlight(base, base, flight), 5, 'gold', 0);
     const mid = arcPosition(arc, flight / 2);
     expect(arcSpaceFromScene(mid.x, mid.y, 0, base, arcApexHeight(flight)).y).toBeCloseTo(1, 4);
+  });
+});
+
+describe('the hero keeps a protected pocket', () => {
+  const HERO_W = 14;
+  const HERO_H = 24;
+  const GROUND = 200;
+  const HERO_X = 60;
+  const p = heroPocket(HERO_X, GROUND, HERO_W, HERO_H);
+
+  // The blind art director: "at the exact moment it shows me combat, it hides
+  // the character I am playing under its own effect."
+  it('covers the whole silhouette with room to spare on every side', () => {
+    expect(p.x).toBeLessThan(HERO_X - HERO_W / 2);
+    expect(p.x + p.w).toBeGreaterThan(HERO_X + HERO_W / 2);
+    expect(p.y).toBeLessThan(GROUND - HERO_H);
+    expect(p.y + p.h).toBeGreaterThanOrEqual(GROUND);
+  });
+
+  it('catches a point anywhere on the figure, feet and crown included', () => {
+    for (const [x, y] of [
+      [HERO_X, GROUND - 1],
+      [HERO_X, GROUND - HERO_H + 1],
+      [HERO_X - HERO_W / 2, GROUND - HERO_H / 2],
+      [HERO_X + HERO_W / 2, GROUND - HERO_H / 2],
+    ] as const) {
+      expect(inPocket(p, x, y), `${x},${y}`).toBe(true);
+    }
+  });
+
+  it('lets the road either side of him through', () => {
+    expect(inPocket(p, HERO_X + 40, GROUND - 10)).toBe(false);
+    expect(inPocket(p, HERO_X - 40, GROUND - 10)).toBe(false);
+    expect(inPocket(p, HERO_X, GROUND - HERO_H - 20)).toBe(false);
+  });
+
+  it('leaves a point that was already clear exactly where it was', () => {
+    const far = nudgeFromPocket(p, HERO_X + 50, GROUND - 30);
+    expect(far).toEqual({ x: HERO_X + 50, y: GROUND - 30 });
+  });
+
+  it('moves an intruding point out by the shortest way, and it stays out', () => {
+    for (const [x, y] of [
+      [HERO_X, GROUND - HERO_H + 2],
+      [HERO_X - HERO_W / 2 + 1, GROUND - 4],
+      [HERO_X + HERO_W / 2 - 1, GROUND - 4],
+    ] as const) {
+      const out = nudgeFromPocket(p, x, y);
+      expect(inPocket(p, out.x, out.y), `${x},${y} -> ${out.x},${out.y}`).toBe(false);
+    }
   });
 });
