@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   affordableCount,
   ASC_NODE_IDS,
+  ASC_NODES,
   ascNodeCost,
   buyHeroLevel,
   buySkill,
@@ -96,16 +97,27 @@ describe('purchaseOptions', () => {
     }
   });
 
-  it('reports a capped skill as atMax with no finite price', () => {
-    const capped = SKILL_IDS.map((id) => SKILLS[id]).find((d) => d && Number.isFinite(d.maxLevel));
-    if (!capped) return;
+  it('reports a capped tree node as atMax with no finite price', () => {
     const s = initialState(1);
-    s.hero.level = 999;
-    s.hero.skills[capped.id] = capped.maxLevel;
-    const row = purchaseOptions(s).find((r) => r.id === capped.id);
+    s.ascendancy.banked = 1e12;
+    const id = ASC_NODE_IDS[0]!;
+    s.ascendancy.nodes[id] = ASC_NODES[id]!.maxRank;
+    const row = purchaseOptions(s).find((r) => r.id === id);
     expect(row?.atMax).toBe(true);
     expect(Number.isFinite(row?.cost ?? Infinity)).toBe(false);
     expect(row?.affordable).toBe(false);
+  });
+
+  it('never reports a skill as maxed, however many ranks are bought', () => {
+    const s = initialState(1);
+    s.hero.level = 999;
+    for (const id of SKILL_IDS) s.hero.skills[id] = 5_000;
+    for (const row of purchaseOptions(s)) {
+      if (row.kind !== 'skill') continue;
+      expect(row.atMax).toBe(false);
+      expect(row.maxRank).toBeNull();
+      expect(Number.isFinite(row.cost)).toBe(true);
+    }
   });
 
   it('counts affordable as a subset of priced', () => {

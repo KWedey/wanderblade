@@ -27,8 +27,6 @@ export interface SkillVM {
   level: number;
   cost: number;
   unlocked: boolean;
-  /** Skill is at its hard rank cap — no further ranks buyable (see SkillDef.maxLevel). */
-  atMax: boolean;
   unlockLevel: number;
   canAfford: boolean;
 }
@@ -374,13 +372,6 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
         refs.btn.disabled = true;
         refs.btn.classList.remove('affordable', 'maxed');
         refs.btn.classList.add('locked');
-      } else if (skill.atMax) {
-        // Bounded multiplier reached its cap: show MAX, hide the cost, no buy.
-        refs.detail.textContent = `Level ${skill.level} · MAX`;
-        refs.cost.textContent = '';
-        refs.btn.disabled = true;
-        refs.btn.classList.remove('affordable', 'locked');
-        refs.btn.classList.add('maxed');
       } else {
         refs.detail.textContent = `Level ${skill.level}`;
         refs.cost.textContent = `${formatNumber(skill.cost)} g`;

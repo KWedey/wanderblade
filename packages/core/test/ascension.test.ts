@@ -10,6 +10,7 @@ import {
   goldPerKill,
   heroDps,
   serialize,
+  SKILL_IDS,
   zonesPerRealm,
   type GameState,
 } from '../src/index';
@@ -63,7 +64,7 @@ describe('the ascension transaction', () => {
     expect(s.portalReady).toBe(false);
     expect(s.gold).toBe(0);
     expect(s.hero.level).toBe(0);
-    expect(s.hero.skills).toEqual({ cleave: 0, warcry: 0 });
+    expect(s.hero.skills).toEqual(Object.fromEntries(SKILL_IDS.map((id) => [id, 0])));
     expect(s.gear).toEqual({ weapon: null, armor: null, trinket: null });
     expect(s.leagues).toBe(0);
     expect(s.boss.enteredAtSec).toBeNull();

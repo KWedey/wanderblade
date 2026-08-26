@@ -4,7 +4,8 @@ import {
   arcPositionAt,
   ARC_FLIGHT_SEC,
   initialState,
-  SKILLS,
+  SKILL_IDS,
+  zonesPerRealm,
   type GameState,
   type LootArc,
 } from '@wanderblade/core';
@@ -78,15 +79,13 @@ describe('bot termination guards', () => {
     expect(state.gold).toBeLessThan(1000);
   });
 
-  it('skips capped skills instead of stalling the greedy loop', () => {
+  it('terminates on skills whose marginal value has decayed to nothing', () => {
     const state: GameState = initialState(1);
-    state.hero.level = 15;
-    state.hero.skills.cleave = SKILLS.cleave!.maxLevel;
-    state.hero.skills.warcry = SKILLS.warcry!.maxLevel;
+    state.hero.level = 20;
+    for (const id of SKILL_IDS) state.hero.skills[id] = 4_000;
     state.gold = 1e6;
     expect(botBuyGold(state)).toBeGreaterThan(0);
-    expect(state.hero.skills.cleave).toBe(SKILLS.cleave!.maxLevel);
-    expect(state.hero.skills.warcry).toBe(SKILLS.warcry!.maxLevel);
+    expect(state.gold).toBeLessThan(1e6);
   });
 
   it('spends banked Ascendancy down to nothing affordable', () => {
@@ -186,6 +185,11 @@ describe('aimAtOldestArc', () => {
   });
 });
 
+/** How far down the whole run a state has come, across realm resets. */
+function progress(s: GameState): number {
+  return s.realm * zonesPerRealm + s.zone;
+}
+
 describe('runPlayer determinism and contract watching', () => {
   it('produces identical runs for the same seed and policy', () => {
     const a = runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' });
@@ -207,7 +211,13 @@ describe('runPlayer determinism and contract watching', () => {
     expect(active.totalActiveSec).toBeGreaterThan(0);
     expect(idle.totalActiveSec).toBe(0);
     expect(idle.state.momentum.value).toBe(0);
-    expect(active.state.lifetime.kills).toBeGreaterThan(idle.state.lifetime.kills);
+    // Progress, not kill count: the active player ascends sooner and so spends
+    // the same hours on fewer, larger enemies. Raw kills favour whoever stayed
+    // behind in the cheap zones.
+    expect(progress(active.state)).toBeGreaterThan(progress(idle.state));
+    expect(active.state.ascendancy.victories).toBeGreaterThanOrEqual(
+      idle.state.ascendancy.victories,
+    );
   });
 
   it('stops at portal-ready when asked', () => {

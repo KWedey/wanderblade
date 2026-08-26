@@ -32,7 +32,9 @@ import {
   REALM_STEP,
   skillCost,
   skillMult,
-  skillMultPerLevel,
+  skillRankMult,
+  SKILL_IDS,
+  SKILL_MAX_BONUS,
   swingInterval,
   zonesPerRealm,
 } from '../src/index';
@@ -100,10 +102,35 @@ describe('hero damage model', () => {
     expect(heroBaseDamage(1, 0)).toBeCloseTo(d0 * 1.12, 10);
   });
 
-  it('skillMult is the product of (1 + 0.05 * rank); rank 0 is neutral', () => {
-    const f = (rank: number) => 1 + skillMultPerLevel * rank;
+  it('skillMult is the product of skillRankMult; rank 0 is neutral', () => {
     expect(skillMult({ cleave: 0, warcry: 0 })).toBeCloseTo(1, 10);
-    expect(skillMult({ cleave: 2, warcry: 4 })).toBeCloseTo(f(2) * f(4), 10);
+    expect(skillMult({ cleave: 2, warcry: 4 })).toBeCloseTo(
+      skillRankMult(2) * skillRankMult(4),
+      10,
+    );
+  });
+
+  it('skillRankMult rises with rank and never exceeds 1 + SKILL_MAX_BONUS', () => {
+    expect(skillRankMult(0)).toBe(1);
+    // Strictly increasing over the ranks a realm actually reaches. Past the
+    // point where the decay term underflows to zero it sits exactly on the
+    // asymptote, so the durable bound is "never exceeds", not "never reaches".
+    for (let r = 1; r <= 60; r++) {
+      expect(skillRankMult(r)).toBeGreaterThan(skillRankMult(r - 1));
+    }
+    for (let r = 1; r < 2000; r++) {
+      expect(skillRankMult(r)).toBeGreaterThanOrEqual(skillRankMult(r - 1));
+      expect(skillRankMult(r)).toBeLessThanOrEqual(1 + SKILL_MAX_BONUS);
+    }
+    expect(skillRankMult(1e6)).toBe(1 + SKILL_MAX_BONUS);
+  });
+
+  it('bounds skillMult at the ceiling no matter how many ranks are bought', () => {
+    const ceiling = Math.pow(1 + SKILL_MAX_BONUS, SKILL_IDS.length);
+    const maxed: Record<string, number> = {};
+    for (const id of SKILL_IDS) maxed[id] = 1e6;
+    expect(skillMult(maxed)).toBeLessThanOrEqual(ceiling * (1 + 1e-12));
+    expect(skillMult(maxed)).toBeGreaterThan(ceiling * 0.999);
   });
 
   it('walks SKILL_IDS, so key order and stray keys cannot move the product', () => {
@@ -138,7 +165,7 @@ describe('hero damage model', () => {
     s.ascendancy.nodes.heft = 1;
     const edge = 1 + ASC_NODES.edge!.perRank * 2;
     const heft = 1 + ASC_NODES.heft!.perRank * 1;
-    const expected = (d0 * 1.12 ** 3 * edge + 40 * heft) * (1 + skillMultPerLevel * 2);
+    const expected = (d0 * 1.12 ** 3 * edge + 40 * heft) * skillRankMult(2);
     expect(heroDps(s)).toBeCloseTo(expected, 8);
   });
 

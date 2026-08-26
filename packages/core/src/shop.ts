@@ -61,20 +61,19 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
     if (!def) continue;
     const rank = state.hero.skills[id] ?? 0;
     const unlocked = level >= def.unlockLevel;
-    const atMax = rank >= def.maxLevel;
-    const cost = atMax ? Infinity : skillCost(rank, state.realm);
+    const cost = skillCost(rank, state.realm);
     out.push({
       kind: 'skill',
       id,
       name: def.name,
       currency: 'gold',
       rank,
-      maxRank: def.maxLevel,
+      maxRank: null,
       cost,
       unlockLevel: def.unlockLevel,
       unlocked,
-      atMax,
-      affordable: unlocked && !atMax && state.gold >= cost,
+      atMax: false,
+      affordable: unlocked && state.gold >= cost,
     });
   }
 

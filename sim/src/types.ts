@@ -65,6 +65,34 @@ export interface Sample {
   earningsMult: number;
 }
 
+/**
+ * One look at the upgrade panel, taken before any purchase loop ran. `priced`
+ * counts rows carrying a real price; `affordable` counts the ones the player
+ * could act on that instant.
+ */
+export interface ShopSample {
+  timeSec: number;
+  /** Seconds since this realm began — the grace window is measured from here. */
+  sinceRealmStartSec: number;
+  realm: number;
+  affordable: number;
+  priced: number;
+}
+
+/** What the spend-depth validator reports. */
+export interface SpendDepth {
+  /** Samples taken past the post-ascension grace window. */
+  counted: number;
+  minAffordable: number;
+  minPriced: number;
+  /** Realm holding `minAffordable`. */
+  worstRealm: number;
+  /** Share of counted samples with fewer than two things to buy. */
+  starvedFraction: number;
+  /** Longest unbroken stretch, in seconds, with fewer than two things to buy. */
+  longestStarvedSec: number;
+}
+
 /** A single PASS/FAIL result. */
 export interface ValidatorResult {
   id: string;

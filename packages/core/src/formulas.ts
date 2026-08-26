@@ -26,7 +26,8 @@ import {
   skillCostBase,
   skillCostRate,
   SKILL_IDS,
-  skillMultPerLevel,
+  SKILL_MAX_BONUS,
+  SKILL_RANK_DECAY,
   zonesPerRealm,
 } from './constants';
 import { momentumMultiplier } from './momentum';
@@ -111,14 +112,20 @@ export function heroBaseDamage(level: number, realm: number): number {
   return d0 * Math.pow(rD, level) * realmScale(realm);
 }
 
+/** One skill's DPS factor at `rank`: rises toward 1 + SKILL_MAX_BONUS, never past. */
+export function skillRankMult(rank: number): number {
+  if (!(rank > 0)) return 1;
+  return 1 + SKILL_MAX_BONUS * (1 - Math.pow(SKILL_RANK_DECAY, rank));
+}
+
 /**
- * skillMult = Π over realm-local skills of (1 + 0.05 * rank), walked in
+ * skillMult = Π over realm-local skills of `skillRankMult(rank)`, walked in
  * SKILL_IDS order so the float product cannot depend on a save's key order.
  */
 export function skillMult(skills: Record<string, number>): number {
   let m = 1;
   for (const id of SKILL_IDS) {
-    m *= 1 + skillMultPerLevel * (skills[id] ?? 0);
+    m *= skillRankMult(skills[id] ?? 0);
   }
   return m;
 }

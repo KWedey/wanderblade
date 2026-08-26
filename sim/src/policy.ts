@@ -61,6 +61,12 @@ export interface RunHooks {
   onSlice?: (state: GameState) => void;
   /** Purchases made by an in-session bot touch, so the driver can total them. */
   onPurchases?: (bought: { gold: number; tree: number }) => void;
+  /**
+   * Fired when the player would be looking at the upgrade panel — always
+   * before a purchase loop runs, because the greedy bot drains the gold that
+   * decides what is affordable.
+   */
+  onShop?: (state: GameState) => void;
 }
 
 // `f?.(advance(...))` never calls advance when f is undefined — optional
@@ -75,6 +81,7 @@ export function runIdle(state: GameState, seconds: number, hooks: RunHooks = {})
     const dt = Math.min(IDLE_SLICE_SEC, left);
     const events = advance(state, dt);
     hooks.onEvents?.(events);
+    hooks.onShop?.(state);
     hooks.onSlice?.(state);
     left -= dt;
   }
@@ -130,6 +137,7 @@ export function runActive(
   while (left > 1e-9) {
     const dt = Math.min(TOUCH_INTERVAL_SEC, left);
     strikeThrough(state, dt, rate, hooks.onEvents);
+    hooks.onShop?.(state);
     hooks.onPurchases?.(botTouch(state));
     hooks.onSlice?.(state);
     left -= dt;

@@ -35,8 +35,14 @@ export const rC = 1.15;
 export const skillCostBase = 50;
 export const skillCostRate = 1.15;
 
-/** Each realm-local skill rank contributes (1 + this * rank) to the DPS product. */
-export const skillMultPerLevel = 0.05;
+/**
+ * A skill's DPS factor approaches `1 + SKILL_MAX_BONUS` as its rank rises,
+ * closing the remaining gap by `1 - SKILL_RANK_DECAY` each rank. Ranks are
+ * uncapped: the asymptote is what keeps `skillMult` bounded, so the panel never
+ * has to show MAX and the player always has a priced row to buy.
+ */
+export const SKILL_MAX_BONUS = 0.176;
+export const SKILL_RANK_DECAY = 0.85;
 
 // --- Gear (the primary realm-local power scaler) -------------------------
 /** Drop power: gearPowerBase * REALM_STEP^realm * gearPowerRate^z * rarityMult. */
@@ -194,14 +200,26 @@ export interface SkillDef {
   name: string;
   /** Hero level at which the skill becomes purchasable. */
   unlockLevel: number;
-  /** Hard rank cap, so skillMult stays bounded and cannot run the DPS away. */
-  maxLevel: number;
 }
 
+/**
+ * Five tracks, two of them live from level 0, the rest arriving inside the
+ * first few minutes. Breadth is the point: the panel must answer "what do I
+ * spend on next" without a greyed lock being the answer.
+ */
 export const SKILLS: Record<string, SkillDef> = {
-  cleave: { id: 'cleave', name: 'Cleave', unlockLevel: 5, maxLevel: 10 },
-  warcry: { id: 'warcry', name: 'Warcry', unlockLevel: 15, maxLevel: 10 },
+  cleave: { id: 'cleave', name: 'Cleave', unlockLevel: 0 },
+  warcry: { id: 'warcry', name: 'Warcry', unlockLevel: 0 },
+  riposte: { id: 'riposte', name: 'Riposte', unlockLevel: 2 },
+  sunder: { id: 'sunder', name: 'Sunder', unlockLevel: 6 },
+  secondWind: { id: 'secondWind', name: 'Second Wind', unlockLevel: 14 },
 };
 
 /** Ordered skill ids (stable order → deterministic skillMult product). */
-export const SKILL_IDS: readonly string[] = ['cleave', 'warcry'];
+export const SKILL_IDS: readonly string[] = [
+  'cleave',
+  'warcry',
+  'riposte',
+  'sunder',
+  'secondWind',
+];

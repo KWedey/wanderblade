@@ -360,7 +360,6 @@ export class Game {
       const def = SKILLS[id]!;
       const level = s.hero.skills[id] ?? 0;
       const unlocked = s.hero.level >= def.unlockLevel;
-      const atMax = level >= def.maxLevel;
       const cost = skillCost(level, s.realm);
       return {
         id,
@@ -368,9 +367,8 @@ export class Game {
         level,
         cost,
         unlocked,
-        atMax,
         unlockLevel: def.unlockLevel,
-        canAfford: !inBoss && unlocked && !atMax && s.gold >= cost,
+        canAfford: !inBoss && unlocked && s.gold >= cost,
       };
     });
 
@@ -396,7 +394,7 @@ export class Game {
     let purchaseName = `Hero Lv ${s.hero.level + 1}`;
     let purchaseCost = heroLevelCost;
     for (const skill of skills) {
-      if (!skill.unlocked || skill.atMax || skill.cost >= purchaseCost) continue;
+      if (!skill.unlocked || skill.cost >= purchaseCost) continue;
       purchaseCost = skill.cost;
       purchaseName = `${skill.name} ${skill.level + 1}`;
     }

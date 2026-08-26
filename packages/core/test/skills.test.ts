@@ -11,7 +11,8 @@ import {
   skillCost,
   SKILL_IDS,
   skillMult,
-  skillMultPerLevel,
+  skillRankMult,
+  SKILL_MAX_BONUS,
   SKILLS,
 } from '../src/index';
 import { portalReady } from './helpers';
@@ -52,9 +53,15 @@ describe('buyHeroLevel', () => {
 });
 
 describe('buySkill unlock gates', () => {
-  it('defines the v1 skills at the spec unlock levels', () => {
-    expect(SKILLS.cleave?.unlockLevel).toBe(5);
-    expect(SKILLS.warcry?.unlockLevel).toBe(15);
+  it('opens at least two skills at hero level 0, so minute one has real choice', () => {
+    const atZero = SKILL_IDS.filter((id) => SKILLS[id]?.unlockLevel === 0);
+    expect(atZero.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('opens every skill inside the first stretch of a realm', () => {
+    for (const id of SKILL_IDS) {
+      expect(SKILLS[id]!.unlockLevel).toBeLessThanOrEqual(20);
+    }
   });
 
   it('rejects an unknown skill id', () => {
@@ -63,32 +70,25 @@ describe('buySkill unlock gates', () => {
     expect(buySkill(s, 'nope')).toBe(false);
   });
 
-  it('cannot buy cleave before hero level 5', () => {
-    const s = initialState(1);
-    s.gold = 1e9;
-    s.hero.level = 4;
-    expect(buySkill(s, 'cleave')).toBe(false);
-    expect(s.hero.skills.cleave).toBe(0);
-
-    s.hero.level = 5;
-    expect(buySkill(s, 'cleave')).toBe(true);
-    expect(s.hero.skills.cleave).toBe(1);
-  });
-
-  it('cannot buy warcry before hero level 15', () => {
-    const s = initialState(1);
-    s.gold = 1e9;
-    s.hero.level = 14;
-    expect(buySkill(s, 'warcry')).toBe(false);
-
-    s.hero.level = 15;
-    expect(buySkill(s, 'warcry')).toBe(true);
-    expect(s.hero.skills.warcry).toBe(1);
+  it('gates every skill exactly at its unlock level', () => {
+    for (const id of SKILL_IDS) {
+      const def = SKILLS[id]!;
+      const s = initialState(1);
+      s.gold = 1e9;
+      if (def.unlockLevel > 0) {
+        s.hero.level = def.unlockLevel - 1;
+        expect(buySkill(s, id)).toBe(false);
+        expect(s.hero.skills[id]).toBe(0);
+      }
+      s.hero.level = def.unlockLevel;
+      expect(buySkill(s, id)).toBe(true);
+      expect(s.hero.skills[id]).toBe(1);
+    }
   });
 
   it('charges the skill cost curve and is a no-op when unaffordable', () => {
     const s = initialState(1);
-    s.hero.level = 5;
+    s.hero.level = 20;
     s.gold = skillCost(0, 0); // exactly 50
     expect(buySkill(s, 'cleave')).toBe(true);
     expect(s.gold).toBeCloseTo(0, 6);
@@ -96,46 +96,54 @@ describe('buySkill unlock gates', () => {
     expect(s.hero.skills.cleave).toBe(1);
   });
 
-  it('each rank multiplies DPS by (1 + skillMultPerLevel * rank)', () => {
+  it('each rank multiplies DPS by skillRankMult(rank)', () => {
     const s = initialState(1);
     s.hero.level = 5;
     s.gold = 1e9;
     const base = heroDps(s);
     buySkill(s, 'cleave');
-    expect(heroDps(s)).toBeCloseTo(base * (1 + skillMultPerLevel), 8);
+    expect(heroDps(s)).toBeCloseTo(base * skillRankMult(1), 8);
     buySkill(s, 'cleave');
-    expect(heroDps(s)).toBeCloseTo(base * (1 + skillMultPerLevel * 2), 8);
+    expect(heroDps(s)).toBeCloseTo(base * skillRankMult(2), 8);
   });
 });
 
-describe('buySkill hard cap (bounded multiplier)', () => {
-  it('refuses to buy past maxLevel and spends no gold at the cap', () => {
+describe('skill ranks are uncapped, and the asymptote is what bounds them', () => {
+  it('never refuses a rank for being too high, only for gold', () => {
     const s = initialState(1);
-    s.hero.level = 15;
-    s.gold = 1e12;
-    const cap = SKILLS.cleave!.maxLevel;
-    for (let i = 0; i < cap; i++) expect(buySkill(s, 'cleave')).toBe(true);
-    expect(s.hero.skills.cleave).toBe(cap);
+    s.hero.level = 20;
+    s.gold = 1e18;
+    for (let i = 0; i < 200; i++) expect(buySkill(s, 'cleave')).toBe(true);
+    expect(s.hero.skills.cleave).toBe(200);
 
-    const goldAtCap = s.gold;
+    s.gold = 0;
+    const rankAtBroke = s.hero.skills.cleave;
     expect(buySkill(s, 'cleave')).toBe(false);
-    expect(s.hero.skills.cleave).toBe(cap);
-    expect(s.gold).toBe(goldAtCap);
+    expect(s.hero.skills.cleave).toBe(rankAtBroke);
   });
 
-  it('bounds skillMult at a fixed, finite ceiling', () => {
+  it('holds skillMult under the ceiling however much gold is poured in', () => {
     const s = initialState(1);
-    s.hero.level = 15;
+    s.hero.level = 20;
+    s.gold = 1e18;
+    for (const id of SKILL_IDS) for (let i = 0; i < 300; i++) buySkill(s, id);
+    const ceiling = Math.pow(1 + SKILL_MAX_BONUS, SKILL_IDS.length);
+    expect(skillMult(s.hero.skills)).toBeLessThan(ceiling);
+  });
+
+  it('charges the rising price for every rank, so gold strictly falls', () => {
+    const s = initialState(1);
+    s.hero.level = 20;
     s.gold = 1e12;
-    const capC = SKILLS.cleave!.maxLevel;
-    const capW = SKILLS.warcry!.maxLevel;
-    for (let i = 0; i < capC; i++) buySkill(s, 'cleave');
-    for (let i = 0; i < capW; i++) buySkill(s, 'warcry');
-    expect(skillMult(s.hero.skills)).toBeCloseTo(
-      (1 + skillMultPerLevel * capC) * (1 + skillMultPerLevel * capW),
-      10,
-    );
-    expect(1 + skillMultPerLevel * capC).toBeCloseTo(1.5, 10);
+    let prev = s.gold;
+    let prevSpend = 0;
+    for (let i = 0; i < 30; i++) {
+      expect(buySkill(s, 'warcry')).toBe(true);
+      const spend = prev - s.gold;
+      expect(spend).toBeGreaterThan(prevSpend);
+      prevSpend = spend;
+      prev = s.gold;
+    }
   });
 });
 

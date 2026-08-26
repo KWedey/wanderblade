@@ -112,7 +112,6 @@ export function buySkill(state: GameState, id: string): boolean {
   if (!def) return false;
   if (state.hero.level < def.unlockLevel) return false;
   const current = state.hero.skills[id] ?? 0;
-  if (current >= def.maxLevel) return false;
   const cost = skillCost(current, state.realm);
   if (!(state.gold >= cost)) return false;
   state.gold -= cost;
