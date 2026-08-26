@@ -9,6 +9,7 @@ import {
   ARC_SPLIT_MIN,
   ARC_SPLIT_MAX,
   arcSplitCount,
+  COIN_SHARE_SPREAD,
   speciesFor,
   arcsForKill,
   deserialize,
@@ -342,5 +343,93 @@ describe('perfect aim beats no aim', () => {
     const restored = deserialize(serialize(s));
     expect(serialize(restored)).toBe(serialize(s));
     expect(restored.arcs).toEqual(s.arcs);
+  });
+});
+
+/**
+ * Three significant figures — what `formatNumber` prints. Replicated rather
+ * than imported: core may not reach into `app`, and the point is the precision
+ * a player reads, not the module that produces it.
+ */
+const shown = (v: number): string => v.toPrecision(3);
+
+describe("a kill's coins are not all worth the same", () => {
+  /**
+   * The bug a blind judge filed against the log: `Snatched it mid-air +19.0M`
+   * twice, two rows apart, identical text. Not a display fault — with an even
+   * split a zone's whole payout vocabulary is `SPECIES.length` x the three
+   * split counts, so a player sees the same 15 numbers cycle forever.
+   */
+  it('gives every coin of a kill a different printed value', () => {
+    let collisions = 0;
+    for (let k = 0; k < 20_000; k++) {
+      const arcs = arcsForKill(k, 1e6, 0);
+      if (new Set(arcs.map((a) => shown(a.gold))).size !== arcs.length) collisions += 1;
+    }
+    expect(collisions).toBe(0);
+  });
+
+  it('keeps the closest pair far enough apart to survive rounding', () => {
+    // Measured 1.0224 over 200k kills. Three significant figures need ~1.005,
+    // so the margin is real rather than a value that happens to round apart.
+    let worst = Infinity;
+    for (let k = 0; k < 20_000; k++) {
+      const v = arcsForKill(k, 1e6, 0)
+        .map((a) => a.gold)
+        .sort((a, b) => a - b);
+      for (let i = 1; i < v.length; i++) worst = Math.min(worst, v[i]! / v[i - 1]!);
+    }
+    expect(worst).toBeGreaterThan(1.02);
+  });
+
+  /**
+   * The band-safety argument, exactly rather than statistically. The weights
+   * are normalised by their own sum, so a kill pays precisely what it paid
+   * before — this is stronger than #40's "unchanged in expectation".
+   */
+  it('pays out exactly the kill total, and averages an even split', () => {
+    for (const k of [0, 1, 7, 999, 100_000, 7_654_321]) {
+      for (const gold of [1, 37.5, 1e9, 1.234e15]) {
+        const arcs = arcsForKill(k, gold, 0);
+        expect(arcs.reduce((t, a) => t + a.gold, 0)).toBe(gold);
+        const mean = arcs.reduce((t, a) => t + a.gold, 0) / arcs.length;
+        expect(mean).toBe(gold / arcs.length);
+      }
+    }
+  });
+
+  it('spreads shares by the width the constant names', () => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let k = 0; k < 20_000; k++) {
+      const arcs = arcsForKill(k, 1e6, 0);
+      const even = 1e6 / arcs.length;
+      for (const a of arcs) {
+        lo = Math.min(lo, a.gold / even);
+        hi = Math.max(hi, a.gold / even);
+      }
+    }
+    // Normalising by the kill's own weight sum can push a share slightly
+    // *outside* the raw 1 +/- spread rather than inside it: a fat coin beside
+    // two lean ones divides by a sum below n. Measured 0.5544 .. 1.4528 over
+    // 500k kills, so the envelope is pinned a little wider than the constant.
+    expect(lo).toBeGreaterThan(0.5);
+    expect(hi).toBeLessThan(1.5);
+    expect(hi - lo).toBeGreaterThan(2 * COIN_SHARE_SPREAD * 0.9);
+  });
+
+  it('costs no RNG draw, so a save reconstructs the same coins', () => {
+    for (const k of [0, 13, 4242]) {
+      const a = arcsForKill(k, 1e6, 0).map((x) => x.gold);
+      const b = arcsForKill(k, 1e6, 0).map((x) => x.gold);
+      expect(a).toEqual(b);
+    }
+    // And it is split-invariant through the engine, not just as a function.
+    const whole = initialState(9);
+    advance(whole, 4000);
+    const split = initialState(9);
+    advance(split, 1500);
+    advance(split, 2500);
+    expect(serialize(split)).toBe(serialize(whole));
   });
 });

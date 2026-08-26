@@ -162,6 +162,17 @@ export const ARC_SPLIT_MAX = 4;
 /** Seconds between one kill's coins leaving the hero. */
 export const ARC_STAGGER_SEC = 0.12;
 
+/**
+ * How far one coin's share may sit from an even split, as a fraction: shares
+ * run 0.55x to 1.45x of `gold / n` before normalisation. Wide enough that two
+ * coins from one kill differ at the three significant figures the HUD prints —
+ * an even split gave a zone only `SPECIES.length x split counts` = 15 distinct
+ * payouts, and a player watching the same number recur every few rows concludes
+ * the log is fake. The weights are normalised, so the kill's total is exactly
+ * what it was.
+ */
+export const COIN_SHARE_SPREAD = 0.45;
+
 /** Arc space reach: the nearest and furthest an arc lands from the hero. */
 export const ARC_MIN_REACH = 0.5;
 export const ARC_MAX_REACH = 1.5;

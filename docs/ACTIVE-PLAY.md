@@ -34,11 +34,20 @@ rarity tier when caught.
 - `ARC_FLIGHT_SEC` default 1.5 — how long a coin stays catchable
 - `ARC_SPLIT_MIN` / `ARC_SPLIT_MAX` **2 / 4** coins per kill, `ARC_STAGGER_SEC` **0.12**
 - `ARC_CATCH_MULT` **1.6**
+- `COIN_SHARE_SPREAD` **0.45** — how unevenly one kill's gold divides between its coins
 
-Split count, stagger and landing point all come from the kill index, so they are
+Split count, stagger, landing point and share all come from the kill index, so they are
 deterministic and the renderer never chooses them. Coin values sum to the kill's payout
 **exactly** — the last coin carries the residual, so the split can neither mint nor lose
 a fraction (`arcsForKill` in `packages/core/src/arcs.ts`).
+
+**The coins of one kill are worth different amounts.** An even split gave a zone only
+`SPECIES.length × 3` split counts = **15 distinct payouts**, cycled forever, and the log
+visibly repeated itself — `Snatched it mid-air — +19.0M gold` twice, two rows apart. The
+shares are weighted by an irrational-indexed sequence and normalised by their own sum, so
+the kill total is unchanged *exactly* rather than in expectation (`docs/DECISIONS.md`
+#44). Reach and worth use different irrationals, so neither predicts the other and mean
+catch value is unmoved.
 
 The multiplier is what the band allows, not a preference, and it moved when the payout was
 split. The binding constraint is the **strike rate, not the number of coins in the air**:
