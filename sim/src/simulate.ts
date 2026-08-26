@@ -3,9 +3,9 @@
 
 import {
   advance,
+  affordableCount,
   attackSpeedMultiplier,
   bossEtaSec,
-  bossHp,
   deserialize,
   earningsMultiplier,
   enterPortal,
@@ -14,6 +14,7 @@ import {
   initialState,
   killTime,
   momentumAt,
+  pricedCount,
   serialize,
   swingInterval,
   type GameEvent,
@@ -21,7 +22,14 @@ import {
 } from '@wanderblade/core';
 import { botTouch } from './bot';
 import { CAP_RATE, runActive, runIdle, SEC_PER_DAY, strikeTimes, type RunHooks } from './policy';
-import type { BreachKind, PolicyName, RealmRecord, Sample, SimConfig } from './types';
+import type {
+  BreachKind,
+  PolicyName,
+  RealmRecord,
+  Sample,
+  ShopSample,
+  SimConfig,
+} from './types';
 
 /** How often a Road clone is kept as a probe fixture. */
 const ROAD_STATE_INTERVAL_SEC = 3600;
@@ -37,9 +45,7 @@ const PREPARE_PATIENCE_SEC = 3 * SEC_PER_DAY;
 
 /** The duration the portal preview would show, at sustained full momentum. */
 export function previewEtaSec(state: GameState): number {
-  const dps = heroDps(state) * attackSpeedMultiplier(state, 1);
-  if (!(dps > 0)) return Infinity;
-  return bossHp(state.realm) / dps;
+  return bossEtaSec(state, 1);
 }
 
 /** Portal-entry timing. `prompt` commits at the first chance after it opens. */
@@ -70,6 +76,12 @@ export interface RunResult {
   snapshots: Map<number, GameState>;
   /** Periodic Road clones, the fixtures the windowed probes replay from. */
   roadStates: GameState[];
+  /**
+   * Every look at the upgrade panel, taken before any purchase loop ran. The
+   * whole run, uncapped: a truncated tail would let the late realms P8 is
+   * really about go unmeasured while the report still printed a large `n`.
+   */
+  shopSamples: ShopSample[];
 }
 
 export function clone(s: GameState): GameState {
@@ -237,6 +249,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
 
   const snapshots = new Map<number, GameState>();
   const roadStates: GameState[] = [];
+  const shopSamples: ShopSample[] = [];
   let totalActiveSec = 0;
   let stop = false;
   let overfarmUntilSec: number | null = null;
@@ -269,6 +282,16 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
           if (opts.maxVictories !== undefined && e.victories >= opts.maxVictories) stop = true;
         }
       }
+    },
+    onShop: (s) => {
+      if (s.phase !== 'road') return;
+      shopSamples.push({
+        timeSec: s.timeSec,
+        sinceRealmStartSec: s.timeSec - current().startSec,
+        realm: s.realm,
+        affordable: affordableCount(s),
+        priced: pricedCount(s),
+      });
     },
     onPurchases: (bought) => {
       current().treePurchasesTotal += bought.tree;
@@ -362,6 +385,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     totalActiveSec,
     snapshots,
     roadStates,
+    shopSamples,
   };
 }
 

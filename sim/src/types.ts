@@ -84,9 +84,12 @@ export interface SpendDepth {
   /** Samples taken past the post-ascension grace window. */
   counted: number;
   minAffordable: number;
+  /** Rows carrying a real price at the leanest look — gold cannot move this. */
   minPriced: number;
   /** Realm holding `minAffordable`. */
   worstRealm: number;
+  /** Share of looks offering the target number of affordable rows or more. */
+  richFraction: number;
   /** Share of counted samples with fewer than two things to buy. */
   starvedFraction: number;
   /** Longest unbroken stretch, in seconds, with fewer than two things to buy. */
@@ -138,6 +141,8 @@ export interface SeedResult {
     roadGoldGained: number;
     etaImprovement: number;
   } | null;
+  /** How much the upgrade panel offered across the run. */
+  spendDepth: SpendDepth;
   totalKills: number;
   finalRealm: number;
   victories: number;

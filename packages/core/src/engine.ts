@@ -4,7 +4,6 @@
 
 import {
   ARC_CATCH_MULT,
-  ARC_FLIGHT_SEC,
   ASC_NODE_IDS,
   ASC_NODES,
   dropChance,
@@ -31,7 +30,7 @@ import {
   skillCost,
   swingInterval,
 } from './formulas';
-import { arcHitIndex, arcLandingX } from './arcs';
+import { arcHitIndex, arcsForKill } from './arcs';
 import { addMomentum, momentumAt } from './momentum';
 import { createRng, type Rng } from './rng';
 import type {
@@ -125,7 +124,6 @@ export function buyAscendancyNode(state: GameState, id: string): boolean {
   const def = ASC_NODES[id];
   if (!def) return false;
   const rank = state.ascendancy.nodes[id] ?? 0;
-  if (rank >= def.maxRank) return false;
   const cost = ascNodeCost(id, rank);
   if (!Number.isFinite(cost) || !(state.ascendancy.banked >= cost)) return false;
   state.ascendancy.banked -= cost;
@@ -236,14 +234,21 @@ function tryEquip(
   return true;
 }
 
-/** Drop arcs that have already landed. Uncaught arcs cost the player nothing. */
+/**
+ * Drop arcs that have already landed. Uncaught arcs cost the player nothing.
+ * Staggering means one kill's later coins can outlive the next kill's first,
+ * so the list is not sorted by expiry and a leading-prefix splice would leak.
+ */
 function pruneArcs(state: GameState, clock: number): void {
   if (state.arcs.length === 0) return;
-  let keep = 0;
-  while (keep < state.arcs.length && (state.arcs[keep] as LootArc).expiresAtSec <= clock) {
-    keep += 1;
+  let write = 0;
+  for (let read = 0; read < state.arcs.length; read++) {
+    const arc = state.arcs[read] as LootArc;
+    if (arc.expiresAtSec <= clock) continue;
+    state.arcs[write] = arc;
+    write += 1;
   }
-  if (keep > 0) state.arcs.splice(0, keep);
+  state.arcs.length = write;
 }
 
 /** Process exactly one Road kill: gold, drop roll, arc, leagues, zone. */
@@ -286,12 +291,7 @@ function processKill(
     arcGear = { slot, rarity, realm, zone: z };
   }
 
-  state.arcs.push({
-    gold,
-    expiresAtSec: clock + ARC_FLIGHT_SEC,
-    landingX: arcLandingX(state.killIndex),
-    gear: arcGear,
-  });
+  state.arcs.push(...arcsForKill(state.killIndex, gold, clock, arcGear));
 
   state.leagues += leaguePerKill;
   recap.leaguesTraveled += leaguePerKill;

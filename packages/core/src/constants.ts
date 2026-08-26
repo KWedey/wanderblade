@@ -111,11 +111,29 @@ export const MOMENTUM_MAX_BONUS = 0.75;
 /** Seconds a kill's loot arc stays catchable. */
 export const ARC_FLIGHT_SEC = 1.5;
 /**
- * A caught arc pays this multiple of its base gold. The kill already credited
- * 1.0x at full value, so a catch pays only the increment and idle loses nothing.
- * Tuned with MOMENTUM_MAX_BONUS so capped Road play lands at 1.75 * 1.15 ~= 2.0x.
+ * A caught coin pays this multiple of *its own* value — a share of the kill,
+ * not the whole kill. The kill already credited 1.0x in full, so a catch pays
+ * only the increment and idle loses nothing.
+ *
+ * It is 1.6 rather than the 1.15 a one-arc-per-kill payout wanted because the
+ * binding constraint is the strike rate, not the number of coins in the air:
+ * the reference player strikes 3.3x/s against 4.2 kills/s, so splitting a
+ * payout across n coins divides each catch by n without buying any more
+ * catches. Measured at 1.91-1.95x Road-active, mid-band.
  */
-export const ARC_CATCH_MULT = 1.15;
+export const ARC_CATCH_MULT = 1.6;
+/**
+ * Coins per kill. A kill's payout is thrown as several arcs rather than one,
+ * so the air carries a stream of loot instead of a single blip, and a catch is
+ * partial — `ARC_CATCH_MULT` applies to each coin, not to the whole kill.
+ * The count is derived from the kill index, so it is deterministic and the
+ * renderer never chooses it.
+ */
+export const ARC_SPLIT_MIN = 2;
+export const ARC_SPLIT_MAX = 4;
+/** Seconds between one kill's coins leaving the hero. */
+export const ARC_STAGGER_SEC = 0.12;
+
 /** Arc space reach: the nearest and furthest an arc lands from the hero. */
 export const ARC_MIN_REACH = 0.5;
 export const ARC_MAX_REACH = 1.5;
@@ -149,45 +167,68 @@ export const ASC_REALM_GROWTH = 0.5;
 /** Automatic per-victory bonus to gold and passive earnings. Never touches DPS. */
 export const EARNINGS_BONUS_PER_VICTORY = 0.15;
 
+/**
+ * How steeply a node's price rises per rank: cost(r) = costBase * (1 + this * r).
+ *
+ * Linear, not geometric, and that choice is the whole late-game curve. Pending
+ * Ascendancy per realm grows linearly (`ASC_REALM_GROWTH`), so lifetime banked
+ * grows with realm squared; a linear price makes the rank a player can reach
+ * grow *linearly* with the realm, and a multiplicative per-rank effect then
+ * makes tree power grow exponentially — the same shape as `bossHp`. A
+ * geometric price can only ever buy logarithmic rank growth, which saturates.
+ */
+export const ASC_COST_STEP = 0.5;
+
+/**
+ * Persistent attack speed is the one tree effect that must stay bounded. The
+ * engine steps once per kill and once per guardian swing, and speed divides
+ * *through* the idle floor (see `killTime`), so unbounded speed means unbounded
+ * event steps per simulated second — a long offline gap would never finish
+ * reconciling. Damage and gear power carry the unbounded growth instead, where
+ * the kill-time floor absorbs them.
+ */
+export const ASC_SPEED_MAX_BONUS = 0.6;
+export const ASC_SPEED_DECAY = 0.9;
+
 export interface AscNodeDef {
   id: string;
   name: string;
-  maxRank: number;
-  /** Rank r costs costBase * costRate^r banked Ascendancy. */
+  /** Rank r costs costBase * (1 + ASC_COST_STEP * r) banked Ascendancy. */
   costBase: number;
-  costRate: number;
   effect: 'damage' | 'gearPower' | 'attackSpeed';
+  /**
+   * Each rank multiplies its effect by (1 + this). Compounding, not additive —
+   * except on `attackSpeed`, whose curve is ASC_SPEED_MAX_BONUS/DECAY instead.
+   */
   perRank: number;
 }
 
-/** The persistent combat tree — the only source of persistent combat power. */
+/**
+ * The persistent combat tree — the only source of persistent combat power, and
+ * uncapped, so banked Ascendancy always has somewhere to go.
+ */
 export const ASC_NODES: Record<string, AscNodeDef> = {
   edge: {
     id: 'edge',
     name: "Wanderer's Edge",
-    maxRank: 12,
     costBase: 18,
-    costRate: 1.6,
     effect: 'damage',
-    perRank: 0.12,
+    perRank: 0.037,
   },
   heft: {
     id: 'heft',
     name: 'Ironhand',
-    maxRank: 12,
     costBase: 22,
-    costRate: 1.6,
     effect: 'gearPower',
-    perRank: 0.12,
+    perRank: 0.037,
   },
   fury: {
     id: 'fury',
     name: 'Relentless',
-    maxRank: 8,
     costBase: 34,
-    costRate: 1.75,
     effect: 'attackSpeed',
-    perRank: 0.05,
+    // Unused: the bounded speed curve above sets this node's value.
+    perRank: 0.037,
   },
 };
 

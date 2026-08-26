@@ -164,3 +164,55 @@ Content from D&D books, settings, adventures, brands, or art that is not in the 
 **Why:** The first implementation popped the oldest arc off the front of the queue with no spatial test at all. A tap at empty sky caught a coin, and a tap on the third coin caught the first — which removes position from the mechanic and makes Loot Arcs an auto-collect with extra steps. The layer earns its place only if *where and when* you strike decides what you get. Keeping the trajectory in core is what lets that stay deterministic: render timing never enters the rules, and identical timestamped aimed inputs still produce byte-identical results under any split.
 
 **Also settled here:** `ARC_CATCH_MULT` is 1.15, not the 2.0 `docs/ACTIVE-PLAY.md` carried before anything was simulated. Momentum's ×1.75 and arc catching compound; 1.15 puts the Road-active ceiling at ≈2.0×, mid-band, measured at 1.95× with zero spread across five seeds. 2.0 would reach ~3.5× and break the 1.8–2.2× band it was written to satisfy.
+
+## 26. Spend depth is a shipped requirement, not polish — 2026-08-25
+
+**Decision:** The upgrade panel must carry **at least five priced rows at every moment of Road play, from the first minute**, and at least four of them affordable at 95% of looks. `purchaseOptions(state)` in `packages/core/src/shop.ts` is the single definition of a shop row, consumed by the client's panel, the simulator's purchase policy, and validator **P8**. Realm-local skills go from two capped tracks to **five uncapped ones** — two live at hero level 0, the rest at 2, 6 and 14 — bounded by an asymptotic value curve (`skillRankMult` rises toward `1 + SKILL_MAX_BONUS`) rather than a rank cap.
+
+**Why:** A blind critic ranked the early-game frame second of six and named the reason: the reference bar shows five things to buy with prices right now, and Wanderblade showed one buyable upgrade and two greyed locks. Measured before changing anything, gold bought exactly one thing — Hero Level — for essentially the whole game: `pricedCount` sat at 4 for every realm sampled, because both skills reached rank 10 within about five minutes and read `MAX` forever after. `docs/ECONOMY.md`'s pacing contract asks for "the number and value of decisions within a 15–30 minute active session", and one decision is not a number.
+
+A rank cap and a bounded value curve answer the same question twice, and the cap was the half putting `MAX` on screen. Removing it is what keeps a row buyable forever while `skillMult` stays finite. Five tracks at `SKILL_MAX_BONUS` 0.176 reach the same 2.25× ceiling the two capped tracks had, which is why the pacing bands did not move: P1 stayed at 1.85–1.91.
+
+**Measured** (`npm run sim -- --seeds 3 --days 90`, 124,657 looks): 6 priced rows at the leanest look, ≥4 affordable at 99.8% of looks, under two affordable for 0.14% of looks, longest such stretch 2.5 min.
+
+**On the starvation clauses.** Their ceilings — 1% of looks, 5 minutes — were set from that first measurement, not chosen in advance, and the distribution is why: every long stretch sits at the same point in a realm, the deliberate spend-down just before committing to a guardian. Emptying your own wallet on purpose is not an empty shop. The bar passes that and still fails loudly on a real stall, which in the capped-tree game ran to hours. The first draft of this clause measured first-to-last starved *sample*, which reported 0.0s for a stretch seen once and hid the real 2.5 min entirely; it now brackets a stretch by the window it sits inside, so the figure errs long rather than short.
+
+The sampler is uncapped. It previously stopped at 20,000 samples, which fell around realm 11–14 of 85 and reported 19,985 looks with a 0.0s worst drought — four fifths of the run, including every late realm Decision #27 is about, went unmeasured while the report still printed a large `n`. The 60.0s drought the full run exposes is one idle sample interval and sits exactly on P8's ceiling.
+
+## 27. The Ascendancy tree is uncapped, and its price curve is linear — 2026-08-25
+
+**Decision:** `ascNodeCost(id, rank) = costBase * (1 + ASC_COST_STEP * rank)` — **linear in rank, with no cap** — and a node's damage or gear-power effect **compounds** per rank rather than adding. Persistent attack speed is the single exception: it rises toward `1 + ASC_SPEED_MAX_BONUS` and stops. `BOSS_REALM_GAIN` stays 1.22.
+
+**Why:** At 90 days P6 failed from **realm 45** (95.8 min against a 90-minute ceiling, running away to 179 min by realm 51, identical on every seed). The cause was the tree being a bounded sink: 32 total ranks, fully bought by realm 39, leaving **18,829 banked Ascendancy unspendable**. Past that point hero persistent power grew only ×1.12/realm from the earnings bonus against a guardian growing ×1.22/realm — a ~9%/realm deficit compounding forever. The entry gate hid it by making the player farm a portal-ready realm, where Decision #22 credits no Ascendancy at all; that stall grew 15h → 27 → 39 → 52 → 63 → 76h until the three-day patience cap ran out and P6 broke.
+
+No value of `BOSS_REALM_GAIN` fixes it. Hero persistent-power growth is fast while the tree is being bought and flat once it caps, and a constant cannot track a curve whose slope changes; lowering it re-creates Decision #23's collapse in the early realms, which already sit at the band floor.
+
+The cost curve is the shape that matters. Ascendancy income per realm grows linearly (`ASC_REALM_GROWTH`), so lifetime banked grows with realm **squared**. A geometric price can only buy **logarithmic** rank growth — it saturates by construction. A linear price makes reachable rank grow **linearly** with the realm, and a compounding per-rank effect then makes tree power grow **exponentially**, the same shape as `bossHp`. One `BOSS_REALM_GAIN` now holds every realm instead of a window of them.
+
+**Why speed is the exception:** momentum and tree speed divide *through* the idle kill-time floor, so an unbounded speed multiplier means unbounded event steps per simulated second — a long offline gap would never finish reconciling. Measured: with speed uncapped a 90-day single-seed run took over 15 minutes and a realm-199 guardian test hung outright; bounded, the same run takes 91 seconds. Damage and gear power carry the unbounded growth, where the kill-time floor absorbs them.
+
+**Measured:** `npm run sim -- --seeds 3 --days 90` → ALL PASS, 18 validators × 3 seeds. P6 85/85 realms in band with no trend. The portal-ready-to-entry wait is bounded and plateauing at ~29h (mean 16.2h across 85 realms) instead of diverging, and banked Ascendancy ends at 21 rather than 18,829.
+
+**Supersedes:** the capped three-node tree in Decision #16's implementation. The pending/banked split, the gold-only earnings bonus, and Guardrail 8 are unchanged — persistent combat power still comes only from explicit Ascendancy purchases.
+
+## 28. P7 measures Ascendancy earned, not the balance left over — 2026-08-25
+
+**Decision:** P7 compares `banked + pending + ascSpent(nodes)` between the prompt and overfarm policies. `ascSpent` sums every rank price actually paid, and is tested against what the engine deducted.
+
+**Why:** P7 compared the leftover banked balance, which was a fair proxy only while the tree was capped and the balance was pure unspent residue. Against an uncapped sink it measures *who spent less*, and it inverted for that reason alone — prompt 2196 against overfarm 2312, with the band and the game both unchanged. On the corrected instrument the same run reads prompt 110,635 against overfarm 103,165. The band did not move; the instrument was wrong.
+
+## 29. The engine's overflow frontier is realm 297, and it is pinned — 2026-08-25
+
+**Decision:** `packages/core/test/magnitude.test.ts` asserts that every client-facing scalar is finite at realm 199, and pins the two frontiers where finiteness ends: `bossHp` overflows first at **realm 297**, and the hero level ladder tops out at **2102 at realm 199** and **659 at realm 296** because level and realm multiply in both `heroBaseDamage` and `levelCost`.
+
+**Why:** A late-game capture showed gold rendering as `1.0637e+278` and a portal panel reading `Infinityd NaNh`, and the question was whether the client-side formatter fixes were papering over real overflow in core. They were not — core is finite and exact at those magnitudes. But there is a real cliff past it: at realm 297 a guardian's HP is `Infinity` and no build can ever fell it, which is a soft-lock rather than a rendering problem. `docs/ECONOMY.md` requires detecting non-finite values before they reach client state, so the frontier is now a test that fails if a constant change drags it toward realms a player can reach.
+
+## 30. A kill's payout is thrown as several coins, and the split lives in core — 2026-08-25
+
+**Decision:** Every Road kill throws `ARC_SPLIT_MIN`–`ARC_SPLIT_MAX` (2–4) coins rather than one arc, staggered `ARC_STAGGER_SEC` (0.12 s) apart, each with its own reach. `arcsForKill(killIndex, gold, launchSec, gear)` in `packages/core/src/arcs.ts` produces them; count, stagger and landing point are all derived from the kill index, so they consume no RNG draw and the renderer never chooses them. Coin values sum to the kill's payout **exactly** — the last coin carries the residual rather than a rounded share. `ARC_CATCH_MULT` applies **per coin**, so catching some of a kill is a partial catch. Gear rides the first coin; a drop cannot be halved.
+
+**Why:** The reference bar's screen carries a continuous stream of loot while Wanderblade paid once per kill, so its air was full of weather where the bar's is full of earning. Splitting the payout is what puts earning in the air without changing what a kill is worth.
+
+**`ARC_CATCH_MULT` moves 1.15 → 1.6, and the reason is not the number of coins.** The binding constraint is the **strike rate**, not arc availability: the reference player strikes 3.3×/s against 4.2 kills/s, and measurement confirms **0.999 catches per strike** — every aimed strike already connects. Splitting a payout across n coins therefore divides each catch by n and buys no additional catches. At 1.15 the split measured **1.75–1.76×** Road-active, below the 1.8 floor; at 1.6 it measures **1.91–1.95×, mean 1.93**, mid-band. This supersedes the 1.15 that Decision #25 settled for an un-split arc; that value was correct for the payout shape it was measured against.
+
+**Also fixed here:** `pruneArcs` took a leading prefix of the arc list, which assumed arcs expire in the order they were created. Staggering breaks that — one kill's later coins outlive the next kill's first — so it now filters. The old form would have leaked landed arcs into the save rather than mis-crediting, but it would have leaked.

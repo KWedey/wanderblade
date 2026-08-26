@@ -223,17 +223,23 @@ describe('the Ascendancy tree', () => {
     expect(heroDps(s)).toBeGreaterThan(dpsBefore);
   });
 
-  it('refuses unknown nodes, unaffordable ranks, and ranks past the cap', () => {
+  it('refuses unknown nodes and unaffordable ranks, but never a rank for depth', () => {
     const s = portalReady(11, 3600);
     expect(buyAscendancyNode(s, 'nope')).toBe(false);
     s.ascendancy.banked = 0;
     expect(buyAscendancyNode(s, 'edge')).toBe(false);
 
+    // Uncapped: banked Ascendancy always has somewhere to go, so the only
+    // refusal left is not being able to pay for it.
     s.ascendancy.banked = 1e9;
-    for (let i = 0; i < 12; i++) expect(buyAscendancyNode(s, 'edge')).toBe(true);
+    for (let i = 0; i < 500; i++) expect(buyAscendancyNode(s, 'edge')).toBe(true);
+    expect(s.ascendancy.nodes.edge).toBe(500);
+
+    s.ascendancy.banked = 0;
     const banked = s.ascendancy.banked;
     expect(buyAscendancyNode(s, 'edge')).toBe(false);
     expect(s.ascendancy.banked).toBe(banked);
+    expect(s.ascendancy.nodes.edge).toBe(500);
   });
 
   it('carries its combat power into the next realm', () => {

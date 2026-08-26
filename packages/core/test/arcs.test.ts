@@ -5,6 +5,12 @@ import {
   ARC_CATCH_MULT,
   ARC_CATCH_RADIUS,
   ARC_FLIGHT_SEC,
+  ARC_STAGGER_SEC,
+  ARC_SPLIT_MIN,
+  ARC_SPLIT_MAX,
+  arcSplitCount,
+  arcsForKill,
+  deserialize,
   enterPortal,
   initialState,
   serialize,
@@ -35,26 +41,72 @@ describe('loot arcs', () => {
     advance(s, ROAD_KILL0_SEC + 1e-6); // one kill at the walking pace
     expect(s.lifetime.kills).toBe(1);
     expect(s.gold).toBeCloseTo(1, 10); // enemyGold(0, 0) = 1
-    expect(s.arcs).toHaveLength(1);
+    expect(s.arcs).toHaveLength(arcSplitCount(s.killIndex));
 
-    advance(s, ARC_FLIGHT_SEC + 2); // the arc lands uncaught
+    advance(s, ARC_FLIGHT_SEC + 2); // every coin lands uncaught
     expect(s.gold).toBeGreaterThan(1);
   });
 
-  it('pays the catch increment on top of the base gold already credited', () => {
+  it('splits a kill into coins whose values sum to the payout exactly', () => {
+    const s = initialState(31);
+    advance(s, ROAD_KILL0_SEC + 1e-6);
+    const paid = s.gold;
+    expect(s.arcs.length).toBe(arcSplitCount(s.killIndex));
+    expect(s.arcs.length).toBeGreaterThan(1);
+    // Exactly, not closely: the last coin carries the residual, so the split
+    // can neither mint nor lose a fraction of a payout.
+    const summed = s.arcs.reduce((t, a) => t + a.gold, 0);
+    expect(summed).toBe(paid);
+  });
+
+  it('staggers the coins of a kill so they leave one after another', () => {
+    const s = initialState(31);
+    advance(s, ROAD_KILL0_SEC + 1e-6);
+    for (let i = 1; i < s.arcs.length; i++) {
+      const prev = s.arcs[i - 1] as LootArc;
+      const here = s.arcs[i] as LootArc;
+      expect(here.expiresAtSec - prev.expiresAtSec).toBeCloseTo(ARC_STAGGER_SEC, 10);
+      expect(here.landingX).not.toBe(prev.landingX);
+    }
+  });
+
+  it('pays the catch increment on one coin, leaving the rest of the kill in the air', () => {
     const s = initialState(31);
     advance(s, ROAD_KILL0_SEC + 1e-6);
     const afterKill = s.gold;
-    expect(s.arcs).toHaveLength(1);
+    const coins = s.arcs.length;
+    expect(coins).toBeGreaterThan(1);
+    const target = s.arcs[0] as LootArc;
 
     const at = 1.5 * ROAD_KILL0_SEC;
     const events = advance(s, ROAD_KILL0_SEC / 2, [
-      { atSec: at, aim: aimAt(s.arcs[0] as LootArc, at) },
+      { atSec: at, aim: aimAt(target, at) },
     ]);
     const catches = events.filter((e) => e.type === 'arcCatch');
     expect(catches).toHaveLength(1);
-    expect(s.gold).toBeCloseTo(afterKill * ARC_CATCH_MULT, 10);
-    expect(catches[0]).toMatchObject({ bonusGold: afterKill * (ARC_CATCH_MULT - 1) });
+    // The increment is that coin's share, not the whole kill's — which is what
+    // makes a partial catch possible.
+    expect(catches[0]).toMatchObject({ bonusGold: target.gold * (ARC_CATCH_MULT - 1) });
+    expect(s.gold).toBeCloseTo(afterKill + target.gold * (ARC_CATCH_MULT - 1), 10);
+  });
+
+  it('pays the full kill increment only when every coin is caught', () => {
+    const s = roadAt(31, 20, 10);
+    advance(s, 10.001);
+    const afterKill = s.gold;
+    const coins = [...s.arcs];
+    expect(coins.length).toBeGreaterThan(1);
+
+    let events: ReturnType<typeof advance> = [];
+    for (const coin of coins) {
+      const at = coin.expiresAtSec - ARC_FLIGHT_SEC / 2;
+      events = events.concat(advance(s, Math.max(1e-9, at - s.timeSec + 1e-9), [
+        { atSec: at, aim: aimAt(coin, at) },
+      ]));
+    }
+    expect(events.filter((e) => e.type === 'arcCatch')).toHaveLength(coins.length);
+    const kill = coins.reduce((t, a) => t + a.gold, 0);
+    expect(s.gold).toBeCloseTo(afterKill + kill * (ARC_CATCH_MULT - 1), 6);
   });
 
   it('cannot catch an arc that has already landed', () => {
@@ -239,5 +291,49 @@ describe('perfect aim beats no aim', () => {
     playActive(aimed, 600, 4);
 
     expect(aimed.gold).toBeGreaterThan(blind.gold);
+  });
+
+  it('derives the split from the kill index alone, with no RNG draw', () => {
+    // Same kill index, same shape, whatever the payout or the clock — the
+    // renderer cannot influence it and the kill-keyed stream is untouched.
+    for (const k of [0, 1, 2, 7, 41, 1_000_003]) {
+      const a = arcsForKill(k, 100, 0);
+      const b = arcsForKill(k, 100, 0);
+      expect(JSON.stringify(b)).toBe(JSON.stringify(a));
+
+      const scaled = arcsForKill(k, 7, 12.5);
+      expect(scaled).toHaveLength(a.length);
+      expect(scaled.map((x) => x.landingX)).toEqual(a.map((x) => x.landingX));
+    }
+  });
+
+  it('sums coin values to the payout exactly across many kills and magnitudes', () => {
+    for (const gold of [1, 3, 7, 0.1, 1e-9, 12_345.678, 1e18, 1e200]) {
+      for (let k = 0; k < 200; k++) {
+        const coins = arcsForKill(k, gold, 0);
+        const summed = coins.reduce((t, c) => t + c.gold, 0);
+        expect(summed).toBe(gold);
+        for (const c of coins) expect(Number.isFinite(c.gold)).toBe(true);
+      }
+    }
+  });
+
+  it('keeps every coin count inside its bounds and every reach distinct', () => {
+    for (let k = 0; k < 5_000; k++) {
+      const n = arcSplitCount(k);
+      expect(n).toBeGreaterThanOrEqual(ARC_SPLIT_MIN);
+      expect(n).toBeLessThanOrEqual(ARC_SPLIT_MAX);
+      const reaches = arcsForKill(k, 10, 0).map((c) => c.landingX);
+      expect(new Set(reaches).size).toBe(n);
+    }
+  });
+
+  it('a split kill survives a save round-trip unchanged', () => {
+    const s = initialState(31);
+    advance(s, 4.001);
+    expect(s.arcs.length).toBeGreaterThan(1);
+    const restored = deserialize(serialize(s));
+    expect(serialize(restored)).toBe(serialize(s));
+    expect(restored.arcs).toEqual(s.arcs);
   });
 });

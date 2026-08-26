@@ -29,7 +29,7 @@ export interface PurchaseOption {
   unlockLevel: number;
   unlocked: boolean;
   atMax: boolean;
-  /** Unlocked, not capped, and the currency is on hand. */
+  /** Exactly what the engine will accept right now — the buy call returns true. */
   affordable: boolean;
 }
 
@@ -40,6 +40,9 @@ export interface PurchaseOption {
 export function purchaseOptions(state: GameState): PurchaseOption[] {
   const out: PurchaseOption[] = [];
   const level = state.hero.level;
+  // Every purchase is refused for the duration of a guardian attempt, so a row
+  // the wallet could cover is still not one the engine will take.
+  const locked = state.phase === 'boss';
 
   const heroCost = levelCost(level, state.realm);
   out.push({
@@ -53,7 +56,7 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
     unlockLevel: 0,
     unlocked: true,
     atMax: false,
-    affordable: state.gold >= heroCost,
+    affordable: !locked && state.gold >= heroCost,
   });
 
   for (const id of SKILL_IDS) {
@@ -73,7 +76,7 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
       unlockLevel: def.unlockLevel,
       unlocked,
       atMax: false,
-      affordable: unlocked && state.gold >= cost,
+      affordable: !locked && unlocked && state.gold >= cost,
     });
   }
 
@@ -81,7 +84,6 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
     const def = ASC_NODES[id];
     if (!def) continue;
     const rank = state.ascendancy.nodes[id] ?? 0;
-    const atMax = rank >= def.maxRank;
     const cost = ascNodeCost(id, rank);
     out.push({
       kind: 'node',
@@ -89,12 +91,12 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
       name: def.name,
       currency: 'ascendancy',
       rank,
-      maxRank: def.maxRank,
+      maxRank: null,
       cost,
       unlockLevel: 0,
       unlocked: true,
-      atMax,
-      affordable: !atMax && state.ascendancy.banked >= cost,
+      atMax: false,
+      affordable: !locked && state.ascendancy.banked >= cost,
     });
   }
 

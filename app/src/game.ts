@@ -15,7 +15,6 @@ import {
   initialState,
   killsPerZone,
   killTime,
-  levelCost,
   momentumAt,
   momentumMultiplier,
   purchaseOptions,
@@ -499,22 +498,24 @@ export class Game {
           }
         : null;
 
-    // Every track core knows about, capped or not, so the panel is full rather
-    // than one buyable row over two greyed locks.
-    const skills: SkillVM[] = purchaseOptions(s)
-      .filter((o) => o.kind === 'skill')
-      .map((o) => ({
-        id: o.id,
-        name: o.name,
-        level: o.rank,
-        cost: o.cost,
-        unlocked: o.unlocked,
-        atMax: o.atMax,
-        unlockLevel: o.unlockLevel,
-        canAfford: o.affordable,
+    // The panel prices and gates nothing itself: core's shop rows are the same
+    // rows the simulator counts and the engine will actually accept.
+    const rows = purchaseOptions(s);
+    const skills: SkillVM[] = rows
+      .filter((r) => r.kind === 'skill')
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        level: r.rank,
+        cost: r.cost,
+        unlocked: r.unlocked,
+        atMax: r.atMax,
+        unlockLevel: r.unlockLevel,
+        canAfford: r.affordable,
       }));
 
-    const heroLevelCost = levelCost(s.hero.level, s.realm);
+    const heroRow = rows.find((r) => r.kind === 'hero')!;
+    const heroLevelCost = heroRow.cost;
     // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
     // reflect a purchase immediately instead of lagging one kill behind.
     const goldPerSec = this.goldPerKill / killTime(s, momentum);
@@ -563,7 +564,7 @@ export class Game {
       bossResult: this.currentBossResult(),
       refusal: this.currentRefusal(),
       levelCost: heroLevelCost,
-      canAffordLevel: s.gold >= heroLevelCost,
+      canAffordLevel: heroRow.affordable,
       goldPerSec,
       gold: s.gold,
       marchGoal,
