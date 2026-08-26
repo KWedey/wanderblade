@@ -7,7 +7,10 @@
 import {
   advance,
   arcPositionAt,
+  ARC_CATCH_SEC,
   ARC_FLIGHT_SEC,
+  ARC_MAX_REACH,
+  ARC_MIN_REACH,
   createRng,
   initialState,
   type ArcPoint,
@@ -18,6 +21,15 @@ import {
 } from '@wanderblade/core';
 
 import { botTouch } from './bot';
+
+/**
+ * The catch radius varies with a coin's speed (docs/DECISIONS.md #35), so there
+ * is no single constant to express scatter against. This is the radius a
+ * mid-reach coin has at its apex — the tightest the window ever gets — which
+ * makes "radii of slop" a worst-case reading rather than an average one.
+ */
+export const REFERENCE_RADIUS =
+  (ARC_CATCH_SEC * ((ARC_MIN_REACH + ARC_MAX_REACH) / 2)) / ARC_FLIGHT_SEC;
 
 export interface Thumb {
   /** Milliseconds between seeing the coin and the strike being stamped. */
@@ -51,10 +63,8 @@ export interface ThumbResult {
   goldPerSec: number;
   /** Multiple of the same state left alone for the same span. */
   vsIdle: number;
-  /** Scatter expressed against the window it has to land in. */
-  /** Aim scatter in arc-space units. The catch radius is no longer a constant
-   * (DECISIONS.md #35), so this cannot be expressed as a multiple of one. */
-  scatterUnits: number;
+  /** Scatter as a multiple of `REFERENCE_RADIUS`, the tightest the window gets. */
+  scatterRadii: number;
 }
 
 /**
@@ -183,7 +193,7 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
     catchRate: aimed > 0 ? catches / aimed : 0,
     goldPerSec,
     vsIdle: idle > 0 ? goldPerSec / idle : 0,
-    scatterUnits: scatter,
+    scatterRadii: scatter / REFERENCE_RADIUS,
   };
 }
 
@@ -220,7 +230,7 @@ function averaged(thumb: Thumb, opts: SweepOptions, warms: GameState[]): ThumbRe
     catchRate: mean((r) => r.catchRate),
     goldPerSec: mean((r) => r.goldPerSec),
     vsIdle: mean((r) => r.vsIdle),
-    scatterUnits: runs[0]!.scatterUnits,
+    scatterRadii: runs[0]!.scatterRadii,
   };
 }
 

@@ -3,7 +3,13 @@
 // or tap cadence changes; the answer moves with all four.
 
 import { ARC_CATCH_SEC, ARC_FLIGHT_SEC } from '@wanderblade/core';
-import { DEFAULT_PX_PER_UNIT, sweep, type SweepAxes, type ThumbResult } from './thumb';
+import {
+  DEFAULT_PX_PER_UNIT,
+  REFERENCE_RADIUS,
+  sweep,
+  type SweepAxes,
+  type ThumbResult,
+} from './thumb';
 
 const DEFAULTS = {
   latencyMs: [80, 150, 220, 300, 400],
@@ -34,7 +40,9 @@ const HELP = `Wanderblade thumb harness — catch rate against human reaction an
   --help             this message
 
 Catch radius is ${ARC_CATCH_SEC}s of the coin's own travel, so it widens as the
-coin falls; arcs fly for ${ARC_FLIGHT_SEC}s. Scatter is in arc-space units.
+coin falls; arcs fly for ${ARC_FLIGHT_SEC}s. The "x radius" column measures
+scatter against ${REFERENCE_RADIUS.toFixed(3)} units — a mid-reach coin's radius at its apex,
+the tightest the window ever gets — so it reads as a worst case, not an average.
 A perfect oracle is --latency 0 --scatter 0, or any latency at --lead 1.`;
 
 function numList(raw: string | undefined, flag: string): number[] {
@@ -70,7 +78,7 @@ function table(rows: ThumbResult[]): string {
     r.thumb.lead.toFixed(2),
     `${r.thumb.latencyMs}ms`,
     `${r.thumb.scatterPx}px`,
-    r.scatterUnits.toFixed(2),
+    r.scatterRadii.toFixed(2),
     pct(r.catchRate),
     gold(r.goldPerSec),
     `${r.vsIdle.toFixed(2)}x`,
@@ -153,7 +161,7 @@ function main(argv: readonly string[]): void {
 
   const rows = sweep(axes, { seed, seconds, pxPerUnit, seeds });
   if (csv) {
-    console.log('tapsPerSec,pick,lead,latencyMs,scatterPx,scatterUnits,catchRate,goldPerSec,vsIdle');
+    console.log('tapsPerSec,pick,lead,latencyMs,scatterPx,scatterRadii,catchRate,goldPerSec,vsIdle');
     for (const r of rows) {
       console.log(
         [
@@ -162,7 +170,7 @@ function main(argv: readonly string[]): void {
           r.thumb.lead,
           r.thumb.latencyMs,
           r.thumb.scatterPx,
-          r.scatterUnits.toFixed(4),
+          r.scatterRadii.toFixed(4),
           r.catchRate.toFixed(4),
           r.goldPerSec.toFixed(0),
           r.vsIdle.toFixed(4),
