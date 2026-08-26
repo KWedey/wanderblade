@@ -54,6 +54,28 @@ npx vitest packages/core/test           # watch mode
 
 `npm run sim` always exits 0: the harness succeeding is not the same as the pacing targets passing. Read the printed PASS/FAIL summary.
 
+**The gate exits 1 under load without a single failing test.** `Errors N`
+alongside `Tests <all> passed` is `[vitest-worker]: Timeout calling
+"onTaskUpdate"` — the reporter's RPC starving, not an assertion. Several agents
+share this machine; load average 74 on 10 cores is normal here. Read the `Test
+Files` and `Tests` lines, and say which you are quoting. Do not change the
+reporter to quiet it: that hides a real signal from every other agent.
+
+**Never merge, rebase or checkout in a worktree while its gate is running
+there.** Vitest reads from disk as it goes, so a mid-run merge collects new
+tests against an already-loaded old core. It produced 19 failures once, all
+`(0, bestBuy) is not a function`, none of them real.
+
+**Write gate logs inside the worktree, never `/tmp`.** Agents share `/tmp` and
+the names collide; one agent spent real time debugging a 246-file run out of
+another's `gate6.log`.
+
+**`cd` does not survive between shell calls, and the main checkout sits on a
+dead branch.** A drifted call has silently pointed `git log --follow` at
+`feat/m0-m1a-prototype`, committed there, and "found" a file missing from
+integration that was never missing. Use absolute paths, and check
+`git rev-parse --abbrev-ref HEAD` before believing anything a repo tells you.
+
 ## Architecture
 
 Three workspaces around one pure rules package.
