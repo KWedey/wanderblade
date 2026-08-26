@@ -24,6 +24,7 @@ import {
   killTime,
   momentumAt,
   momentumMultiplier,
+  bestBuy,
   purchaseOptions,
   summarizeEvents,
   zonesPerRealm,
@@ -42,6 +43,7 @@ import { clearSave, readSave, writeSave } from './save';
 import type { SceneModel } from './scene/scene';
 import type {
   AscendancyVM,
+  BestBuyVM,
   BossVM,
   GearVM,
   PortalVM,
@@ -601,6 +603,13 @@ export class Game {
       purchaseGoal = `${purchaseName} in ~${formatDuration((purchaseCost - s.gold) / goldPerSec)}`;
     } else purchaseGoal = `${purchaseName} — ${formatNumber(purchaseCost - s.gold)} more gold`;
 
+    // Core ranks the rows; the panel only draws the winner. dpsGain is read back
+    // off the ratio core already priced, never recomputed here.
+    const top = bestBuy(s, 'gold');
+    const best: BestBuyVM | null = top
+      ? { id: top.id, name: top.name, cost: top.cost, dpsGain: top.valuePerCost * top.cost }
+      : null;
+
     return {
       regionName: regionName(s.realm),
       zoneInRegion: s.zone + 1,
@@ -620,6 +629,7 @@ export class Game {
       marchProgress,
       purchaseGoal,
       purchaseReady,
+      bestBuy: best,
       skills,
       ascendancy,
       gear: {

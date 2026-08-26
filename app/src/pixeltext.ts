@@ -236,6 +236,14 @@ function cascadeMinHeight(el: HTMLElement): number {
  * of this same text, so capping there caps the bitmap at the width that made it
  * fall back; the positioned ancestor is a fence someone drew on purpose.
  */
+/** The text as the browser renders it, so measurement and ink agree. */
+function applyCase(text: string, transform: string): string {
+  if (transform === 'uppercase') return text.toUpperCase();
+  if (transform === 'lowercase') return text.toLowerCase();
+  if (transform === 'capitalize') return text.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+  return text;
+}
+
 function roomFor(el: HTMLElement): number {
   let room = 0;
   for (let node = el.parentElement; node; node = node.parentElement) {
@@ -257,10 +265,6 @@ export function paintElement(
     fallBack(el, holder);
     return false;
   }
-  if (unsupported(trimmed).length > 0) {
-    fallBack(el, holder);
-    return false;
-  }
 
   if (!holder) {
     holder = document.createElement('span');
@@ -274,6 +278,13 @@ export function paintElement(
 
   const floor = cascadeMinHeight(el);
   const style = window.getComputedStyle(el);
+  // The browser measured the box from the transformed text; drawing the raw
+  // textContent puts glyphs of a different width in a box sized for others.
+  const cased = applyCase(trimmed, style.textTransform);
+  if (unsupported(cased).length > 0) {
+    fallBack(el, holder);
+    return false;
+  }
   const padLeft = parseFloat(style.paddingLeft) || 0;
   const padTop = parseFloat(style.paddingTop) || 0;
   // clientWidth is 0 for an inline box; its rect is the only honest measure.
@@ -288,7 +299,7 @@ export function paintElement(
   // need. Only nowrap: claiming for every leaf took the HUD grid's whole track.
   const padX = padLeft + (parseFloat(style.paddingRight) || 0);
   if (nowrap && !remeasured) {
-    const want = Math.min(textWidth(trimmed, preferred) + padX, roomFor(el));
+    const want = Math.min(textWidth(cased, preferred) + padX, roomFor(el));
     if (want > outer + 0.5) {
       // An inline box ignores min-width, so the claim silently did nothing and
       // the element fell back anyway. It is a text leaf whose content becomes a
@@ -298,7 +309,7 @@ export function paintElement(
       return paintElement(el, dpr, true);
     }
   }
-  const layout = layoutPixelText(trimmed, preferred, boxWidth, nowrap, MIN_UI_SCALE);
+  const layout = layoutPixelText(cased, preferred, boxWidth, nowrap, MIN_UI_SCALE);
   if (!layout) {
     fallBack(el, holder);
     return false;
@@ -319,7 +330,7 @@ export function paintElement(
     canvas.setAttribute('aria-hidden', 'true');
     el.appendChild(canvas);
   }
-  const key = `${trimmed}|${layout.scale}|${layout.lines.length}|${boxWidth}|${align}|${color}|${outline}|${dpr}`;
+  const key = `${cased}|${layout.scale}|${layout.lines.length}|${boxWidth}|${align}|${color}|${outline}|${dpr}`;
   if (canvas.dataset['key'] === key) return true;
   canvas.dataset['key'] = key;
   const pad = outline ? layout.scale : 0;

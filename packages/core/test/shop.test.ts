@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   advance,
   affordableCount,
+  ASC_NODES,
   ASC_NODE_IDS,
   ascNodeCost,
   buyHeroLevel,
   buySkill,
   buyAscendancyNode,
+  bestBuy,
   enterPortal,
+  heroDps,
   initialState,
   levelCost,
   pricedCount,
@@ -189,5 +192,74 @@ describe('purchaseOptions', () => {
     s.gold = cheapest;
     expect(affordableCount(s)).toBeGreaterThan(0);
     expect(affordableCount(s)).toBeLessThan(pricedCount(s));
+  });
+});
+
+describe('valuePerCost is the one ranking of what to buy', () => {
+  /** States across the whole curve — the ranking has to hold at every scale. */
+  function states(): GameState[] {
+    const out: GameState[] = [];
+    for (const seed of [1, 7, 23]) {
+      for (const seconds of [60, 3600, 86_400]) {
+        const s = initialState(seed);
+        advance(s, seconds);
+        out.push(s);
+      }
+    }
+    return out;
+  }
+
+  it('prices a rank by the DPS it actually adds', () => {
+    for (const s of states()) {
+      for (const row of purchaseOptions(s)) {
+        // Priced on every unlocked row; only an affordable one can be executed.
+        if (row.valuePerCost <= 0 || !row.affordable) continue;
+        const before = heroDps(s);
+        const after = clone(s);
+        expect(buyFrom(after, row)).toBe(true);
+        const gained = heroDps(after) - before;
+        // Attack-speed nodes buy DPS the damage formula does not see, so the
+        // check is directional for those and exact for the rest.
+        if (row.kind === 'node' && ASC_NODES[row.id]?.effect === 'attackSpeed') {
+          expect(row.valuePerCost).toBeGreaterThan(0);
+        } else {
+          expect(gained / row.cost).toBeCloseTo(row.valuePerCost, 6);
+        }
+      }
+    }
+  });
+
+  it('names a best buy that is affordable, and the cheaper one on a tie', () => {
+    for (const s of states()) {
+      for (const currency of ['gold', 'ascendancy'] as const) {
+        const best = bestBuy(s, currency);
+        if (!best) continue;
+        expect(best.affordable).toBe(true);
+        expect(best.currency).toBe(currency);
+        for (const row of purchaseOptions(s)) {
+          if (row.currency !== currency || !row.affordable || row.valuePerCost <= 0) continue;
+          expect(best.valuePerCost).toBeGreaterThanOrEqual(row.valuePerCost);
+          if (row.valuePerCost === best.valuePerCost) {
+            expect(best.cost).toBeLessThanOrEqual(row.cost);
+          }
+        }
+      }
+    }
+  });
+
+  it('offers nothing to spend when the wallet cannot cover a row', () => {
+    const s = initialState(3);
+    s.gold = 0;
+    s.ascendancy.banked = 0;
+    expect(bestBuy(s, 'gold')).toBeNull();
+    expect(bestBuy(s, 'ascendancy')).toBeNull();
+  });
+
+  // A guardian attempt refuses every purchase, so the panel must not point at
+  // a row the engine will reject.
+  it('names no buy during a guardian attempt', () => {
+    const s = portalReady(1, 0);
+    enterPortal(s);
+    expect(bestBuy(s, 'gold')).toBeNull();
   });
 });
