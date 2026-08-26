@@ -20,3 +20,17 @@ is far heavier than three scripts justify.
 
 Output lands in `.gauntlet/`, which is gitignored. The images are throwaway; the
 tools are not, which is why they live here.
+
+## Every capture names the checkout that rendered it
+
+`qa:capture` writes a `.json` beside each `.png` recording the port, the checkout it was
+run from, and the checkout the dev server is actually serving. Several dev servers run
+here at once on different worktrees, and reading QA off the wrong port has twice invented
+bugs that did not exist.
+
+It warns on two mismatches:
+
+- the serving checkout is a different commit from the one you ran from
+- the serving checkout is dirty, so the frame is not the commit it claims. Two worktrees
+  sharing one branch share its ref, so a stale checkout reports the newest commit while
+  serving the old files. HEAD alone cannot see this.

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Capture a judged frame from a live dev server.
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -73,4 +74,55 @@ for (let i = 0; i < taps; i++) {
 await page.waitForTimeout(60); // land mid-swing rather than on the settle
 writeFileSync(out, await page.screenshot());
 await browser.close();
+
+// A PNG cannot say which branch rendered it. Several dev servers run at once
+// here on different worktrees, and reading QA off the wrong port has twice
+// invented bugs that did not exist. The server's own checkout is the answer,
+// not this script's - they are routinely different.
+const sh = (cmd, args, cwd) => {
+  try {
+    return execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  } catch {
+    return null;
+  }
+};
+const serverCwd = (() => {
+  const pid = sh('lsof', ['-t', `-iTCP:${port}`, '-sTCP:LISTEN']);
+  if (!pid) return null;
+  const line = sh('lsof', ['-a', '-p', pid.split('\n')[0], '-d', 'cwd', '-Fn']);
+  return line ? (line.split('\n').find((l) => l.startsWith('n'))?.slice(1) ?? null) : null;
+})();
+// HEAD is not enough. Two worktrees sharing one branch share its ref, so a
+// stale checkout reports the newest commit while serving the old files.
+const served = serverCwd
+  ? {
+      cwd: serverCwd,
+      head: sh('git', ['rev-parse', '--short', 'HEAD'], serverCwd),
+      branch: sh('git', ['rev-parse', '--abbrev-ref', 'HEAD'], serverCwd),
+      dirty: (sh('git', ['status', '--porcelain'], serverCwd) || '').split('\n').filter(Boolean).length,
+    }
+  : null;
+const provenance = {
+  png: out,
+  url,
+  port,
+  capturedBy: { cwd: repo, head: sh('git', ['rev-parse', '--short', 'HEAD'], repo), branch: sh('git', ['rev-parse', '--abbrev-ref', 'HEAD'], repo) },
+  served,
+};
+writeFileSync(out.replace(/\.png$/, '.json'), JSON.stringify(provenance, null, 2));
 console.log(`wrote ${out}`);
+if (!served) {
+  console.log(`served by :${port} — could not resolve the server's checkout`);
+} else {
+  console.log(`served by ${served.branch}@${served.head}  (${served.cwd})`);
+  if (served.dirty > 0) {
+    console.log(
+      `WARNING: the serving checkout has ${served.dirty} uncommitted paths, so this frame is NOT ${served.head}.`,
+    );
+  }
+  if (served.head !== provenance.capturedBy.head) {
+    console.log(
+      `WARNING: this frame is ${served.branch}@${served.head}, not the ${provenance.capturedBy.branch}@${provenance.capturedBy.head} you ran from.`,
+    );
+  }
+}
