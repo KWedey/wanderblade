@@ -36,7 +36,7 @@ import { stageFromQuery } from './devstage';
 import { createFeel, type Cue } from './feel';
 import { killProgress, smoothStep, zoneSweep } from './anim';
 import { bossName, describeEvent, gearName, regionName, type LogEntry } from './flavor';
-import { clamp01, formatDuration } from './format';
+import { clamp01, formatDuration, formatNumber } from './format';
 import { clearSave, readSave, writeSave } from './save';
 import type { SceneModel } from './scene/scene';
 import type {
@@ -557,7 +557,9 @@ export class Game {
     const heroLevelCost = heroRow.cost;
     // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
     // reflect a purchase immediately instead of lagging one kill behind.
-    const goldPerSec = this.goldPerKill / killTime(s, momentum);
+    // Zero in the portal: the boss grants no income (DECISIONS.md #15), and a
+    // live rate over a frozen purse is the readout lying to the player.
+    const goldPerSec = s.phase === 'boss' ? 0 : this.goldPerKill / killTime(s, momentum);
 
     // Goal gradient (DECISIONS.md #12): how far along, and how long from here.
     // A raw remaining-kill count is the opposite of a gradient - 946 of them
@@ -587,9 +589,11 @@ export class Game {
       purchaseName = `${skill.name} ${skill.level + 1}`;
     }
     const purchaseReady = s.gold >= purchaseCost;
-    const purchaseGoal = purchaseReady
-      ? `${purchaseName} ready — tap it!`
-      : `${purchaseName} in ~${formatDuration((purchaseCost - s.gold) / goldPerSec)}`;
+    let purchaseGoal: string;
+    if (purchaseReady) purchaseGoal = `${purchaseName} ready — tap it!`;
+    else if (goldPerSec > 0) {
+      purchaseGoal = `${purchaseName} in ~${formatDuration((purchaseCost - s.gold) / goldPerSec)}`;
+    } else purchaseGoal = `${purchaseName} — ${formatNumber(purchaseCost - s.gold)} more gold`;
 
     return {
       regionName: regionName(s.realm),

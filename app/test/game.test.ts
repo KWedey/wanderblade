@@ -254,3 +254,40 @@ describe('the Ascendancy tree the client now reaches', () => {
     expect(vm().ascendancy.victories).toBe(3);
   });
 });
+
+// A boss fight grants no income (DECISIONS.md #15). The Road rate kept
+// printing anyway, so the HUD read "+629M/s" over a purse frozen for the whole
+// fight, and every upgrade row promised a wait that would never elapse.
+describe('the portal pays nothing, and says so', () => {
+  interface PhaseInternals {
+    tick: () => void;
+    state: GameState;
+  }
+
+  function vmInPhase(phase: 'road' | 'boss'): ViewModel {
+    nowMs = 1000;
+    let latest: ViewModel | null = null;
+    const view: View = { ...stubView, renderPanels: (next) => (latest = next) };
+    const inner = new Game(view) as unknown as PhaseInternals;
+    inner.state.phase = phase;
+    inner.state.boss = { hpRemaining: 500, hpMax: 1000, enteredAtSec: 0 };
+    nowMs += 1000;
+    inner.tick();
+    if (!latest) throw new Error('no view model rendered');
+    return latest;
+  }
+
+  it('reports no gold per second inside the portal', () => {
+    expect(vmInPhase('boss').goldPerSec).toBe(0);
+  });
+
+  it('still reports a rate on the road, so the zero means something', () => {
+    expect(vmInPhase('road').goldPerSec).toBeGreaterThan(0);
+  });
+
+  it('names what a purchase still costs instead of a wait that never ends', () => {
+    const goal = vmInPhase('boss').purchaseGoal;
+    expect(goal).not.toMatch(/in ~/);
+    expect(goal).toMatch(/more gold|ready/);
+  });
+});
