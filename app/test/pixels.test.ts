@@ -12,6 +12,7 @@ import {
   fontFaults,
   massProfile,
   type SpriteMap,
+  BOSS_SHAPE,
   MONSTER_SILHOUETTES,
   sculpt,
   spriteMapFaults,
@@ -295,6 +296,24 @@ describe('creatures read as dangerous', () => {
     for (const [i, map] of MONSTER_SILHOUETTES.entries()) {
       expect(map.rows.length, `shape ${i} is shorter than the hero`).toBeGreaterThanOrEqual(heroH);
     }
+  });
+
+  // The other half of the same complaint, and the half that had no guard: "Hero
+  // is a ~12px sprite; the wolf he is fighting is ~24px. He reads as a child
+  // next to it." A floor alone lets every mob drift upward and leave the hero
+  // behind, which is what happened. The hero is the scale the road is measured
+  // against, so road mobs are bounded on both sides; only the guardian towers.
+  it('never towers over the hero — the guardian alone is allowed to', () => {
+    const heroH = ALL_SPRITE_MAPS.HERO_WALK_A!.rows.length;
+    for (const [i, map] of MONSTER_SILHOUETTES.entries()) {
+      if (i === BOSS_SHAPE) continue;
+      expect(
+        map.rows.length / heroH,
+        `shape ${i} is ${(map.rows.length / heroH).toFixed(2)}x the hero`,
+      ).toBeLessThanOrEqual(1.2);
+    }
+    const boss = MONSTER_SILHOUETTES[BOSS_SHAPE]!;
+    expect(boss.rows.length / heroH, 'the guardian does not tower').toBeGreaterThan(1.4);
   });
 
   it('carries its mass up top rather than pooling at the feet', () => {

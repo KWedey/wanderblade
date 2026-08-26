@@ -1548,7 +1548,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const t = swingAnim / SWING_ANIM_SEC;
     const angle = swingAnim > 0 ? -1.25 + (1 - t) * 1.42 : -0.3;
     const handX = heroX + 5;
-    const handY = groundY + bob - 9;
+    // The grip rides just above the belt, so it follows the sprite instead of a
+    // constant: at a fixed -9 the hand stayed at the old 20px hero's hip and
+    // ended up at the taller one's thigh, with the blade swinging from his knee.
+    const handY = groundY + bob - Math.round(heroA.height * 0.42);
     drawSpriteRotated(ctx, sword, handX, handY, angle, 2, 2);
 
     if (swingAnim > 0) {
