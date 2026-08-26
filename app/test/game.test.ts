@@ -155,9 +155,9 @@ describe('the client carries no economy of its own', () => {
   }
 
   // `enemyGold` is the *base* payout; the engine credits it times the
-  // per-victory earnings bonus. Caching the base understated every payout the
-  // client showed - the count-up target, the per-second rate, and the "in ~X"
-  // wait on every upgrade row - by 50% at five realm victories.
+  // per-victory earnings bonus. Caching the base understates the count-up
+  // target, the per-second rate, and every row's "in ~X" wait by 50% at five
+  // victories.
   it('caches the payout the engine credits, bonus and all', () => {
     nowMs = 1000;
     const inner = new Game(stubView) as unknown as PayoutInternals;

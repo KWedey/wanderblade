@@ -118,13 +118,8 @@ export function formatPercent(ratio: number): string {
 }
 
 /**
- * Human duration for cooldowns and recap spans:
- * 45 → "45s", 130 → "2m 10s", 7400 → "2h 3m", 90000 → "1d 1h".
- */
-/**
- * Shown when the duration is not a number the game can represent. Deep realms
- * overflow boss HP past a double, so no estimate exists to print; a bare dash
- * read as an empty field.
+ * Shown when the duration is not a number the game can represent: deep realms
+ * overflow boss HP past a double, so no estimate exists to print.
  */
 export const NO_ESTIMATE = 'beyond reckoning';
 
@@ -135,6 +130,10 @@ export const NO_ESTIMATE = 'beyond reckoning';
  */
 export const NO_TIME = 'instant';
 
+/**
+ * Human duration for cooldowns and recap spans:
+ * 45 → "45s", 130 → "2m 10s", 7400 → "2h 3m", 90000 → "1d 1h".
+ */
 export function formatDuration(totalSec: number): string {
   if (!Number.isFinite(totalSec)) return NO_ESTIMATE;
   if (totalSec < 1) return NO_TIME;

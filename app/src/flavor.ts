@@ -41,10 +41,8 @@ function toRoman(n: number): string {
 
 /**
  * Named biome for a 0-based region index. The endless tail relaps the same
- * biomes with a lap numeral rather than becoming "Beyond the Edge N", because
- * the scene's skins cycle on this same list: a generic name over a specific
- * picture put the words in a fight with the art ("Beyond the Edge" over a
- * sunny meadow). Name and skin now always agree by construction.
+ * biomes with a lap numeral because the scene's skins cycle on this same list,
+ * so name and picture agree by construction.
  */
 export function regionName(region: number): string {
   const r = region < 0 ? 0 : region;

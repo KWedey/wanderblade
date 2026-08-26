@@ -523,9 +523,8 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     canAfford: boolean,
     vm: ViewModel,
   ): void {
-    // Affordability is core's answer, carried on the row. Re-deriving it from
-    // gold vs cost is how the staging harness came to price Ascendancy rows in
-    // gold; the view must not hold a second opinion about what is buyable.
+    // Core's answer, carried on the row: the view holds no second opinion
+    // about what is buyable.
     if (canAfford) {
       fill.style.width = '100%';
       detail.textContent = base;
@@ -704,8 +703,8 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     recapDrops.textContent = formatNumber(recap.drops);
     recapBosses.textContent = formatNumber(recap.victories);
     recapOverlay.hidden = false;
-    // Outside .screen, so it needs its own repaint or it keeps the webfont the
-    // rest of the product no longer uses.
+    // Outside .screen, so it needs its own repaint or it keeps a webfont the
+    // rest of the product does not use.
     repaintPixelText(recapOverlay);
   }
 

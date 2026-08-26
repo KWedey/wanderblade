@@ -112,9 +112,8 @@ describe('arcApexHeight', () => {
     expect(arcApexHeight(0, 160)).toBe(1);
   });
 
-  // The scale exists to put core's arc on the pixel grid, so it is measured
-  // against core's arc. Asserting it against a client-side ballistic copy only
-  // ever proved the copy agreed with itself.
+  // The scale exists to put core's arc on the pixel grid, so core's arc is what
+  // it is measured against.
   it('lands core\'s unit apex on exactly that many pixels', () => {
     const apex = arcApexHeight(ARC_FLIGHT_SEC);
     const peak = arcPositionAt(coreArc(), ARC_FLIGHT_SEC / 2);
@@ -133,10 +132,8 @@ describe('arcSpaceFromScene', () => {
     expect(arcSpaceFromScene(50, 60, 50, 100, 40).y).toBeCloseTo(1);
   });
 
-  // Core measures reach (0.5-1.5) and catch radius (0.12) in apex units, so a
-  // point is only comparable against them if x is normalized like y. The old
-  // assertion here kept x in raw scene pixels, which made the distance test in
-  // arcHitIndex mix units.
+  // Core measures reach (0.5-1.5) and catch radius (0.12) in apex units, so x
+  // must be normalized like y or arcHitIndex compares mixed units.
   it('is independent of pixel scale in both axes', () => {
     const a = arcSpaceFromScene(120, 60, 50, 100, 40);
     const b = arcSpaceFromScene(240, 120, 100, 200, 80);
@@ -268,10 +265,8 @@ describe('the momentum meter holds its peak', () => {
 });
 
 describe('the held-strike cadence comes from core, not a local copy', () => {
-  // app/src/active.ts declared MOMENTUM_SUSTAIN_RATE = 4 and
-  // MOMENTUM_MAX_BONUS = 1.2 against core's 3.29 and 0.75. A second economy
-  // living beside the real one is how a hold that should pin momentum at the
-  // cap instead settled below it.
+  // A client-side copy of the sustain rate settles a held strike below the cap
+  // core would pin it at, so the cadence has to be derived, never declared.
   it('fires exactly at the rate that sustains momentum', () => {
     expect(HOLD_STRIKE_INTERVAL_SEC).toBeCloseTo(1 / sustainStrikeRate(), 12);
   });

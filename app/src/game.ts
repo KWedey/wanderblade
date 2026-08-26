@@ -36,14 +36,10 @@ import type { SceneModel } from './scene/scene';
 import type { BossVM, GearVM, PortalVM, SkillVM, View, ViewModel } from './view';
 
 /**
- * Engine tick. A strike only reaches `state.momentum` when `advance` ingests
- * it, so the tick period is the age of the newest momentum the client can
- * know about: at 250ms a player pinned at the cap rendered x1.70 against a
- * true x1.75, because the last strike had not been applied yet. Rendering
- * already evaluates core's own momentumAt at display time (DECISIONS.md #12),
- * so this is the whole of the remaining lag. Split-invariance makes a shorter
- * period free of behaviour change - the same elapsed time in more pieces is
- * byte-identical by contract.
+ * Engine tick. A strike reaches `state.momentum` only when `advance` ingests
+ * it, so this period is the age of the newest momentum the client can know
+ * about — the whole of the render lag, since display already evaluates core's
+ * momentumAt (DECISIONS.md #12). Split-invariance makes a shorter period free.
  */
 const TICK_MS = 100;
 const SAVE_INTERVAL_MS = 5000;
@@ -465,8 +461,8 @@ export class Game {
     // fresh without recomputing engine math 60× a second.
     this.groundKillSchedule();
     this.dps = heroDps(this.state);
-    // The engine's own payout, not bare enemyGold: that drops the per-victory
-    // earnings bonus, so the counter chased a target 50% low after five realms.
+    // The engine's payout, not bare enemyGold — that omits the per-victory
+    // earnings bonus the engine credits.
     const g = goldPerKill(this.state);
     // Finite guard: it overflows to Infinity in the deep endless tail;
     // Infinity * 0 would poison displayGold with NaN.

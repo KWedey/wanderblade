@@ -196,11 +196,10 @@ export function nudgeFromPocket(
 }
 
 /**
- * Peak-hold for the momentum meter. Momentum decays continuously between
- * strikes, so a sample taken mid-gap reads below the cap even when the player
- * is pinned at it: at 25 taps/sec the gap is 40ms, which reads 0.9862 and used
- * to floor to 5 of 6 pips and truncate to x1.7. The meter told a player at the
- * ceiling they had not reached it. A VU meter solves this by holding the peak.
+ * Peak-hold for the momentum meter, as a VU meter does. Momentum decays between
+ * strikes, so a mid-gap sample reads under the cap even for a player pinned at
+ * it — at 25 taps/sec, 0.9862 — and the meter must not call that short of the
+ * ceiling.
  */
 export const PEAK_HOLD_SEC = 0.4;
 /** How fast the held peak falls once the hold expires, in units per second. */
