@@ -10,6 +10,7 @@ import {
   backdropSkin,
   groundBladeOf,
   lightnessOf,
+  glowRingRadii,
   momentumLift,
   realmSkin,
   skinValueSpread,
@@ -115,5 +116,26 @@ describe('momentumLift', () => {
     expect(momentumLift(0)).toBe(0);
     expect(momentumLift(1)).toBeCloseTo(0.22);
     expect(momentumLift(3)).toBeCloseTo(0.22);
+  });
+});
+
+describe('a glow carries intensity as ring count, not as dither', () => {
+  it('spends more rings as gain rises, and never more than three', () => {
+    expect(glowRingRadii(40, 0.1)).toHaveLength(1);
+    expect(glowRingRadii(40, 0.5)).toHaveLength(2);
+    expect(glowRingRadii(40, 1)).toHaveLength(3);
+    expect(glowRingRadii(40, 9)).toHaveLength(3);
+  });
+
+  it('draws the outermost ring first and steps inward', () => {
+    const radii = glowRingRadii(40, 1);
+    expect(radii[0]).toBe(40);
+    for (let i = 1; i < radii.length; i++) expect(radii[i]!).toBeLessThan(radii[i - 1]!);
+  });
+
+  it('draws nothing at no radius, no gain, or a ring under a pixel', () => {
+    expect(glowRingRadii(0, 1)).toEqual([]);
+    expect(glowRingRadii(40, 0)).toEqual([]);
+    expect(glowRingRadii(1, 1)).not.toContain(0);
   });
 });

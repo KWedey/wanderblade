@@ -734,3 +734,19 @@ export const OUTLINE_INK = INK.black;
 export function momentumLift(momentum: number, max = 0.22): number {
   return Math.max(0, Math.min(1, momentum)) * max;
 }
+
+/**
+ * Radii of a glow's concentric rings, outermost first. Intensity is carried by
+ * ring count because the world upscales — a dither's lit-pixel share becomes a
+ * scatter of 36px blocks at desktop size.
+ */
+export function glowRingRadii(r: number, gain: number): number[] {
+  if (r <= 0 || gain <= 0) return [];
+  const rings = Math.max(1, Math.min(3, Math.ceil(gain * 4)));
+  const out: number[] = [];
+  for (let k = 0; k < rings; k++) {
+    const rr = Math.round(r * (1 - (k * 0.42) / rings));
+    if (rr >= 1) out.push(rr);
+  }
+  return out;
+}

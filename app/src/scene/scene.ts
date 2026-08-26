@@ -42,6 +42,7 @@ import {
   groundBladeOf,
   lighten,
   mixHex,
+  glowRingRadii,
   momentumLift,
   monsterInk,
   realmSkin,
@@ -1453,11 +1454,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    */
   function glowDisc(cx: number, cy: number, r: number, color: string, gain = 1): void {
     if (r <= 0 || gain <= 0) return;
-    const rings = Math.max(1, Math.min(3, Math.ceil(gain * 4)));
     ctx.fillStyle = color;
-    for (let k = 0; k < rings; k++) {
-      const rr = Math.round(r * (1 - (k * 0.42) / rings));
-      if (rr < 1) continue;
+    for (const rr of glowRingRadii(r, gain)) {
       for (let dy = -rr; dy <= rr; dy++) {
         const y = cy + dy;
         if (y < 0 || y >= sceneBottomY) continue;
