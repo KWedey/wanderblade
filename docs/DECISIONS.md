@@ -436,3 +436,40 @@ The webfont measured every one of those boxes at **47–82%** of what the bitmap
 - **Generated content.** `::before`/`::after` never appears in `textContent`, so the bitmap layer cannot see it. The mark stays webfont and prints *over* the bitmap beside it. Banned outright, and `app/test/typegrid.test.ts` fails on any non-empty `content:` rule.
 
 **Cost:** claiming width can push a sibling. The claim is opt-in via `white-space: nowrap`, and `qa:mobile` reports `webfontFallbacks`, `hudOverPanel` and `overflowingX` on every viewport so an over-claim is visible in the same run that proves the fallback is gone.
+
+## 43. A wrong frame of reference is escaped by a different measurement, not more of the same — 2026-08-26
+
+**Decision:** when a measurement keeps confirming a conclusion the frame contradicts, stop measuring and change what is being measured. Paint the thing a colour nothing else in the frame uses, plant a decoy, or read the registered listeners rather than the propagated event.
+
+**Why:** "the hero has no ground shadow" survived four measured attempts. Every crop sampled to answer it contained a full-width dark stripe that read as terrain, so each sample confirmed "no shadow here" and raised confidence without touching the error. Painting `drawShadow` magenta for one capture ended it in a single frame: the magenta ran edge to edge. The hero had a shadow all along — every prop casts at the same one depth, and enough of them tile into a continuous band, so nothing in it reads as cast by anything.
+
+**The same failure is behind most of what has been expensive here:** a gate read out of another agent's `/tmp` log, a capture taken from the wrong port, a thumb sample moved to a horizon that does not exist, `qa:wiring`'s first draft dispatching a `pointermove` and checking it propagated — propagation does not depend on anyone listening, so it would have passed on the build that shipped broken.
+
+**How to apply:** more measurement of the same kind cannot escape a wrong frame of reference; a different kind can. This is the same rule as #38's "every probe ships a mechanism proving it still fires" — a probe that cannot fail and a measurement that cannot surprise you are one bug.
+
+## 44. A log line breaks where its meaning breaks — 2026-08-26
+
+**Decision:** `wrapPixelText` honours a no-break joint (U+00A0) as one wrappable unit, and `flavor.ts` binds each authored phrase — the creature's name, and the whole reward. A phrase too wide for the box alone has its own joints broken, and only its own.
+
+**Why:** the judge read
+
+```
+Felled a Thornback Lynx — +171M
+gold
+```
+
+A number without its unit is not a smaller reward, it is debris. Measured, the box cannot be the fix here the way #42's was:
+
+| | glyphs needed | box |
+|---|---|---|
+| `Felled a Thornback Lynx — +171M gold` (the judged frame) | 430px | 415px |
+| `Felled a Cracked Sentinel — +345B gold` (longest name, longest number) | 454px | 415px |
+| the same entry on a landscape phone | 454px | **222px** |
+
+Abbreviating buys the desktop and not the phone — stripping the article and the unit word gets to 370px, still 148px over at 222. So the line has to break, and it breaks before the em dash rather than inside the reward.
+
+**Breaking per phrase, not per line, is the part worth keeping.** An all-or-nothing retry unbound `+345B gold` because `Dragonfang Greatsword` did not fit the same box. Each phrase now yields on its own account, which is why `(power 345B)` survives a gear name that does not.
+
+**The probe fires.** Joining `bind()`'s parts with an ordinary space turns `never strands a reward's unit` red at 4 of 5 viewports — every one whose panel is narrow enough to wrap. It stays green on the iPad, where nothing wraps at all.
+
+**Cost:** a held joint reaches the accessibility tree as U+00A0. Screen readers speak it as a space, and it never reaches the glyph layer — `plainText` normalises it before `unsupported()` and before every blit — so `FONT` and `FONT_COVERAGE` are untouched.

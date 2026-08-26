@@ -49,11 +49,17 @@ export function measurePixelText(text: string, scale: number): PixelTextMetrics 
 }
 
 /**
- * Greedy word wrap. A word too wide to fit alone still gets its own line —
- * `layoutPixelText` is what decides that scale is unusable and steps down.
+ * Joins words the wrap breaks between only as a last resort. `+171M gold` is
+ * one reward; splitting it stranded `gold` alone on the next row.
  */
-export function wrapPixelText(text: string, scale: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/).filter((w) => w.length > 0);
+export const NO_BREAK = '\u00a0';
+
+/** The string as glyphs see it — a held joint is drawn as an ordinary space. */
+export function plainText(text: string): string {
+  return text.replace(/\u00a0/g, ' ');
+}
+
+function greedyWrap(words: string[], scale: number, maxWidth: number): string[] {
   if (words.length === 0) return [];
   const lines: string[] = [];
   let line = words[0]!;
@@ -69,6 +75,30 @@ export function wrapPixelText(text: string, scale: number, maxWidth: number): st
   }
   lines.push(line);
   return lines;
+}
+
+/**
+ * Wrappable units. A held phrase is one unit while it fits the box alone; past
+ * that its joints break, because honouring a bind is worth a stranded word but
+ * never the webfont fallback an over-wide line triggers. Broken per phrase, so
+ * one name too long for a narrow panel does not unbind the reward beside it.
+ */
+function units(text: string, scale: number, maxWidth: number): string[] {
+  const out: string[] = [];
+  for (const token of text.split(/[^\S\u00a0]+/)) {
+    if (token.length === 0) continue;
+    if (textWidth(token, scale) <= maxWidth) out.push(token);
+    else out.push(...token.split(NO_BREAK).filter((w) => w.length > 0));
+  }
+  return out;
+}
+
+/**
+ * Greedy word wrap. A word too wide to fit alone still gets its own line —
+ * `layoutPixelText` is what decides that scale is unusable and steps down.
+ */
+export function wrapPixelText(text: string, scale: number, maxWidth: number): string[] {
+  return greedyWrap(units(text, scale, maxWidth), scale, maxWidth).map(plainText);
 }
 
 export interface PixelLayout {
@@ -281,7 +311,7 @@ export function paintElement(
   // The browser measured the box from the transformed text; drawing the raw
   // textContent puts glyphs of a different width in a box sized for others.
   const cased = applyCase(trimmed, style.textTransform);
-  if (unsupported(cased).length > 0) {
+  if (unsupported(plainText(cased)).length > 0) {
     fallBack(el, holder);
     return false;
   }

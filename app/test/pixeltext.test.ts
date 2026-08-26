@@ -4,6 +4,7 @@ import { FONT_COVERAGE, GLYPH_H, textWidth } from '../src/scene/pixels';
 import {
   LINE_GAP,
   MIN_UI_SCALE,
+  NO_BREAK,
   alignOffset,
   layoutPixelText,
   lineHeight,
@@ -106,6 +107,26 @@ describe('wrapPixelText', () => {
 
   it('collapses runs of whitespace rather than emitting empty lines', () => {
     expect(wrapPixelText('  a   b  ', 1, 1000)).toEqual(['a b']);
+  });
+
+  it('holds a bound phrase together and breaks the line before it', () => {
+    const held = `Felled a Lynx \u2014${NO_BREAK}+171M${NO_BREAK}gold`;
+    // 25 glyph cells: room for everything but the last word of the reward.
+    const lines = wrapPixelText(held, 2, textWidth('x'.repeat(25), 2));
+    expect(lines).toEqual(['Felled a Lynx', '\u2014 +171M gold']);
+  });
+
+  it('draws a held joint as an ordinary space, never a hole', () => {
+    const [line] = wrapPixelText(`+171M${NO_BREAK}gold`, 2, 1000);
+    expect(line).toBe('+171M gold');
+    expect(unsupported(line!)).toEqual([]);
+  });
+
+  it('breaks the joints of a phrase too wide for the box, and only that phrase', () => {
+    const text = `${NO_BREAK}Dragonfang${NO_BREAK}Greatsword `.trim() + ` +9${NO_BREAK}gold`;
+    // Narrower than the name, wider than the reward: one unbinds, one holds.
+    const lines = wrapPixelText(text, 2, textWidth('x'.repeat(12), 2));
+    expect(lines).toEqual(['Dragonfang', 'Greatsword', '+9 gold']);
   });
 });
 

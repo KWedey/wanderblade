@@ -2,6 +2,7 @@ import { speciesIndex } from '@wanderblade/core';
 import { describe, expect, it } from 'vitest';
 
 import { BOSS_SHAPE, MONSTER_SHAPES } from '../src/scene/pixels';
+import { NO_BREAK, plainText } from '../src/pixeltext';
 import { REGION_NAME_COUNT, describeEvent } from '../src/flavor';
 import {
   GOLEM,
@@ -43,7 +44,12 @@ describe('the log and the scene name one creature', () => {
       for (const kill of [0, 1, 2, 3, 4, 5, 97]) {
         const picked = speciesAt(realm, kill);
         const line = describeEvent(killEvent(realm, kill));
-        expect(line?.text, `realm ${realm} kill ${kill}`).toContain(picked.name);
+        const where = `realm ${realm} kill ${kill}`;
+        // The name is held against the wrap (#44), so the stored string carries
+        // U+00A0 where the player reads a space. Both halves are the claim: the
+        // right creature, and its name whole rather than split down two rows.
+        expect(plainText(line?.text ?? ''), where).toContain(picked.name);
+        expect(line?.text, where).toContain(picked.name.replace(/ /g, NO_BREAK));
       }
     }
   });
