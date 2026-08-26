@@ -97,6 +97,15 @@ export interface SpendDepth {
 }
 
 /** What active play buys in permanent currency, against the same span idle. */
+/** One checkpoint of the active/idle multiple, or why it could not be taken. */
+export interface HorizonPoint {
+  sec: number;
+  /** null when the comparison cannot be taken here. */
+  ratio: number | null;
+  /** `content-end`: a run ran out of ladder. `run-length`: the run stopped first. */
+  blocked: 'content-end' | 'run-length' | null;
+}
+
 export interface PermanentUplift {
   /** The horizon the band is *stated* at — a fixed checkpoint, not the run length. */
   horizonSec: number;
@@ -114,6 +123,8 @@ export interface PermanentUplift {
   rankTarget: number;
   idleRankSec: number | null;
   activeRankSec: number | null;
+  /** The multiple at each checkpoint inside the run. Reported, never banded. */
+  sweep: HorizonPoint[];
   /** Realm where whichever run ended first ran out of content, if either did. */
   contentEndRealm: number | null;
   /** When that happened. The comparison cannot be carried past it. */

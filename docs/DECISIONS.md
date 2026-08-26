@@ -590,7 +590,23 @@ Across five seeds every run reaches realm 301: active stops at days 74.80 / 74.9
 
 **Why no constant moves.** Tuning here would fit the economy to a comparison taken fourteen days after one side ran out of content — the same error class #39 was written to prevent. The lever would also be aimed at the wrong layer: the ceiling is an artifact of float64 range, not a designed stopping point, and the big-number work that addresses it is parked for M4 by #34.
 
-**What changed instead — the exploration labels itself.** `RunResult` and `SeedResult` carry `frontierSec` beside `frontierRealm`; `PermanentUplift` carries `contentEndRealm` / `contentEndSec`. The seed report names the realm *and* the day and states the consequence, and P10's detail appends `[capped at content end — realm N at Td]`. The clause labels and never excuses: the band still fails a bad ratio at the checkpoint, asserted directly.
+**The sweep ships, so the table above is reproducible rather than quoted.** `npm run sim -- --days 90 --seeds 1` prints the active/idle multiple at every checkpoint inside the run, and blanks the ones it cannot take:
+
+```
+   horizon sweep: active/idle Ascendancy per checkpoint (reported, never banded)
+     3.00d 1.99x   7.00d 1.62x   14.00d 1.82x   21.00d 1.99x   30.00d 2.14x
+     45.00d 1.92x   60.00d 1.81x   75.00d 1.78x   90.00d —
+     — = not measurable: past content end — a run stopped at realm 301 at 76.31d,
+         so a later ratio would divide a frozen total by a growing one
+```
+
+The guard is the point of it. `earnedAt` carries the last trail value forward, so an unguarded checkpoint past a run's end reports a frozen numerator over a growing denominator — which is how `1.17x` was produced in the first place. Removing the guard makes the 3-day checkpoint of a run that stopped at 0.5 days report `0.137x`, and the probe test that asserts it reads no-data goes red.
+
+Reported and never banded, for the reason #47 gives: a curve that can go red becomes a thing to tune, and this one is evidence.
+
+The shipped seed-1 sweep differs in detail from the curve that prompted this ADR — 1.78x at day 75 against the 1.92x reported — because that curve came from a scratch generator whose seed and aggregation are no longer recoverable. The shape is the same and the conclusion does not depend on the difference, but that gap is the argument for landing the sweep: a table nobody can re-run is a claim.
+
+**What changed alongside it — the label.** `RunResult` and `SeedResult` carry `frontierSec` beside `frontierRealm`; `PermanentUplift` carries `contentEndRealm` / `contentEndSec`. The seed report names the realm *and* the day and states the consequence, and P10's detail appends `[capped at content end — realm N at Td]`. The clause labels and never excuses: the band still fails a bad ratio at the checkpoint, asserted directly.
 
 **The ceiling was already pinned, and that is what makes this safe.** `packages/core/test/magnitude.test.ts:136` asserts the first non-finite realm is exactly 301, and `:192` asserts realm 300 opens while 301, 302, 400 and 5000 refuse with `'unwinnable'` and leave the Road untouched. A growth constant that drags the frontier toward reachable realms fails there. This ADR adds the player-time reading those tests do not carry; it does not add a second copy of them.
 
