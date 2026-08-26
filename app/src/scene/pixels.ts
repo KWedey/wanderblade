@@ -693,7 +693,7 @@ export const NUMERAL_GLYPHS: Record<string, string[]> = {
   J: ['..#', '..#', '..#', '#.#', '.#.'],
   K: ['#.#', '#.#', '##.', '#.#', '#.#'],
   L: ['#..', '#..', '#..', '#..', '###'],
-  M: ['#.#', '###', '###', '#.#', '#.#'],
+  M: ['#.#', '###', '#.#', '#.#', '#.#'],
   N: ['##.', '#.#', '#.#', '#.#', '#.#'],
   O: ['###', '#.#', '#.#', '#.#', '###'],
   P: ['##.', '#.#', '##.', '#..', '#..'],
@@ -703,7 +703,7 @@ export const NUMERAL_GLYPHS: Record<string, string[]> = {
   T: ['###', '.#.', '.#.', '.#.', '.#.'],
   U: ['#.#', '#.#', '#.#', '#.#', '###'],
   V: ['#.#', '#.#', '#.#', '#.#', '.#.'],
-  W: ['#.#', '#.#', '###', '###', '#.#'],
+  W: ['#.#', '#.#', '#.#', '###', '#.#'],
   X: ['#.#', '#.#', '.#.', '#.#', '#.#'],
   Y: ['#.#', '#.#', '.#.', '.#.', '.#.'],
   Z: ['###', '..#', '.#.', '#..', '###'],
@@ -787,13 +787,18 @@ export interface MassProfile {
  * the creature actually is.
  */
 export function massProfile(map: SpriteMap): MassProfile {
-  const fill = map.rows.map((row) => {
-    let n = 0;
-    for (const ch of row) if (ch !== '.') n++;
-    return n;
+  // Extent, not ink count: a creature standing with its legs apart has fewer
+  // lit pixels than it is wide, and a bar sized by the count is narrower than
+  // the thing it belongs to.
+  const extent = map.rows.map((row) => {
+    const first = row.search(/[^.]/);
+    if (first < 0) return 0;
+    let last = row.length - 1;
+    while (last > first && row[last] === '.') last--;
+    return last - first + 1;
   });
-  const widest = Math.max(0, ...fill);
+  const widest = Math.max(0, ...extent);
   if (widest === 0) return { top: 0, width: map.rows[0]?.length ?? 0 };
-  const shoulders = fill.findIndex((n) => n * 2 >= widest);
+  const shoulders = extent.findIndex((n) => n * 2 >= widest);
   return { top: shoulders < 0 ? 0 : shoulders, width: widest };
 }

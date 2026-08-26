@@ -11,6 +11,7 @@ import {
   NUMERAL_GLYPHS,
   fontFaults,
   massProfile,
+  type SpriteMap,
   MONSTER_SILHOUETTES,
   sculpt,
   spriteMapFaults,
@@ -258,6 +259,24 @@ describe('sprite mass profile', () => {
       const crown = map.rows[0]!.replace(/\./g, '').length;
       if (crown * 2 >= mass.width) continue;
       expect(mass.top, `shape ${i} anchors to its box, not its mass`).toBeGreaterThan(0);
+    }
+  });
+
+  // Sized by lit-pixel count, a golem standing with its legs apart reported a
+  // narrower bar than its own shoulders.
+  it('measures the widest row by extent, not by how much of it is lit', () => {
+    const gapped: SpriteMap = { rows: ['#...#', '.....', '##.##'], legend: { '#': 'body' } };
+    expect(massProfile(gapped).width).toBe(5);
+  });
+
+  // A bar anchored to the mass must still read as a bar *over* the creature.
+  // Half-of-widest could in principle land on a wide belly and bury it.
+  it('stays in the top half of every creature', () => {
+    for (const [i, map] of MONSTER_SHAPES.entries()) {
+      const mass = massProfile(map);
+      expect(mass.top * 2, `shape ${i} anchors below its own midline`).toBeLessThan(
+        map.rows.length,
+      );
     }
   });
 
