@@ -100,6 +100,12 @@ export interface SceneModel {
   /** Momentum [0,1] and its multiplier, from the active-play model. */
   momentum: number;
   momentumMult: number;
+  /**
+   * Core's whole attack-speed multiplier: the Ascendancy speed node times
+   * momentum. The swing animation runs on this, not on momentum alone -- a
+   * player who buys the speed node has to see the blade move.
+   */
+  attackSpeedMult: number;
   /** World frozen behind the recap modal. */
   paused: boolean;
   reduceMotion: boolean;
@@ -169,6 +175,21 @@ const APPROACH_FRAC = 0.3;
 const BOSS_ENTRANCE_SEC = 1.1;
 
 const SWINGS_PER_SEC = 1.7;
+
+/** Seconds one animated swing stands for, at `attackSpeedMult`. */
+export function swingInterval(attackSpeedMult: number): number {
+  return 1 / (SWINGS_PER_SEC * Math.max(0.01, attackSpeedMult));
+}
+
+/**
+ * Damage one animated swing is worth. The scene never computes damage - it
+ * apportions core's dps across the interval the swing represents, so the
+ * numbers on screen integrate back to core's dps exactly however fast the
+ * blade is moving.
+ */
+export function damagePerSwing(dps: number, attackSpeedMult: number): number {
+  return dps * swingInterval(attackSpeedMult);
+}
 const SWING_ANIM_SEC = 0.32;
 const SHAKE_DECAY = 9;
 const MAX_SHAKE = 3.2;
@@ -488,6 +509,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     dps: 0,
     momentum: 0,
     momentumMult: 1,
+    attackSpeedMult: 1,
     paused: false,
     reduceMotion: false,
     boss: null,
@@ -654,7 +676,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   function swing(fromStrike: boolean): void {
-    swingAnim = SWING_ANIM_SEC;
+    // At a maxed speed node and full momentum the cadence outruns a fixed
+    // 0.32s animation, and overlapping swings read as a blur rather than as
+    // faster hits. The stroke shortens to fit its own interval instead.
+    swingAnim = Math.min(SWING_ANIM_SEC, swingInterval(model.attackSpeedMult) * 0.9);
     const lead = queue[0];
     if (!lead || lead.x - engageInset() > heroX + BLADE_REACH + 16) return;
 
@@ -680,7 +705,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     if (damageTextCooldown > 0) return;
     damageTextCooldown = DAMAGE_TEXT_INTERVAL_SEC;
     // Honest: real DPS across the interval this swing represents.
-    const damage = model.dps * (1 / (SWINGS_PER_SEC * model.momentumMult));
+    const damage = damagePerSwing(model.dps, model.attackSpeedMult);
     if (damage < 0.05) return;
     addFloater({
       // Above the monster's head, not beside its ribs: the blade sweeps
@@ -870,8 +895,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       });
     }
 
-    // Auto-attack cadence: idle play still swings, momentum just speeds it up.
-    swingCooldown -= dtSec * model.momentumMult;
+    // Auto-attack cadence off core's own attack speed, so the Ascendancy speed
+    // node is visible in the blade and not only in the kill timer.
+    swingCooldown -= dtSec * model.attackSpeedMult;
     if (swingCooldown <= 0) {
       swingCooldown += 1 / SWINGS_PER_SEC;
       if (queue.length > 0) swing(false);

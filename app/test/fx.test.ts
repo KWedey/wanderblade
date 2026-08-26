@@ -25,6 +25,7 @@ import {
   inPocket,
   nudgeFromPocket,
 } from '../src/scene/fx';
+import { damagePerSwing, swingInterval } from '../src/scene/scene';
 
 /** A core arc launched at t=0, so `arcPositionAt(arc, t)` reads as flight time. */
 function coreArc(killIndex = 3): LootArc {
@@ -274,5 +275,41 @@ describe('the held-strike cadence comes from core, not a local copy', () => {
   it('is a real cadence, not a placeholder', () => {
     expect(HOLD_STRIKE_INTERVAL_SEC).toBeGreaterThan(0.05);
     expect(HOLD_STRIKE_INTERVAL_SEC).toBeLessThan(2);
+  });
+});
+
+// The Ascendancy speed node changed core's kill rate and nothing on screen.
+// A purchase whose visible reward never arrives is a broken promise, so the
+// blade now runs on core's attack speed -- without the scene inventing damage.
+describe('the swing carries core dps whatever speed it runs at', () => {
+  // ascSpeedMultiplier tops out at 1 + ASC_SPEED_MAX_BONUS; momentum stacks on
+  // top of that, so this spans idle through a maxed node at full momentum.
+  const SPEEDS = [1, 1.2, 1.6, 2, 2.56, 4];
+
+  it('apportions dps across the interval a swing represents', () => {
+    for (const speed of SPEEDS) {
+      const swingsPerSec = 1 / swingInterval(speed);
+      const integrated = damagePerSwing(1234.5, speed) * swingsPerSec;
+      expect(integrated, `speed ${speed}`).toBeCloseTo(1234.5, 6);
+    }
+  });
+
+  it('pays less per swing as the blade speeds up, never more', () => {
+    for (let i = 1; i < SPEEDS.length; i++) {
+      expect(damagePerSwing(1000, SPEEDS[i]!)).toBeLessThan(damagePerSwing(1000, SPEEDS[i - 1]!));
+    }
+  });
+
+  // A fixed 0.32s stroke at a maxed node and full momentum overruns its own
+  // interval, and overlapping swings read as a blur rather than as faster hits.
+  it('leaves room between strokes at every speed', () => {
+    for (const speed of SPEEDS) {
+      const stroke = Math.min(0.32, swingInterval(speed) * 0.9);
+      expect(stroke, `speed ${speed}`).toBeLessThan(swingInterval(speed));
+    }
+  });
+
+  it('never divides by a zero attack speed', () => {
+    expect(Number.isFinite(damagePerSwing(1000, 0))).toBe(true);
   });
 });

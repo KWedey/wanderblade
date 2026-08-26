@@ -10,6 +10,7 @@ import {
   ASC_NODE_IDS,
   ascMultiplier,
   ascNodeCost,
+  attackSpeedMultiplier,
   earningsMultiplier,
   buyHeroLevel as coreBuyHeroLevel,
   buyAscendancyNode as coreBuyAscendancyNode,
@@ -254,6 +255,7 @@ export class Game {
       dps: this.dps,
       momentum,
       momentumMult: momentumMultiplier(momentum),
+      attackSpeedMult: attackSpeedMultiplier(this.state, momentum),
       boss:
         this.state.phase === 'boss'
           ? { hpFrac: this.state.boss.hpRemaining / Math.max(1, this.state.boss.hpMax) }
