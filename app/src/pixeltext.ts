@@ -86,11 +86,14 @@ export function layoutPixelText(
   text: string,
   preferredScale: number,
   maxWidth: number,
+  singleLine = false,
 ): PixelLayout | null {
   const trimmed = text.trim();
   if (!trimmed || maxWidth <= 0) return null;
   for (let scale = Math.max(1, Math.floor(preferredScale)); scale >= 1; scale--) {
-    const lines = wrapPixelText(trimmed, scale, maxWidth);
+    const lines = singleLine
+      ? [trimmed.replace(/\s+/g, ' ')]
+      : wrapPixelText(trimmed, scale, maxWidth);
     const width = lines.reduce((w, l) => Math.max(w, textWidth(l, scale)), 0);
     if (width <= maxWidth) {
       const height = lines.length * lineHeight(scale) - LINE_GAP * scale;
@@ -109,42 +112,81 @@ export function alignOffset(lineWidth: number, boxWidth: number, align: PixelAli
   return 0;
 }
 
+/** Horizontal runs, so a glyph costs a handful of fills rather than 35. */
+function blit(
+  ctx: CanvasRenderingContext2D,
+  line: string,
+  x: number,
+  y: number,
+  scale: number,
+): void {
+  let penX = x;
+  for (const ch of line) {
+    const glyph = FONT[ch];
+    if (glyph) {
+      for (let row = 0; row < GLYPH_H; row++) {
+        const bits = glyph[row] ?? '';
+        let run = 0;
+        for (let col = 0; col <= GLYPH_W; col++) {
+          if (col < GLYPH_W && bits[col] === '#') {
+            run++;
+            continue;
+          }
+          if (run > 0) {
+            ctx.fillRect(penX + (col - run) * scale, y + row * scale, run * scale, scale);
+            run = 0;
+          }
+        }
+      }
+    }
+    penX += (GLYPH_W + 1) * scale;
+  }
+}
+
+/** Ring offsets for the outline pass, in glyph pixels. */
+const RING: readonly (readonly [number, number])[] = [
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [-1, 0],
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+];
+
 function paintInto(
   canvas: HTMLCanvasElement,
   layout: PixelLayout,
   boxWidth: number,
   align: PixelAlign,
   color: string,
+  outline: string | null,
   dpr: number,
 ): void {
   const { scale, lines, height } = layout;
-  canvas.width = Math.max(1, Math.round(boxWidth * dpr));
-  canvas.height = Math.max(1, Math.round(height * dpr));
-  canvas.style.width = `${boxWidth}px`;
-  canvas.style.height = `${height}px`;
+  // The ring needs a pixel of room outside the text box on every side.
+  const pad = outline ? scale : 0;
+  const cw = boxWidth + pad * 2;
+  const ch = height + pad * 2;
+  canvas.width = Math.max(1, Math.round(cw * dpr));
+  canvas.height = Math.max(1, Math.round(ch * dpr));
+  canvas.style.width = `${cw}px`;
+  canvas.style.height = `${ch}px`;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, boxWidth, height);
-  ctx.fillStyle = color;
+  ctx.clearRect(0, 0, cw, ch);
 
   lines.forEach((line, index) => {
-    const originX = alignOffset(textWidth(line, scale), boxWidth, align);
-    const originY = index * lineHeight(scale);
-    let penX = originX;
-    for (const ch of line) {
-      const glyph = FONT[ch];
-      if (glyph) {
-        for (let row = 0; row < GLYPH_H; row++) {
-          const bits = glyph[row] ?? '';
-          for (let col = 0; col < GLYPH_W; col++) {
-            if (bits[col] !== '#') continue;
-            ctx.fillRect(penX + col * scale, originY + row * scale, scale, scale);
-          }
-        }
-      }
-      penX += (GLYPH_W + 1) * scale;
+    const originX = pad + alignOffset(textWidth(line, scale), boxWidth, align);
+    const originY = pad + index * lineHeight(scale);
+    if (outline) {
+      ctx.fillStyle = outline;
+      for (const [ox, oy] of RING) blit(ctx, line, originX + ox * scale, originY + oy * scale, scale);
     }
+    ctx.fillStyle = color;
+    blit(ctx, line, originX, originY, scale);
   });
 }
 
@@ -194,10 +236,14 @@ export function paintElement(el: HTMLElement, dpr = window.devicePixelRatio || 1
   // clientWidth is 0 for an inline box; its rect is the only honest measure.
   const outer = el.clientWidth || el.getBoundingClientRect().width;
   const boxWidth = Math.floor(outer - padLeft - (parseFloat(style.paddingRight) || 0));
+  // Honour the author's own white-space: a HUD stat marked nowrap wants the
+  // largest type that fits on one line, not the largest that fits at all.
+  const nowrap = style.whiteSpace === 'nowrap' || style.whiteSpace === 'pre';
   const layout = layoutPixelText(
     trimmed,
     pixelScaleFor(parseFloat(style.fontSize) || GLYPH_H),
     boxWidth,
+    nowrap,
   );
   if (!layout) {
     fallBack(el, holder);
@@ -206,6 +252,10 @@ export function paintElement(el: HTMLElement, dpr = window.devicePixelRatio || 1
 
   const align = ALIGNMENTS[style.textAlign] ?? 'left';
   const color = style.color;
+  // Opt-in per subtree. HUD type floats over open sky and needs the ring the
+  // world's own numbers wear; panel type sits on a dark plate and does not.
+  const ring = style.getPropertyValue('--px-outline').trim();
+  const outline = ring.length > 0 ? ring : null;
   holder.classList.add('px-hidden');
 
   let canvas = el.querySelector<HTMLCanvasElement>(`.${CANVAS_CLASS}`);
@@ -215,12 +265,13 @@ export function paintElement(el: HTMLElement, dpr = window.devicePixelRatio || 1
     canvas.setAttribute('aria-hidden', 'true');
     el.appendChild(canvas);
   }
-  const key = `${trimmed}|${layout.scale}|${boxWidth}|${align}|${color}|${dpr}`;
+  const key = `${trimmed}|${layout.scale}|${layout.lines.length}|${boxWidth}|${align}|${color}|${outline}|${dpr}`;
   if (canvas.dataset['key'] === key) return true;
   canvas.dataset['key'] = key;
-  canvas.style.left = `${padLeft}px`;
-  canvas.style.top = `${padTop}px`;
-  paintInto(canvas, layout, boxWidth, align, color, dpr);
+  const pad = outline ? layout.scale : 0;
+  canvas.style.left = `${padLeft - pad}px`;
+  canvas.style.top = `${padTop - pad}px`;
+  paintInto(canvas, layout, boxWidth, align, color, outline, dpr);
   // The canvas is out of flow, so the element would otherwise collapse to the
   // transparent text's height and clip a label that wrapped to more lines.
   el.style.minHeight = `${layout.height + padTop + (parseFloat(style.paddingBottom) || 0)}px`;

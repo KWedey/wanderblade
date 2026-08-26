@@ -1043,10 +1043,18 @@ body {
 
 
 /* The accessible copy of every bitmap label. It stays in normal flow so the
-   browser still wraps it and sizes the box; only its ink is removed. */
+   browser still wraps it and sizes the box; only its ink is removed.
+   text-shadow paints even at color: transparent, so the HUD's 2px outline
+   ghosted a second copy of every glyph through the bitmap above it. */
 .px-sr.px-hidden,
 .px-sr.px-hidden::selection {
   color: transparent;
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+}
+
+.hud {
+  --px-outline: #1a1c2c;
 }
 
 .px-ink {

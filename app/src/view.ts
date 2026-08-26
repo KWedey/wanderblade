@@ -14,7 +14,7 @@ import { HOLD_STRIKE_INTERVAL_SEC } from './active';
 import { formatDuration, formatGold, formatNumber, formatPercent, formatRate } from './format';
 import type { LogEntry } from './flavor';
 import { panelVars, realmSkin } from './scene/palette';
-import { repaintPixelText } from './pixeltext';
+import { paintElement, repaintPixelText } from './pixeltext';
 import { createScene, type SceneModel, type StrikeOutcome } from './scene/scene';
 
 const LOG_LIMIT = 40;
@@ -453,6 +453,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   let lastDps = -1;
 
   const panelRoot = q(root, '.screen');
+  // The HUD sits outside .screen but wears the same type. Leaving it on the
+  // webfont put soft glyphs under a 2px shadow next to crisp panel bitmap.
+  const hudRoot = q(root, '.hud');
 
   function renderPanels(vm: ViewModel): void {
     regionEl.textContent = vm.regionName;
@@ -566,6 +569,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
       }
     }
     repaintPixelText(panelRoot);
+    repaintPixelText(hudRoot);
   }
 
   // Per-frame path: only touch the DOM when the rendered string/scale actually
@@ -578,6 +582,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     if (text !== lastGoldText) {
       lastGoldText = text;
       goldEl.textContent = text;
+      paintElement(goldEl);
     }
     if (Math.abs(zoneSweep - lastSweep) > 0.0005) {
       lastSweep = zoneSweep;
