@@ -14,7 +14,7 @@ import {
   remainingTimeCarried,
   replayIdentical,
 } from './checks';
-import { formatSeedReport, formatSummary, writeCsv } from './format';
+import { formatSeedReport, formatSummary, formatThumb, writeCsv } from './format';
 import {
   abandonProbe,
   bossUplift,
@@ -219,6 +219,7 @@ function main(): void {
     if (config.csv) csvPaths.push(writeCsv(result, csvDir));
   }
 
+  out.push(formatThumb(config.seed));
   out.push(formatSummary(results));
   if (csvPaths.length > 0) {
     out.push('');
