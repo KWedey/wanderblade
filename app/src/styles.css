@@ -439,7 +439,6 @@ body {
    rather than counting a remainder down beside it. */
 .goal-chip--meter {
   position: relative;
-  overflow: hidden;
 }
 
 .goal-fill {
@@ -451,7 +450,10 @@ body {
   transition: width 220ms steps(12);
 }
 
+/* Block, not inline: pixeltext measures a leaf's box to pick a scale and wrap
+   it, and an inline span reports a width that is not the chip's. */
 .goal-text {
+  display: block;
   position: relative;
 }
 
