@@ -9,12 +9,16 @@ import type { View } from '../src/view';
 let nowMs = 1000;
 globalThis.window = {
   matchMedia: () => ({ matches: false }),
+  // Read at construction for the `?stage=` dev staging query.
+  location: { search: '' },
 } as unknown as Window & typeof globalThis;
 globalThis.performance = { now: () => nowMs } as unknown as Performance;
 
 const stubView: View = {
   renderPanels: () => {},
   renderFrame: () => {},
+  renderScene: () => {},
+  catchArc: () => {},
   pushLog: () => {},
   showRecap: () => {},
   isRecapOpen: () => false,

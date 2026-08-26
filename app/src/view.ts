@@ -6,6 +6,7 @@ import {
   GEAR_SLOTS,
   SKILLS,
   SKILL_IDS,
+  type ArcPoint,
   type GearSlot,
   type Rarity,
   type Recap,
@@ -15,7 +16,7 @@ import { formatDuration, formatGold, formatNumber, formatPercent, formatRate } f
 import type { LogEntry } from './flavor';
 import { panelVars, realmSkin } from './scene/palette';
 import { paintElement, repaintPixelText } from './pixeltext';
-import { createScene, type SceneModel, type StrikeOutcome } from './scene/scene';
+import { createScene, type SceneModel } from './scene/scene';
 
 const LOG_LIMIT = 40;
 
@@ -68,6 +69,8 @@ export interface ViewModel {
   portal: PortalVM | null;
   boss: BossVM | null;
   bossResult: 'win' | 'fail' | null;
+  /** Why the last action did nothing, or null. Shown in the panel, not the log. */
+  refusal: string | null;
   levelCost: number;
   canAffordLevel: boolean;
   goldPerSec: number;
@@ -80,8 +83,8 @@ export interface ViewModel {
 }
 
 export interface ViewHandlers {
-  /** One Strike (docs/ACTIVE-PLAY.md), already resolved against the loot arcs. */
-  onStrike: (outcome: StrikeOutcome) => void;
+  /** One Strike (docs/ACTIVE-PLAY.md). Core resolves it against the loot arcs. */
+  onStrike: (aim: ArcPoint | null) => void;
   onBuyLevel: () => void;
   onBuySkill: (id: string) => void;
   onEnterPortal: () => void;
@@ -97,6 +100,8 @@ export interface View {
   renderFrame(gold: number, zoneSweep: number): void;
   /** Advance and paint the road scene for one frame. */
   renderScene(dtSec: number, model: SceneModel): void;
+  /** Play the catch flourish for an `arcCatch` the engine resolved. */
+  catchArc(bonusGold: number, upgraded: boolean): void;
   pushLog(entries: LogEntry[]): void;
   showRecap(recap: Recap, elapsedSec: number): void;
   isRecapOpen(): boolean;
@@ -195,6 +200,8 @@ function template(): string {
         </button>
       </div>
 
+      <p class="portal-refusal" data-role="portal-refusal" role="status" hidden></p>
+
       <div class="boss-banner" data-role="boss-banner" hidden></div>
     </section>
 
@@ -291,6 +298,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const abandonBtn = q<HTMLButtonElement>(root, '[data-role="abandon"]');
   const abandonFillEl = q(root, '[data-role="abandon-fill"]');
   const bossBannerEl = q(root, '[data-role="boss-banner"]');
+  const portalRefusalEl = q(root, '[data-role="portal-refusal"]');
   const toastEl = q(root, '[data-role="toast"]');
 
   const heroBtn = q<HTMLButtonElement>(root, '[data-role="hero-btn"]');
@@ -488,6 +496,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
       portalEtaEl.textContent = formatDuration(stage.etaSec);
     }
 
+    portalRefusalEl.hidden = vm.refusal === null;
+    if (vm.refusal) portalRefusalEl.textContent = vm.refusal;
+
     bossHpEl.hidden = vm.boss === null;
     bossLiveEl.hidden = vm.boss === null;
     enterPortalBtn.hidden = vm.boss !== null;
@@ -613,11 +624,15 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     recapKills.textContent = formatNumber(recap.kills);
     recapGold.textContent = formatNumber(recap.goldEarned);
     recapDrops.textContent = formatNumber(recap.drops);
-    recapBosses.textContent = formatNumber(recap.bossWins);
+    recapBosses.textContent = formatNumber(recap.victories);
     recapOverlay.hidden = false;
   }
 
   let dressedRegion = -1;
+
+  function catchArc(bonusGold: number, upgraded: boolean): void {
+    scene.catchArc(bonusGold, upgraded);
+  }
 
   function renderScene(dtSec: number, model: SceneModel): void {
     // The panel wears the realm the player is standing in. Set from the same
@@ -640,5 +655,14 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     seedEl.textContent = String(seed);
   }
 
-  return { renderPanels, renderFrame, renderScene, pushLog, showRecap, isRecapOpen, setSeed };
+  return {
+    renderPanels,
+    renderFrame,
+    renderScene,
+    catchArc,
+    pushLog,
+    showRecap,
+    isRecapOpen,
+    setSeed,
+  };
 }

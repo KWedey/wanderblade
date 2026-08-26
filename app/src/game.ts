@@ -4,46 +4,35 @@
 // module only orchestrates and translates state into a ViewModel.
 
 import {
+  abandonBoss as coreAbandonBoss,
   advance,
   buyHeroLevel as coreBuyHeroLevel,
   buySkill as coreBuySkill,
-  bossHp,
-  challengeBoss,
+  bossEtaSec,
   enemyGold,
+  enterPortal as coreEnterPortal,
   heroDps,
   initialState,
   killsPerZone,
   killTime,
   levelCost,
-  skillCost,
-  SKILLS,
-  SKILL_IDS,
+  momentumAt,
+  momentumMultiplier,
+  purchaseOptions,
   summarizeEvents,
-  zonesPerRegion,
+  zonesPerRealm,
   type GameEvent,
+  type ArcPoint,
   type GameState,
   type GearSlot,
+  type Strike,
 } from '@wanderblade/core';
 import { stageFromQuery } from './devstage';
-import {
-  decayMomentum,
-  momentumMultiplier,
-  strikeMomentum,
-  type Strike,
-} from './active';
 import { killProgress, smoothStep, zoneSweep } from './anim';
-import {
-  bossName,
-  describeEvent,
-  gearName,
-  regionName,
-  regionOfZone,
-  zoneInRegion,
-  type LogEntry,
-} from './flavor';
+import { bossName, describeEvent, gearName, regionName, type LogEntry } from './flavor';
 import { formatDuration } from './format';
 import { clearSave, readSave, writeSave } from './save';
-import type { SceneModel, StrikeOutcome } from './scene/scene';
+import type { SceneModel } from './scene/scene';
 import type { BossVM, GearVM, PortalVM, SkillVM, View, ViewModel } from './view';
 
 const TICK_MS = 250;
@@ -54,6 +43,10 @@ const RECAP_SEC = 60;
 const SUSPEND_TICK_SEC = 90;
 /** How long a boss win/fail flourish stays on screen. */
 const BOSS_RESULT_MS = 2600;
+/** How long a refused action explains itself in the panel. */
+const REFUSAL_MS = 4000;
+/** Smallest gap between two strike stamps, so a burst stays strictly ordered. */
+const STRIKE_EPSILON_SEC = 1e-4;
 /**
  * Gold count-up smoothing rate in 1/s, applied as `1 - exp(-rate * dt)` per
  * frame so the counter converges identically on 60Hz and 120Hz displays.
@@ -85,15 +78,9 @@ export class Game {
   private readonly reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   private bossResult: 'win' | 'fail' | null = null;
   private bossResultUntilMs = 0;
-  /** Momentum [0,1] from Strike input (docs/ACTIVE-PLAY.md), decayed per frame. */
-  private momentum = 0;
-  /**
-   * Strikes made since the last engine advance, stamped on the engine clock.
-   * `drainStrikes` is the seam: once `advance(state, dt, strikes)` exists it
-   * consumes this array and momentum becomes engine state. Until then a Strike
-   * moves the meter and the scene and nothing else — no economy value is
-   * invented here, and gold stays exactly what the engine says (DECISIONS.md #12).
-   */
+  private refusal: string | null = null;
+  private refusalUntilMs = 0;
+/** Strikes made since the last engine advance, stamped on the engine clock. */
   private readonly pendingStrikes: Strike[] = [];
 
   /**
@@ -165,13 +152,11 @@ export class Game {
     this.lastTickMs = now;
 
     if (dtSec > 0) {
-      // The strike buffer is drained on the same boundary the engine advances
-      // on, so plugging it into `advance` is a one-argument change.
-      this.drainStrikes();
+      const strikes = this.drainStrikes();
       if (dtSec > SUSPEND_TICK_SEC) {
         this.applyOfflineReturn(dtSec);
       } else {
-        this.ingestEvents(advance(this.state, dtSec));
+        this.ingestEvents(advance(this.state, dtSec, strikes));
       }
     }
 
@@ -181,7 +166,7 @@ export class Game {
 
   /**
    * Display-only estimate [0,1] of progress through the current kill. The
-   * engine's kill schedule is absolute (state.nextKillAtSec), so between ticks
+   * engine's action schedule is absolute (state.nextActionAtSec), so between ticks
    * we extrapolate the game clock on the wall clock; every tick re-grounds it.
    * Never feeds back into core state — pure presentation (math in anim.ts).
    */
@@ -189,7 +174,7 @@ export class Game {
     const sinceTickSec = this.view.isRecapOpen()
       ? 0 // world paused behind the recap — freeze the sweep too
       : Math.min((performance.now() - this.lastTickMs) / 1000, MAX_EXTRAPOLATE_SEC);
-    return killProgress(this.state.nextKillAtSec, this.state.timeSec, sinceTickSec, this.killDurSec);
+    return killProgress(this.state.nextActionAtSec, this.state.timeSec, sinceTickSec, this.killDurSec);
   }
 
   private readonly animate = (frameMs: number): void => {
@@ -215,12 +200,9 @@ export class Game {
           frameDtSec,
         );
 
-    // Momentum bleeds away continuously; only Strike puts it back.
-    this.momentum = decayMomentum(this.momentum, frameDtSec);
-
     this.view.renderFrame(
       this.displayGold,
-      zoneSweep(this.state.gate.atGate, this.state.killsInZone, p, killsPerZone),
+      zoneSweep(this.state.portalReady, this.state.killsInZone, p, killsPerZone),
     );
     // The scene reads the same kill progress the counter does, so the monster
     // dies on the frame the engine's kill lands.
@@ -228,15 +210,29 @@ export class Game {
     requestAnimationFrame(this.animate);
   };
 
+  /** Display-clock overshoot past the last engine tick; zero while paused. */
+  private sinceTickSec(): number {
+    if (this.view.isRecapOpen()) return 0;
+    return Math.min((performance.now() - this.lastTickMs) / 1000, MAX_EXTRAPOLATE_SEC);
+  }
+
+  /** Momentum extrapolated to the display clock; core owns the value itself. */
+  private liveMomentum(): number {
+    return momentumAt(this.state.momentum, this.state.timeSec + this.sinceTickSec());
+  }
+
   private buildSceneModel(progress: number): SceneModel {
+    const momentum = this.liveMomentum();
     return {
-      region: regionOfZone(this.state.zone),
+      region: this.state.realm,
       kills: this.state.lifetime.kills,
       killProgress: progress,
       goldPerKill: this.goldPerKill,
       dps: this.dps,
-      momentum: this.momentum,
-      momentumMult: momentumMultiplier(this.momentum),
+      momentum,
+      momentumMult: momentumMultiplier(momentum),
+      arcs: this.state.arcs,
+      timeSec: this.state.timeSec + this.sinceTickSec(),
       paused: this.view.isRecapOpen(),
       reduceMotion: this.reduceMotion.matches,
     };
@@ -259,21 +255,28 @@ export class Game {
     if (coreBuySkill(this.state, id)) this.renderAll();
   }
 
-  /** One Strike: builds momentum now, and is queued for the engine that will pay it. */
-  strike(outcome: StrikeOutcome): void {
-    this.momentum = strikeMomentum(this.momentum);
-    this.pendingStrikes.push({
-      atSec: this.state.timeSec,
-      aim: outcome.aim,
-      caughtArc: outcome.caughtArc,
-    });
+  /**
+   * One Strike, aimed in core's arc space. The stamp must land strictly inside
+   * the interval `advance` will process: `state.timeSec` is the *last*
+   * boundary and core ignores anything at or before it, so a tap in the same
+   * instant as the tick would be silently swallowed. Bursts inside one frame
+   * share a wall clock, so each is nudged past the one before it.
+   */
+  strike(aim: ArcPoint | null): void {
+    const sinceTickSec = Math.min(
+      (performance.now() - this.lastTickMs) / 1000,
+      MAX_EXTRAPOLATE_SEC,
+    );
+    const floor = this.state.timeSec + STRIKE_EPSILON_SEC;
+    const last = this.pendingStrikes[this.pendingStrikes.length - 1];
+    const atSec = Math.max(
+      this.state.timeSec + sinceTickSec,
+      last ? last.atSec + STRIKE_EPSILON_SEC : floor,
+    );
+    this.pendingStrikes.push({ atSec, aim });
   }
 
-  /**
-   * Hand the buffered Strikes to whoever consumes them and clear the buffer.
-   * The engine call site is `tick`; today nothing consumes them, so they are
-   * dropped rather than being allowed to grow without bound.
-   */
+  /** Hand the buffered Strikes to `advance` and clear the buffer. */
   private drainStrikes(): Strike[] {
     return this.pendingStrikes.splice(0, this.pendingStrikes.length);
   }
@@ -283,13 +286,33 @@ export class Game {
    * the fight; this is the single call site that starts it.
    */
   enterPortal(): void {
-    this.ingestEvents(challengeBoss(this.state).events);
+    const { entered, events } = coreEnterPortal(this.state);
+    this.ingestEvents(events);
+    if (!entered) this.refuse('The road is not yet walked to its end.');
     this.renderAll();
   }
 
-  /** Forfeit the attempt's damage and return to the same realm's road. */
+  /** Forfeit nothing but the walk back: the guardian keeps its wounds. */
   abandonBoss(): void {
+    const { abandoned, events } = coreAbandonBoss(this.state);
+    this.ingestEvents(events);
+    if (!abandoned) this.refuse('There is no guardian to leave.');
     this.renderAll();
+  }
+
+  /**
+   * Why an action did nothing, shown in the panel rather than the log — kill
+   * spam pushes a log line off screen in about two seconds.
+   */
+  private refuse(reason: string): void {
+    this.refusal = reason;
+    this.refusalUntilMs = performance.now() + REFUSAL_MS;
+  }
+
+  private currentRefusal(): string | null {
+    if (this.refusal && performance.now() <= this.refusalUntilMs) return this.refusal;
+    this.refusal = null;
+    return null;
   }
 
   collectRecap(): void {
@@ -317,6 +340,9 @@ export class Game {
   // --- Offline / warp reconciliation ------------------------------------
 
   private applyOfflineReturn(elapsedSec: number): void {
+    // Reconciling a gap moves timeSec past every queued stamp, so the buffer is
+    // dropped rather than replayed as input advance() can only discard.
+    this.pendingStrikes.length = 0;
     // Sub-2s gaps (instant reloads) have nothing worth reconciling or announcing.
     if (elapsedSec < 2) {
       this.renderAll();
@@ -328,7 +354,14 @@ export class Game {
     // Never flood the log with an offline kill stream — surface only milestones.
     const milestones: LogEntry[] = [];
     for (const e of events) {
-      if (e.type === 'region' || e.type === 'bossWin' || e.type === 'bossFail' || e.type === 'edge') {
+      if (
+        e.type === 'zone' ||
+        e.type === 'portalReady' ||
+        e.type === 'portalEnter' ||
+        e.type === 'abandon' ||
+        e.type === 'bossVictory' ||
+        e.type === 'ascend'
+      ) {
         const line = describeEvent(e);
         if (line) milestones.push(line);
       }
@@ -351,8 +384,9 @@ export class Game {
   private ingestEvents(events: GameEvent[]): void {
     const lines: LogEntry[] = [];
     for (const e of events) {
-      if (e.type === 'bossWin') this.setBossResult('win');
-      else if (e.type === 'bossFail') this.setBossResult('fail');
+      if (e.type === 'bossVictory') this.setBossResult('win');
+      else if (e.type === 'abandon') this.setBossResult('fail');
+      else if (e.type === 'arcCatch') this.view.catchArc(e.bonusGold, e.upgraded);
       const line = describeEvent(e);
       if (line) lines.push(line);
     }
@@ -381,9 +415,9 @@ export class Game {
    * completion.
    */
   private groundKillSchedule(): void {
-    if (this.state.nextKillAtSec !== this.killSchedAtSec) {
-      this.killDurSec = killTime(this.state);
-      this.killSchedAtSec = this.state.nextKillAtSec;
+    if (this.state.nextActionAtSec !== this.killSchedAtSec) {
+      this.killDurSec = killTime(this.state, this.liveMomentum());
+      this.killSchedAtSec = this.state.nextActionAtSec;
     }
   }
 
@@ -392,7 +426,7 @@ export class Game {
     // fresh without recomputing engine math 60× a second.
     this.groundKillSchedule();
     this.dps = heroDps(this.state);
-    const g = enemyGold(this.state.zone);
+    const g = enemyGold(this.state.realm, this.state.zone);
     // Finite guard: enemyGold overflows to Infinity in the deep endless tail;
     // Infinity * 0 would poison displayGold with NaN.
     this.goldPerKill = Number.isFinite(g) ? g : 0;
@@ -407,47 +441,55 @@ export class Game {
 
   private buildViewModel(): ViewModel {
     const s = this.state;
-    const region = regionOfZone(s.zone);
+    const momentum = this.liveMomentum();
+    const guardian = bossName(s.realm);
 
-    // The portal is reachable once the road has run out of realm. Boss state is
-    // engine state, so `boss` stays null until the engine carries a fight.
-    const portal: PortalVM | null = s.gate.atGate
-      ? { guardian: bossName(region), etaSec: bossHp(s.zone) / Math.max(1e-9, this.dps) }
-      : null;
-    const boss: BossVM | null = null;
+    // The hero occupies exactly one phase (DECISIONS.md #15), so these are
+    // never both set. The preview is the fight at sustained momentum, which is
+    // the number ADR #24 says P6 measures.
+    const portal: PortalVM | null =
+      s.phase === 'road' && s.portalReady ? { guardian, etaSec: bossEtaSec(s, 1) } : null;
+    const boss: BossVM | null =
+      s.phase === 'boss'
+        ? {
+            guardian,
+            hpRemaining: s.boss.hpRemaining,
+            hpMax: s.boss.hpMax,
+            etaSec: bossEtaSec(s, momentum),
+          }
+        : null;
 
-    const skills: SkillVM[] = SKILL_IDS.map((id) => {
-      const def = SKILLS[id]!;
-      const level = s.hero.skills[id] ?? 0;
-      const unlocked = s.hero.level >= def.unlockLevel;
-      const atMax = level >= def.maxLevel;
-      const cost = skillCost(level);
-      return {
-        id,
-        name: def.name,
-        level,
-        cost,
-        unlocked,
-        atMax,
-        unlockLevel: def.unlockLevel,
-        canAfford: unlocked && !atMax && s.gold >= cost,
-      };
-    });
+    // Every track core knows about, capped or not, so the panel is full rather
+    // than one buyable row over two greyed locks.
+    const skills: SkillVM[] = purchaseOptions(s)
+      .filter((o) => o.kind === 'skill')
+      .map((o) => ({
+        id: o.id,
+        name: o.name,
+        level: o.rank,
+        cost: o.cost,
+        unlocked: o.unlocked,
+        atMax: o.atMax,
+        unlockLevel: o.unlockLevel,
+        canAfford: o.affordable,
+      }));
 
-    const heroLevelCost = levelCost(s.hero.level);
+    const heroLevelCost = levelCost(s.hero.level, s.realm);
     // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
     // reflect a purchase immediately instead of lagging one kill behind.
-    const goldPerSec = this.goldPerKill / killTime(s);
+    const goldPerSec = this.goldPerKill / killTime(s, momentum);
 
     // Goal gradient: the nearest waypoint on the road…
     let marchGoal: string;
-    if (portal) {
-      marchGoal = `${portal.guardian} awaits`;
+    if (boss) {
+      marchGoal = `${guardian} stands before you`;
+    } else if (portal) {
+      marchGoal = `${guardian} awaits`;
     } else {
       const killsLeft = killsPerZone - s.killsInZone;
-      const nextIsGate = zoneInRegion(s.zone) === zonesPerRegion;
+      const lastZone = s.zone >= zonesPerRealm - 1;
       marchGoal = `${killsLeft} kill${killsLeft === 1 ? '' : 's'} to ${
-        nextIsGate ? 'the Boss Gate' : `Zone ${zoneInRegion(s.zone) + 1}`
+        lastZone ? 'the portal' : `Zone ${s.zone + 2}`
       }`;
     }
 
@@ -465,15 +507,16 @@ export class Game {
       : `${purchaseName} in ~${formatDuration((purchaseCost - s.gold) / goldPerSec)}`;
 
     return {
-      regionName: regionName(region),
-      zoneInRegion: zoneInRegion(s.zone),
-      zonesPerRegion,
+      regionName: regionName(s.realm),
+      zoneInRegion: s.zone + 1,
+      zonesPerRegion: zonesPerRealm,
       leagues: s.leagues,
       dps: this.dps,
       heroLevel: s.hero.level,
       portal,
       boss,
       bossResult: this.currentBossResult(),
+      refusal: this.currentRefusal(),
       levelCost: heroLevelCost,
       canAffordLevel: s.gold >= heroLevelCost,
       goldPerSec,

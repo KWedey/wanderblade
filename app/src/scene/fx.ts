@@ -226,5 +226,17 @@ export function arcSpaceFromScene(
   groundY: number,
   apex: number,
 ): Vec2 {
-  return { x: px - heroX, y: (groundY - py) / Math.max(1, apex) };
+  return { x: (px - heroX) / Math.max(1, apex), y: (groundY - py) / Math.max(1, apex) };
+}
+
+/** Inverse of `arcSpaceFromScene`: core's arc space back onto the pixel grid. */
+export function sceneFromArcSpace(
+  ax: number,
+  ay: number,
+  heroX: number,
+  groundY: number,
+  apex: number,
+): Vec2 {
+  const k = Math.max(1, apex);
+  return { x: heroX + ax * k, y: groundY - ay * k };
 }

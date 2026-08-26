@@ -12,22 +12,18 @@ import { ditherAt, falloff, momentumLift, ringFalloff } from './light';
 import {
   arcApexHeight,
   arcSpaceFromScene,
-  arcCaughtBy,
-  arcInFlight,
-  arcPosition,
   decayTo,
   floaterOffsetY,
-  launchArc,
   lifeRemaining,
-  liftForFlight,
+  sceneFromArcSpace,
   shakeOffset,
   stepParticle,
   wrap,
   type Floater,
   type FloaterTier,
-  type LootArc,
   type Particle,
 } from './fx';
+import { arcPositionAt, type ArcPoint, type LootArc } from '@wanderblade/core';
 import {
   HERO_INK,
   LOOT_INK,
@@ -99,6 +95,10 @@ export interface SceneModel {
   /** World frozen behind the recap modal. */
   paused: boolean;
   reduceMotion: boolean;
+  /** Loot arcs in flight, straight off GameState — the scene never owns these. */
+  arcs: readonly LootArc[];
+  /** Engine clock the arcs are evaluated against. */
+  timeSec: number;
 }
 
 /**
@@ -107,28 +107,16 @@ export interface SceneModel {
  * pointer; the engine decides what a Strike hits. Scene units never cross
  * this boundary, so a resize or a scale change cannot move a hit.
  */
-export interface AimPoint {
-  x: number;
-  y: number;
-}
-
-export interface StrikeOutcome {
-  /**
-   * The tap position in arc space, or null when the Strike had no position
-   * (keyboard, or a tap that could not be located). A positionless Strike is
-   * still a real Strike: it swings and it builds momentum.
-   */
-  aim: AimPoint | null;
-  /** The scene's local catch read. Provisional: the engine owns the decision. */
-  caughtArc: boolean;
-  /** Base gold of the caught arc; the bonus it pays is the engine's to decide. */
-  caughtValue: number;
-}
-
 export interface Scene {
   frame(dtSec: number, model: SceneModel): void;
-  /** Register a Strike at a viewport point (or at the hero, when unpositioned). */
-  strikeAt(clientX: number | null, clientY: number | null): StrikeOutcome;
+  /**
+   * Register a Strike and report where it landed in core's arc space, or null
+   * when it had no position (keyboard, or a tap that could not be located). A
+   * positionless Strike still swings and still builds momentum.
+   */
+  strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null;
+  /** Play the catch flourish for an `arcCatch` the engine resolved. */
+  catchArc(bonusGold: number, upgraded: boolean): void;
   /** Viewport point loot streaks fly to — the HUD's gold readout. */
   setCollectAnchor(clientX: number, clientY: number): void;
   dispose(): void;
@@ -170,7 +158,6 @@ const FLOATER_LIFE = 1.05;
  * size and color are never picked per call site.
  */
 const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 1, damage: 1 };
-const TEXT_PAYOUT = '#fbf236';
 const TEXT_CATCH = '#fbf236';
 const TEXT_DAMAGE = '#ffffff';
 const LOOT_GLOW = '#fbf236';
@@ -185,7 +172,6 @@ const IMPACT_GLOW = '#ffffff';
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
 const STREAK_SEC = 0.5;
-const CATCH_RADIUS = 26;
 
 const PARTICLE_CAP = 220;
 const FLOATER_CAP = 12;
@@ -434,7 +420,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let lastKills = -1;
   let deathBurstQueued = false;
 
-  const arcs: LootArc[] = [];
   const particles: Particle[] = [];
   const floaters: Floater[] = [];
   const rests: Rest[] = [];
@@ -452,6 +437,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     momentumMult: 1,
     paused: false,
     reduceMotion: false,
+    arcs: [],
+    timeSec: 0,
   };
 
   function resize(): void {
@@ -591,66 +578,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     impacts.push({ x, y: y - 12, age: 0, life: 0.34 });
     shake = Math.min(MAX_SHAKE, shake + 2.1);
 
-    // The payout leaves the corpse on a visible arc; catching it mid-flight is
-    // the whole active-play verb (docs/ACTIVE-PLAY.md).
-    const gold = model.goldPerKill;
-    if (gold > 0) {
-      const seed = model.kills;
-      arcs.push(
-        launchArc(
-          x,
-          arcBaseY,
-          -(14 + hash01(seed) * 40),
-          arcBaseY,
-          liftForFlight(arcBaseY, arcBaseY, ARC_FLIGHT_SEC),
-          gold,
-          'gold',
-          hash01(seed * 5.5) * Math.PI * 2,
-        ),
-      );
-    }
     queue.shift();
     // Damage numbers belong to the thing that took the hit; a corpse's number
     // left hanging in the air reads as unowned UI.
     for (let i = floaters.length - 1; i >= 0; i--) {
       if (floaters[i]!.owned) floaters.splice(i, 1);
-    }
-  }
-
-  function resolveArc(arc: LootArc, caught: boolean): void {
-    const p = arcPosition(arc, Math.min(arc.age, arc.flightSec));
-    const skin = realmSkin(model.region);
-    if (caught) {
-      // Anchored to the hero, not to the point in the air where the tap
-      // landed. A word floating in open sky belongs to nothing on screen.
-      addFloater({
-        x: heroX + 6,
-        y: groundY - 30,
-        age: 0,
-        life: FLOATER_LIFE,
-        text: 'CAUGHT!',
-        color: TEXT_CATCH,
-        tier: 'catch',
-        owned: false,
-      });
-      burst(p.x, p.y, 12, ['#ffffff', skin.accent, '#fbf236'], 150);
-      shake = Math.min(MAX_SHAKE, shake + 1.2);
-    } else if (arc.value >= 0.05) {
-      addFloater({
-        x: p.x,
-        y: p.y - 14,
-        age: 0,
-        life: 0.8,
-        text: `+${formatShort(arc.value)}`,
-        color: TEXT_PAYOUT,
-        tier: 'payout',
-        owned: false,
-      });
-    }
-    if (caught) {
-      streaks.push({ x0: p.x, y0: p.y, age: 0, gold: arc.kind === 'gold', spin: arc.spin });
-    } else {
-      rests.push({ x: p.x, y: groundY - 3, age: 0, gold: arc.kind === 'gold', spin: arc.spin });
     }
   }
 
@@ -694,32 +626,53 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     });
   }
 
-  function toArcSpace(px: number, py: number): AimPoint {
+  function toArcSpace(px: number, py: number): ArcPoint {
     return arcSpaceFromScene(px, py, heroX, arcBaseY, arcApexHeight(ARC_FLIGHT_SEC));
   }
 
-  function strikeAt(clientX: number | null, clientY: number | null): StrikeOutcome {
+  function strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null {
     heroFlash = 0.12;
     // Restart the auto-attack cadence rather than zeroing it — zero would go
     // negative on the very next step() and fire an immediate duplicate swing.
     swingCooldown = 1 / SWINGS_PER_SEC;
     swing(true);
 
-    if (clientX === null || clientY === null) {
-      return { aim: null, caughtArc: false, caughtValue: 0 };
-    }
+    if (clientX === null || clientY === null) return null;
     const rect = canvas.getBoundingClientRect();
-    const px = (clientX - rect.left) / pixelScale;
-    const py = (clientY - rect.top) / pixelScale;
-    const aim = toArcSpace(px, py);
+    return toArcSpace((clientX - rect.left) / pixelScale, (clientY - rect.top) / pixelScale);
+  }
 
-    for (const arc of arcs) {
-      if (!arcCaughtBy(arc, px, py, CATCH_RADIUS)) continue;
-      arc.caught = true;
-      resolveArc(arc, true);
-      return { aim, caughtArc: true, caughtValue: arc.value };
+  /**
+   * The engine caught an arc. The number is the bonus it actually paid, and it
+   * is anchored to the hero: a figure floating at the point in open sky where
+   * the tap landed belongs to nothing on screen.
+   */
+  function catchArc(bonusGold: number, upgraded: boolean): void {
+    const skin = realmSkin(model.region);
+    addFloater({
+      x: heroX + 6,
+      y: groundY - 30,
+      age: 0,
+      life: FLOATER_LIFE,
+      text: `+${formatShort(bonusGold)}`,
+      color: TEXT_CATCH,
+      tier: 'catch',
+      owned: false,
+    });
+    if (upgraded) {
+      addFloater({
+        x: heroX + 6,
+        y: groundY - 44,
+        age: 0,
+        life: FLOATER_LIFE,
+        text: 'UPGRADED',
+        color: '#ffffff',
+        tier: 'catch',
+        owned: false,
+      });
     }
-    return { aim, caughtArc: false, caughtValue: 0 };
+    burst(heroX + 6, groundY - 26, 12, ['#ffffff', skin.accent, '#fbf236'], 150);
+    shake = Math.min(MAX_SHAKE, shake + 1.2);
   }
 
   // --- Simulation --------------------------------------------------------
@@ -801,20 +754,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     if (swingCooldown <= 0) {
       swingCooldown += 1 / SWINGS_PER_SEC;
       if (queue.length > 0) swing(false);
-    }
-
-    for (let i = arcs.length - 1; i >= 0; i--) {
-      const arc = arcs[i]!;
-      if (arc.caught) {
-        arcs.splice(i, 1);
-        continue;
-      }
-      arc.age += dtSec;
-      arc.spin += dtSec * 9;
-      if (!arcInFlight(arc)) {
-        resolveArc(arc, false);
-        arcs.splice(i, 1);
-      }
     }
 
     for (let i = impacts.length - 1; i >= 0; i--) {
@@ -1402,19 +1341,29 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /** Every live arc's scene position, straight from core's trajectory. */
+  function arcScreenPoints(): { x: number; y: number; spin: number }[] {
+    const apex = arcApexHeight(ARC_FLIGHT_SEC);
+    const out: { x: number; y: number; spin: number }[] = [];
+    for (const arc of model.arcs) {
+      const a = arcPositionAt(arc, model.timeSec);
+      if (!a) continue;
+      const p = sceneFromArcSpace(a.x, a.y, heroX, arcBaseY, apex);
+      out.push({ x: p.x, y: p.y, spin: arc.expiresAtSec * 9 });
+    }
+    return out;
+  }
+
   function drawArcs(): void {
+    const points = arcScreenPoints();
     // Loot in flight is the brightest thing in the scene; it should light the
     // air around it, not sit on the backdrop as a flat disc.
-    for (const arc of arcs) {
-      const p = arcPosition(arc, arc.age);
-      glowDisc(p.x, p.y, 7, LOOT_GLOW, 0.5);
-    }
+    for (const p of points) glowDisc(p.x, p.y, 7, LOOT_GLOW, 0.5);
 
-    for (const arc of arcs) {
-      const p = arcPosition(arc, arc.age);
-      const sprite = arc.kind === 'gold' ? coin : gem;
+    for (const p of points) {
+      const sprite = coin;
       // Squash the coin on its spin so it reads as tumbling metal.
-      const squash = Math.abs(Math.cos(arc.spin));
+      const squash = Math.abs(Math.cos(p.spin + clockSec * 9));
       const w = Math.max(2, Math.round(sprite.width * (0.35 + squash * 0.65)));
       ctx.drawImage(
         sprite.image,
@@ -1423,15 +1372,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         w,
         sprite.height,
       );
-      // Catch affordance: a bright ring pulse while the arc is still catchable.
-      if (arcInFlight(arc)) {
-        const pulse = (Math.sin(clockSec * 12 + arc.spin) + 1) / 2;
-        ctx.fillStyle = pulse > 0.5 ? '#ffffff' : '#fbf236';
-        const r = 7;
-        for (let a = 0; a < 8; a++) {
-          const ang = (a / 8) * Math.PI * 2 + clockSec * 3;
-          ctx.fillRect(Math.floor(p.x + Math.cos(ang) * r), Math.floor(p.y + Math.sin(ang) * r), 1, 1);
-        }
+      // Catch affordance: a bright ring pulse. Core only keeps an arc in
+      // `state.arcs` while it is catchable, so anything drawn here is live.
+      const pulse = (Math.sin(clockSec * 12 + p.spin) + 1) / 2;
+      ctx.fillStyle = pulse > 0.5 ? '#ffffff' : '#fbf236';
+      const r = 7;
+      for (let a = 0; a < 8; a++) {
+        const ang = (a / 8) * Math.PI * 2 + clockSec * 3;
+        ctx.fillRect(Math.floor(p.x + Math.cos(ang) * r), Math.floor(p.y + Math.sin(ang) * r), 1, 1);
       }
     }
   }
@@ -1607,7 +1555,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     window.removeEventListener('resize', onResize);
   }
 
-  return { frame, strikeAt, setCollectAnchor, dispose };
+  return { frame, strikeAt, catchArc, setCollectAnchor, dispose };
 }
 
 /**

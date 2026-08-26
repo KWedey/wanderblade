@@ -7,6 +7,7 @@ import {
   arcInFlight,
   arcPosition,
   arcSpaceFromScene,
+  sceneFromArcSpace,
   decayTo,
   floaterOffsetY,
   launchArc,
@@ -205,11 +206,21 @@ describe('arcSpaceFromScene', () => {
     expect(arcSpaceFromScene(50, 60, 50, 100, 40).y).toBeCloseTo(1);
   });
 
-  it('is independent of pixel scale', () => {
+  // Core measures reach (0.5-1.5) and catch radius (0.12) in apex units, so a
+  // point is only comparable against them if x is normalized like y. The old
+  // assertion here kept x in raw scene pixels, which made the distance test in
+  // arcHitIndex mix units.
+  it('is independent of pixel scale in both axes', () => {
     const a = arcSpaceFromScene(120, 60, 50, 100, 40);
     const b = arcSpaceFromScene(240, 120, 100, 200, 80);
-    expect(b.x).toBeCloseTo(a.x * 2);
+    expect(b.x).toBeCloseTo(a.x);
     expect(b.y).toBeCloseTo(a.y);
+  });
+
+  it('round-trips through sceneFromArcSpace', () => {
+    const back = sceneFromArcSpace(1.75, 1, 50, 100, 40);
+    expect(back.x).toBeCloseTo(120);
+    expect(back.y).toBeCloseTo(60);
   });
 });
 

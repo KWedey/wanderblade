@@ -3,7 +3,7 @@
 // this is UI-only and never feeds back into game math.
 
 import type { GameEvent, GearSlot, Rarity } from '@wanderblade/core';
-import { zonesPerRegion } from '@wanderblade/core';
+import { zonesPerRealm } from '@wanderblade/core';
 import { formatNumber } from './format';
 
 /** One rendered log line. `kind` drives its CSS accent. */
@@ -17,7 +17,6 @@ export interface LogEntry {
     | 'gate'
     | 'bossWin'
     | 'bossFail'
-    | 'edge'
     | 'info';
 }
 
@@ -59,12 +58,12 @@ export const REGION_NAME_COUNT = REGION_NAMES.length;
 
 /** Region index that a global zone belongs to. */
 export function regionOfZone(zone: number): number {
-  return Math.floor(zone / zonesPerRegion);
+  return Math.floor(zone / zonesPerRealm);
 }
 
-/** 1-based zone number within its region (1..zonesPerRegion). */
+/** 1-based zone number within its realm (1..zonesPerRealm). */
 export function zoneInRegion(zone: number): number {
-  return (zone % zonesPerRegion) + 1;
+  return (zone % zonesPerRealm) + 1;
 }
 
 const ENEMY_NAMES: string[][] = [
@@ -157,27 +156,42 @@ export function describeEvent(e: GameEvent): LogEntry | null {
     case 'zone':
       return {
         kind: 'zone',
-        text: `Pressed on — ${regionName(regionOfZone(e.zone))} Zone ${zoneInRegion(e.zone)}`,
+        text: `Pressed on — ${regionName(e.realm)} Zone ${e.zone + 1}`,
       };
-    case 'region':
-      return { kind: 'region', text: `Entered ${regionName(e.region)}!` };
-    case 'gate':
+    case 'arcCatch':
+      return {
+        kind: 'kill',
+        text: `Snatched it mid-air — +${formatNumber(e.bonusGold)} gold${
+          e.upgraded ? ', and the loot came up a tier' : ''
+        }`,
+      };
+    case 'portalReady':
       return {
         kind: 'gate',
-        text: `Reached the gate — ${bossName(e.region)} looms ahead`,
+        text: `The road runs out — ${bossName(e.realm)} waits beyond the portal`,
       };
-    case 'bossWin':
+    case 'portalEnter':
       return {
-        kind: 'bossWin',
-        text: `Slew ${bossName(e.region)} — ${regionName(e.region + 1)} lies open`,
+        kind: 'region',
+        text: `Stepped through — ${capitalize(bossName(e.realm))} turns to face you`,
       };
-    case 'bossFail':
+    case 'abandon':
       return {
         kind: 'bossFail',
-        text: `${capitalize(bossName(e.region))} — too strong… for now`,
+        text: `Withdrew from ${bossName(e.realm)} — its wounds keep`,
       };
-    case 'edge':
-      return { kind: 'edge', text: 'You reach World’s Edge — the road runs on beyond' };
+    case 'bossVictory':
+      return {
+        kind: 'bossWin',
+        text: `Slew ${bossName(e.realm)} — +${formatNumber(
+          e.payout + e.pendingBanked,
+        )} Ascendancy banked`,
+      };
+    case 'ascend':
+      return {
+        kind: 'region',
+        text: `The realm ascends — ${regionName(e.toRealm)} opens ahead`,
+      };
     default:
       return null;
   }

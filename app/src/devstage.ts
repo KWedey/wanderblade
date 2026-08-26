@@ -28,6 +28,9 @@ export const STAGE_PRESETS: Record<string, Omit<StagePlan, 'seed'>> = {
 /**
  * Spends everything affordable, repeatedly, until a pass buys nothing. A single
  * pass is not enough: one level-up can make the next skill affordable.
+ *
+ * Each track is drained inside the pass. Skill ranks are uncapped, so buying
+ * one rank per pass never converged within any sane pass budget.
  */
 export function spendDown(state: GameState, maxPasses = 40): number {
   let bought = 0;
@@ -38,7 +41,7 @@ export function spendDown(state: GameState, maxPasses = 40): number {
       boughtThisPass++;
     }
     for (const id of SKILL_IDS) {
-      if (buySkill(state, id)) {
+      while (buySkill(state, id)) {
         bought++;
         boughtThisPass++;
       }
