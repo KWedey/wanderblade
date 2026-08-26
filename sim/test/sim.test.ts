@@ -21,6 +21,7 @@ import {
 } from '../src/probes';
 import { runPlayer } from '../src/simulate';
 import { runCorrectness, runPacing } from '../src/validators';
+import { PERMANENT_HORIZON_SEC } from '../src/probes';
 import type { BreachKind, SeedResult, ShopSample, SimConfig } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
@@ -496,5 +497,61 @@ describe('the dead-time and starvation clauses bite', () => {
       deadTime: { ...main.deadTime, longestSec: 76 * 3600, realms: 30 },
     });
     expect(find(parked, 'P9').pass).toBe(false);
+  });
+});
+
+/**
+ * P10's band is stated at a fixed checkpoint, so a run that does not reach it
+ * must say so rather than judge a short measurement against a long bar. That
+ * mismatch is what made bare `npm run sim` print a red line meaning "you used
+ * the wrong flags", which teaches people to ignore red.
+ */
+describe('P10 bands at a checkpoint, not at the run length', () => {
+  const p10 = (r: SeedResult) =>
+    runPacing(r).find((v) => v.id === 'P10') as { pass: boolean; detail: string };
+
+  const uplift = (over: Partial<NonNullable<SeedResult['permanentUplift']>> = {}) => ({
+    horizonSec: PERMANENT_HORIZON_SEC,
+    reachedHorizon: true,
+    measuredAtSec: PERMANENT_HORIZON_SEC,
+    idleEarned: 1000,
+    activeEarned: 1840,
+    ratio: 1.84,
+    idleFirstAscensionSec: 14 * 3600,
+    activeFirstAscensionSec: 11 * 3600,
+    rankTarget: 20,
+    idleRankSec: 4.5 * 86_400,
+    activeRankSec: 3.5 * 86_400,
+    ...over,
+  });
+
+  it('passes on the measured middle of the band', () => {
+    expect(p10(stubResult({ permanentUplift: uplift() })).pass).toBe(true);
+  });
+
+  it('fails outside the band once the checkpoint is reached', () => {
+    expect(p10(stubResult({ permanentUplift: uplift({ ratio: 1.2 }) })).pass).toBe(false);
+    expect(p10(stubResult({ permanentUplift: uplift({ ratio: 3.0 }) })).pass).toBe(false);
+  });
+
+  it('leaves the ratio unbanded, and says so, on a run that stops short', () => {
+    const short = uplift({
+      reachedHorizon: false,
+      measuredAtSec: 7 * 86_400,
+      ratio: 1.2, // would fail the band, and must not be judged by it
+    });
+    const v = p10(stubResult({ permanentUplift: short }));
+    expect(v.pass).toBe(true);
+    expect(v.detail).toContain('not banded');
+    expect(v.detail).toContain('band is stated at');
+  });
+
+  it('still bands the sooner-clause on a short run, so it cannot pass vacuously', () => {
+    const short = uplift({
+      reachedHorizon: false,
+      measuredAtSec: 7 * 86_400,
+      activeFirstAscensionSec: 13.9 * 3600, // 1.01x sooner — nowhere near the floor
+    });
+    expect(p10(stubResult({ permanentUplift: short })).pass).toBe(false);
   });
 });

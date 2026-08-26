@@ -98,7 +98,12 @@ export interface SpendDepth {
 
 /** What active play buys in permanent currency, against the same span idle. */
 export interface PermanentUplift {
+  /** The horizon the band is *stated* at — a fixed checkpoint, not the run length. */
   horizonSec: number;
+  /** Whether both runs actually reached it. False leaves the ratio unbanded. */
+  reachedHorizon: boolean;
+  /** Where the ratio was actually taken, which equals `horizonSec` when reached. */
+  measuredAtSec: number;
   idleEarned: number;
   activeEarned: number;
   /** Active Ascendancy earned over idle. */
