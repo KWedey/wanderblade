@@ -413,25 +413,30 @@ export function panelVars(skin: RealmSkin): Record<string, string> {
 
 /** Fixed inks the hero and his sword always wear, in every realm. */
 /**
- * The hero has to be the brightest silhouette in the frame, not the darkest.
- * A dark figure with a thin rim works when the space around it is empty; ours
- * stands in a busy one, so it wins on luminance or it does not win.
+ * The hero wins on *hue*, not on luminance alone. Lifting every tone made him
+ * the brightest thing in frame and cost him his identity - a critic read the
+ * result as "grey-blue and off-white, the two least saturated colours in a
+ * saturated scene." A warm figure on a cool green-and-blue world separates on
+ * two axes at once, so value rises only far enough to clear the background and
+ * saturation goes up rather than down.
  */
 export const HERO_INK: InkSet = {
   outline: INK.black,
-  hair: lighten(INK.wood, 0.2),
-  skin: lighten(INK.parchment, 0.18),
+  hair: saturate(lighten(INK.woodLight, 0.06), 0.3),
+  skin: saturate(lighten(INK.parchment, 0.06), 0.2),
   // A face has to read at 14px: a lit cheek, a dark eye, one tunic highlight.
-  skinLit: lighten(INK.parchment, 0.5),
+  skinLit: lighten(INK.parchment, 0.34),
   eye: '#241016',
-  hatBand: lighten('#3c2a3f', 0.3),
-  cloak: lighten(INK.rose, 0.22),
-  scarf: lighten(INK.rose, 0.22),
-  tunic: lighten(INK.blue, 0.3),
-  tunicLit: lighten(INK.blue, 0.55),
-  belt: lighten(INK.woodLight, 0.25),
-  pants: lighten(INK.plum, 0.3),
-  boot: lighten(INK.wood, 0.18),
+  hatBand: saturate(lighten('#3c2a3f', 0.14), 0.25),
+  cloak: saturate(INK.rose, 0.22),
+  scarf: saturate(INK.rose, 0.22),
+  // The warm coat and blue scarf are what a critic named when it found him
+  // instantly. They go back at full strength.
+  tunic: saturate(lighten(INK.blue, 0.1), 0.3),
+  tunicLit: saturate(lighten(INK.blue, 0.3), 0.25),
+  belt: saturate(INK.woodLight, 0.28),
+  pants: saturate(lighten(INK.woodLight, 0.02), 0.3),
+  boot: saturate(INK.wood, 0.3),
   steel: '#ffffff',
   steelDark: INK.ice,
   // A fuller down the blade: a solid white bar read as a parallelogram.
@@ -531,6 +536,28 @@ export function groundBladeOf(skin: RealmSkin): string {
   return blade;
 }
 
+/**
+ * Scenery two value steps down, for the layer nearest the camera. Foreground
+ * trees, hedge, hills and turf all sat in one green band, so nothing read as
+ * in front of anything and the fight had no ground to stand against. Darkening
+ * only the nearest layer buys the whole foreground separation in one edit.
+ */
+export const FOREGROUND_DARKEN = 0.22;
+
+export function foregroundInk(skin: RealmSkin): InkSet {
+  const ink = sceneryInk(skin);
+  const down = (hex: string): string => mixHex(hex, '#000000', FOREGROUND_DARKEN);
+  return {
+    ...ink,
+    leaf: down(ink.leaf!),
+    leafDark: down(ink.leafDark!),
+    leafLite: down(ink.leafLite!),
+    bark: down(ink.bark!),
+    barkDark: down(ink.barkDark!),
+    grassBlade: down(ink.grassBlade!),
+  };
+}
+
 export function sceneryInk(skin: RealmSkin): InkSet {
   return {
     outline: INK.black,
@@ -623,6 +650,12 @@ export function monsterInk(skin: RealmSkin, shape = 0): InkSet {
 
 /** Linear blend of two hex colours. Aerial perspective: distant layers get
  *  mixed toward the haze so depth reads without any gradient. */
+/** Pushes a colour's saturation up (or down, negative) without moving its hue. */
+export function saturate(hex: string, amount: number): string {
+  const [h, sat, l] = toHsl(hex);
+  return toHex(h, Math.min(1, Math.max(0, sat + amount)), l);
+}
+
 export function mixHex(a: string, b: string, t: number): string {
   const k = Math.max(0, Math.min(1, t));
   const na = parseInt(a.slice(1), 16);

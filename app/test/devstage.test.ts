@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { initialState } from '@wanderblade/core';
+import { initialState, purchaseOptions } from '@wanderblade/core';
 
 import { spendDown, STAGE_PRESETS, stageFromQuery, stageState } from '../src/devstage';
 
@@ -65,5 +65,17 @@ describe('stageFromQuery', () => {
 
   it('exposes a late preset that is longer than mid', () => {
     expect(STAGE_PRESETS['late']!.totalSec).toBeGreaterThan(STAGE_PRESETS['mid']!.totalSec);
+  });
+});
+
+describe('a staged capture shows a real choice', () => {
+  // "Never capture a frame where every upgrade is unaffordable - the panel's
+  // answer is 'buy nothing', the one answer a screenshot must never give."
+  // Ending staging on a spend pass froze the shop at zero gold, which is not a
+  // state a player is ever in: income is continuous.
+  it.each(Object.keys(STAGE_PRESETS))('leaves %s able to afford something', (stage) => {
+    const state = stageState({ ...STAGE_PRESETS[stage]!, seed: 7 });
+    const affordable = purchaseOptions(state).filter((o) => o.unlocked && !o.atMax && state.gold >= o.cost);
+    expect(affordable.length, `${stage} stages to an all-unaffordable shop`).toBeGreaterThan(0);
   });
 });

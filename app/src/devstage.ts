@@ -5,6 +5,7 @@
 
 import {
   advance,
+  purchaseOptions,
   buyHeroLevel,
   buySkill,
   initialState,
@@ -59,12 +60,37 @@ export function spendDown(state: GameState, maxPasses = 40): number {
 export function stageState(plan: StagePlan): GameState {
   const state = initialState(plan.seed);
   const rounds = Math.max(1, plan.rounds);
-  const chunk = plan.totalSec / rounds;
+  // The settle comes out of the plan's own budget, not on top of it, so a
+  // staged run still advances exactly plan.totalSec of engine time.
+  const settle = Math.min(SETTLE_SEC, plan.totalSec * 0.25);
+  const chunk = (plan.totalSec - settle) / rounds;
   for (let i = 0; i < rounds; i++) {
     advance(state, chunk);
     spendDown(state);
   }
+  // A player never sits at zero gold: income is continuous, so within seconds
+  // of any purchase something is affordable again. Ending the staging on a
+  // spend pass froze the shop at "buy nothing", which is the one answer a
+  // captured frame must never give - and it is a staging artefact, not the
+  // game. Run the last stretch unspent, in steps, until the panel shows a real
+  // choice; a fixed span cannot do it, because 90 seconds of income is
+  // everything at realm 0 and a rounding error twenty realms later.
+  let spent = 0;
+  const step = settle / SETTLE_STEPS;
+  while (spent < settle && !canAffordAnything(state)) {
+    advance(state, step);
+    spent += step;
+  }
+  if (spent < settle) advance(state, settle - spent);
   return state;
+}
+
+/** Seconds of unspent income the staged run ends on, and how finely it is walked. */
+const SETTLE_SEC = 90;
+const SETTLE_STEPS = 90;
+
+function canAffordAnything(state: GameState): boolean {
+  return purchaseOptions(state).some((o) => o.unlocked && !o.atMax && state.gold >= o.cost);
 }
 
 /**

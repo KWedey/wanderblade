@@ -688,21 +688,22 @@ body {
 .upgrade-name {
   letter-spacing: 0.05em;
   grid-area: name;
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .upgrade-detail {
   grid-area: detail;
-  font-size: 16px;
+  font-size: 17px;
 }
 
+/* The loudest thing in the row. "What do I buy next" is a price comparison,
+   and the price was two points smaller than the name it sat beside. */
 .upgrade-cost {
   grid-area: cost;
   /* "163 g" is one token to a reader; wrapping it put the unit on its own line. */
   white-space: nowrap;
-  font-size: 20px;
+  font-size: 26px;
   color: var(--gold);
-  white-space: nowrap;
 }
 
 .upgrade-btn.affordable {
@@ -719,13 +720,27 @@ body {
   cursor: default;
 }
 
+/* Unaffordable, not invisible. Fading parchment on brown to 55% left the row
+   brown-on-brown - four separate reports of the same fault. It keeps full
+   contrast and says what it is with a dimmer *hue*, not a dimmer alpha. */
 .upgrade-btn:disabled:not(.locked):not(.maxed) {
-  opacity: 0.55;
+  background: var(--panel-sunk);
+  border-color: #2b1a17;
+  color: var(--parchment);
+}
+
+.upgrade-btn:disabled:not(.locked):not(.maxed) .upgrade-cost {
+  color: #d9a066;
+}
+
+.upgrade-btn:disabled:not(.locked):not(.maxed) .upgrade-detail {
+  color: #b4826a;
 }
 
 .upgrade-btn.locked {
-  opacity: 0.6;
   border-style: dashed;
+  border-color: #3d2b26;
+  color: #a8785f;
 }
 
 .upgrade-btn.locked .upgrade-detail {

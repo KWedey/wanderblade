@@ -41,6 +41,7 @@ import {
   mixHex,
   monsterInk,
   realmSkin,
+  foregroundInk,
   sceneryInk,
   type RealmSkin,
 } from './palette';
@@ -306,6 +307,9 @@ interface SkinnedSprites {
   monsters: BakedSprite[];
   /** Three canopy silhouettes; a treeline of one shape reads as a stamp. */
   trees: BakedSprite[];
+  /** Nearest-camera copies, two value steps down. */
+  fernNear: BakedSprite;
+  tuftNear: BakedSprite;
   rock: BakedSprite;
   fence: BakedSprite;
   tuft: BakedSprite;
@@ -336,6 +340,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // The treeline stands behind everything that matters; it bakes off the
     // graded skin so the sprite plane has something to read against.
     const bInk = sceneryInk(backdropSkin(skin));
+    const fgInk = foregroundInk(skin);
     const built: SkinnedSprites = {
       monsters: MONSTER_SHAPES.map((m, i) => bakeSprite(m, monsterInk(skin, i))),
       trees: [TREE, TREE_TALL, TREE_WIDE].map((t) => bakeSprite(t, bInk)),
@@ -344,6 +349,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       tuft: bakeSprite(TUFT, sInk),
       flower: bakeSprite(FLOWER, sInk),
       fern: bakeSprite(FERN, sInk),
+      fernNear: bakeSprite(FERN, fgInk),
+      tuftNear: bakeSprite(TUFT, fgInk),
       birds: [BIRD_UP, BIRD_DOWN].map((b) => bakeSprite(b, bInk)),
     };
     skinCache.set(key, built);
@@ -1194,7 +1201,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
     // Nearest depth: double-size fronds at the frame edge, the layer the
     // camera actually passes through.
-    const fern = sprites.fern;
+    const fern = sprites.fernNear;
     for (let i = 0; i < 14; i++) {
       const x = Math.floor(wrap(hash01(i * 9.1 + 21) * PROP_SPAN - scrollFore, PROP_SPAN));
       if (x < -40 || x > vw + 40) continue;
@@ -1233,7 +1240,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
           drawSprite(ctx, sprites.rock, x, groundY + 1);
           break;
         case 'tuft':
-          drawSprite(ctx, sprites.tuft, x, groundY + 2);
+          drawSprite(ctx, sprites.tuftNear, x, groundY + 2);
           break;
         case 'flower':
           drawSprite(ctx, sprites.flower, x, groundY + 2);

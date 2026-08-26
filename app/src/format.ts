@@ -130,9 +130,10 @@ export const NO_ESTIMATE = 'beyond reckoning';
 
 /**
  * Shown for anything under a second. "0s" against a guardian reads as a broken
- * readout rather than as a fight that is already over.
+ * readout; "moments" read as placeholder copy. A fight that is over before the
+ * readout can tick is instant, and that is a real answer.
  */
-export const NO_TIME = 'moments';
+export const NO_TIME = 'instant';
 
 export function formatDuration(totalSec: number): string {
   if (!Number.isFinite(totalSec)) return NO_ESTIMATE;
