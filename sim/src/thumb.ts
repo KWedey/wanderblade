@@ -6,6 +6,7 @@
 
 import {
   advance,
+  ARC_CATCH_MULT,
   arcPositionAt,
   ARC_CATCH_SEC,
   ARC_FLIGHT_SEC,
@@ -59,9 +60,13 @@ export interface ThumbResult {
   aimed: number;
   /** Aimed taps whose chosen coin had landed before the strike resolved. */
   doomed: number;
+  /** Catches that took the coin the player actually aimed at, not a neighbour. */
+  intendedHits: number;
   catches: number;
   /** Catches per aimed tap. */
   catchRate: number;
+  /** Share of catches that were the aimed coin. 0 means every catch was luck. */
+  intendedRate: number;
   goldPerSec: number;
   /** Multiple of the same state left alone for the same span. */
   vsIdle: number;
@@ -155,6 +160,7 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
   let aimed = 0;
   let catches = 0;
   let doomed = 0;
+  let intendedHits = 0;
   const gold0 = state.gold;
   const t0 = state.timeSec;
 
@@ -187,7 +193,18 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
     taps += 1;
 
     const events = advance(state, period, strikes);
-    for (const e of events) if (e.type === 'arcCatch') catches += 1;
+    // Identify the caught coin by its payout rather than by splitting the
+    // advance: `advance` skips a strike stamped exactly at its start, so
+    // stopping the clock on the strike instant silently drops it. `bonusGold`
+    // is the same multiplication the engine did, so the compare is exact.
+    // Coin shares are spread per-coin (#44), which makes collisions rare but
+    // not impossible — this is a reported number, never an assertion.
+    const wanted = mark ? mark.gold * (ARC_CATCH_MULT - 1) : NaN;
+    for (const e of events) {
+      if (e.type !== 'arcCatch') continue;
+      catches += 1;
+      if (e.bonusGold === wanted) intendedHits += 1;
+    }
   }
 
   const secs = state.timeSec - t0;
@@ -197,8 +214,10 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
     taps,
     aimed,
     doomed,
+    intendedHits,
     catches,
     catchRate: aimed > 0 ? catches / aimed : 0,
+    intendedRate: catches > 0 ? intendedHits / catches : 0,
     goldPerSec,
     vsIdle: idle > 0 ? goldPerSec / idle : 0,
     scatterRadii: scatter / REFERENCE_RADIUS,
@@ -235,8 +254,10 @@ function averaged(thumb: Thumb, opts: SweepOptions, warms: GameState[]): ThumbRe
     taps: runs.reduce((n, r) => n + r.taps, 0),
     aimed: runs.reduce((n, r) => n + r.aimed, 0),
     doomed: runs.reduce((n, r) => n + r.doomed, 0),
+    intendedHits: runs.reduce((n, r) => n + r.intendedHits, 0),
     catches: runs.reduce((n, r) => n + r.catches, 0),
     catchRate: mean((r) => r.catchRate),
+    intendedRate: mean((r) => r.intendedRate),
     goldPerSec: mean((r) => r.goldPerSec),
     vsIdle: mean((r) => r.vsIdle),
     scatterRadii: runs[0]!.scatterRadii,

@@ -1,5 +1,6 @@
 // Report and CSV rendering. Presentation only — no measurement happens here.
 
+import { runThumb, warmState, type Thumb } from './thumb';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fmtTime } from './validators';
@@ -138,4 +139,47 @@ export function writeCsv(r: SeedResult, dir: string): string {
   );
   writeFileSync(path, [header, ...rows].join('\n') + '\n', 'utf8');
   return path;
+}
+
+/**
+ * The active layer's skill metric, printed and never banded.
+ *
+ * Catch *rate* answers "is active play faster". It cannot answer "is active
+ * play skilful", because in a field this dense a tap that misses its coin
+ * lands on a neighbour — under the shipped circular window **every** catch at
+ * human latency is a neighbour (`docs/DECISIONS.md` #43). `aimed coin` is the
+ * share that took the coin the player actually went for, and it is the number
+ * that separates the two questions. Reported so it stops living only inside an
+ * ad-hoc sweep; no PASS/FAIL, nothing here can go red.
+ */
+export function formatThumb(seed: number): string {
+  const warm = warmState(seed);
+  const opts = { seed, seconds: 20, pxPerUnit: 31, seeds: 1 };
+  const base = { scatterPx: 0, tapsPerSec: 5, lead: 0 } as const;
+  const rows: [string, Thumb][] = [
+    ['  0 ms  landing', { ...base, latencyMs: 0, pick: 'landing' }],
+    ['250 ms  landing', { ...base, latencyMs: 250, pick: 'landing' }],
+    ['250 ms  apex   ', { ...base, latencyMs: 250, pick: 'apex' }],
+    ['250 ms  landing, sloppy aim', { ...base, latencyMs: 250, scatterPx: 12, pick: 'landing' }],
+  ];
+  const out: string[] = [
+    '',
+    'ACTIVE THUMB — reported, not a validator',
+    '',
+    '  latency  pick                          catch rate   aimed coin',
+  ];
+  for (const [label, thumb] of rows) {
+    const r = runThumb(thumb, opts, warm);
+    out.push(
+      `  ${label.padEnd(30)}${r.catchRate.toFixed(2).padStart(8)}` +
+        `${(r.intendedRate * 100).toFixed(0).padStart(12)}%`,
+    );
+  }
+  out.push('');
+  out.push(
+    '  "aimed coin" is the share of catches that took the coin the player went',
+    '  for. A high catch rate beside a low aimed-coin share means active play is',
+    '  faster without being skilful — see docs/DECISIONS.md #43 and #45.',
+  );
+  return out.join('\n');
 }

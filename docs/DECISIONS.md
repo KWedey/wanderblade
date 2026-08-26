@@ -528,3 +528,38 @@ Abbreviating buys the desktop and not the phone — stripping the article and th
 
 **One arithmetic trap, recorded because the first draft got it backwards.** Normalising can push a share slightly *outside* the raw `1 ± spread` band, not inside it: a fat coin beside two lean ones divides by a sum below `n`. Measured envelope is **0.5544 … 1.4528** over 500k kills, and the test pins that rather than the constant.
 
+## 46. Flight length cannot move the aim problem, and the sim reports `intended` — 2026-08-26
+
+**Decision:** `ARC_FLIGHT_SEC` stays **1.5**. `npm run sim` now prints an **ACTIVE THUMB** block reporting catch rate beside `aimed coin` — the share of catches that took the coin the player went for. Reported, never banded.
+
+**Why flight length is not a lever, and it is arithmetic rather than a measurement.** The displacement that defeats an aimed tap is `latency × speed`; the catch radius is `ARC_CATCH_SEC × speed`. Their ratio is **`latency / ARC_CATCH_SEC`** — speed cancels. `ARC_FLIGHT_SEC` changes only speed, so it cannot move the ratio at all. That is the same scale-freedom that makes #35's window constant in time, seen from the other side.
+
+Measured with the shipped circular window, the real engine path, 250 ms, 400 taps:
+
+| `ARC_FLIGHT_SEC` | coins airborne | landing rate | landing `intended` | ±1.0 |
+|---|---|---|---|---|
+| **1.5** (control) | 18.2 | 0.93 | **0%** | 0.13 |
+| 2.25 | 29.1 | 0.75 | **0%** | 0.07 |
+| 3.0 | 40.0 | 0.69 | **0%** | 0.07 |
+| 6.0 | 82.8 | 0.34 | **0%** | 0.05 |
+
+`intended` is 0% at every length, exactly as the cancellation predicts.
+
+**With the ellipse of #45 it moves a little, and not where it was hoped.** Landing `intended` 34% → **42%** at flight 4.5, and the apex comes off 0% only to **1%**. The apex curvature offset does shrink as predicted — `4·Δp²`, so 0.111 at flight 1.5 becomes 0.028 at flight 3.0, well inside `ARC_CATCH_PERP` — but a longer flight also multiplies the coins in the air (18 → 40), and a neighbour then outscores the aimed coin instead. The lever trades curvature for density and nets out.
+
+**Declined on feel as well as numbers.** At flight 3.0 a coin hangs for three seconds with forty on screen at once; at 4.5 there are sixty-one. That is floating debris, not a thrown purse. The latency profile also turns erratic — at flight 4.0 a 150 ms player catches 0.20 while a 100 ms player catches 1.00 — which is the reflex-lottery shape #45 rejected compensation for.
+
+**Why `intended` is printed and not banded.** Catch *rate* answers "is active play faster". It cannot answer "is active play skilful", because in a dense field a tap that misses its coin lands on a neighbour. The shipped block makes the gap visible on every run:
+
+```
+  latency  pick                          catch rate   aimed coin
+    0 ms  landing                   0.97         100%
+  250 ms  landing                   0.83           0%
+  250 ms  apex                      0.97           0%
+  250 ms  landing, sloppy aim       0.58          19%
+```
+
+The last row is the whole problem in one line: **sloppy aim scores 19% where perfect aim scores 0%**, because scatter accidentally compensates for a systematically late tap. No band is attached — a metric that can go red becomes a thing to tune, and this one is evidence.
+
+**One implementation note worth keeping.** The caught coin is identified by matching `bonusGold`, not by splitting the advance around the strike. `advance` skips a strike stamped exactly at its start, so stopping the clock on the strike instant silently drops it and every catch rate reads zero. Coin shares are spread per-coin (#44), so the match is near-unique — acceptable for a reported number, never for an assertion.
+
