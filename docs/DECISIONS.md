@@ -739,3 +739,20 @@ The rise is a sample collapse, not skill. Catches by scatter: **398 / 343 / 315 
 Fewer, larger islands at higher coverage is the "isolated blades → continuous patch" claim, made without depending on animation-phase-sensitive screenshot diffing (two same-code captures of the live dev server differ by ~488k of 1.57M pixels from animation/scroll state alone — raw pixel diffing between captures is not a valid before/after instrument here).
 
 **Both probes fire.** Reverting `foliageNotchAt` to the old per-row roll fails `never jumps between adjacent rows the way an independent roll did` (max delta ≥3.5 vs the lobe version's bound). Reverting `grassClumpBlades` to a single stamp drops the coverage/island computation back to the "before" row above.
+
+## 53. Sun halo is stacked solid discs, hill bands carry a base shadow and lit cap, and the far horizon shares the hills' hue — 2026-08-26
+
+**Decision:** `sunHaloBands` (`palette.ts`) replaces `glowRingRadii`/`glowDisc` for the sun only — each band is a full filled disc (`fillDisc`, `scene.ts`) painted largest-and-dimmest first, so the glow is carried by filled area and a colour step, never by a ring of unpainted pixels. `drawHills` gains a dark base band and a lit cap on every layer, the same two-band trick `drawRange` already used. `coherentRange` derives each realm's `range` from its own `hillFar` instead of an independently authored ink.
+
+**Why:** Gauntlet round 35 (`verdict35.md`, img-1, ranked #4/4) named the sun "a dashed/dithered ring... the single worst flaw across all four images" and the hills "flat stepped color bands (teal-green, then grey-blue, then olive) with no gradient — reads as arbitrary layering." The sun had already failed once as a dither and once as concentric ring *outlines* (`glowDisc`, round 34) — two attempts at "which pixels to leave out." `glowDisc` only ever plotted the two edge pixels of each ring per scanline, never filled between them, which is the dashed artifact by construction.
+
+**The range mismatch was mechanical, not just a taste call.** Three of seven realms hardcoded `range: INK.grey` regardless of `hillFar` — Greenwood's teal hillFar sat behind a neutral cool grey with no shared hue at all, which computes out to `#37684e` (hillFar, post-recede) next to `#6d6c6f` (old range, post-recede): different hue families, not one more step of atmospheric perspective. `coherentRange` mixes 65% hillFar into the authored range before recession runs, so the horizon and the hills it's behind stay one family.
+
+**Still no gradients** — DECISIONS.md #13 stands. Every new band is a hard flat fill; `sunHaloBands` and the hill cap/base are discrete value steps, the same idiom as `drawRange`'s existing "two value bands and a lit cap," never a radial or linear blend.
+
+**`glowDisc`/`glowRingRadii` are untouched** — loot-pickup glow (`scene.ts:1795`) still uses them and was out of scope for this round.
+
+**Evidence:**
+- Deterministic: `coherentRange` and `sunHaloBands` are pure functions with unit tests in `palette.test.ts` (mix math, monotonic band ordering, empty-input edges); reverting either reds its own tests.
+- Qualitative only (not measured): `.gauntlet/ours/sky-after.png` at `visual/sky@9167623` (dirty) shows the sun as one glowing disc with three visible value steps and no gap between them, and both hill layers showing a shadowed base and a lit ridge instead of a flat card.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 36 passed (36)**, **Tests 688 passed (688)**.

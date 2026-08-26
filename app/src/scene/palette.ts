@@ -76,7 +76,7 @@ export const INK = {
   bronze: '#8a6f30',
 } as const;
 
-const REALM_SKINS: RealmSkin[] = [
+const RAW_REALM_SKINS: RealmSkin[] = [
   // Greenwood — the sunlit default: high-key cyan sky over vivid grass.
   {
     skyTop: INK.sky,
@@ -288,6 +288,21 @@ const REALM_SKINS: RealmSkin[] = [
     accent: INK.cyan,
   },
 ];
+
+/**
+ * The furthest hill layer takes hillFar's hue rather than an independently
+ * authored one — three realms shared the same neutral grey `range` regardless
+ * of their hill colour, and a judge read the resulting seam as one band bolted
+ * onto the stack, not one more step of the same recession (DECISIONS.md #53).
+ */
+export function coherentRange(hillFar: string, authoredRange: string): string {
+  return mixHex(hillFar, authoredRange, 0.35);
+}
+
+const REALM_SKINS: RealmSkin[] = RAW_REALM_SKINS.map((skin) => ({
+  ...skin,
+  range: coherentRange(skin.hillFar, skin.range),
+}));
 
 /** Number of named realm skins the endless tail cycles through. */
 export const REALM_SKIN_COUNT = REALM_SKINS.length;
@@ -749,6 +764,27 @@ export function glowRingRadii(r: number, gain: number): number[] {
     if (rr >= 1) out.push(rr);
   }
   return out;
+}
+
+/** One solid halo step: a filled disc radius and how far its colour mixes toward sky. */
+export interface HaloBand {
+  r: number;
+  skyMix: number;
+}
+
+/**
+ * Sun halo as solid stacked discs, outermost first — mass and a value step
+ * carry the glow, same as a hill's lit cap, rather than a ring of gaps in the
+ * sky. A ring of separated pixels only reads as light while it is finer than
+ * the eye can resolve; upscaled pixel art never is (DECISIONS.md #53).
+ */
+export function sunHaloBands(coreR: number): HaloBand[] {
+  if (coreR <= 0) return [];
+  return [
+    { r: Math.round(coreR * 2), skyMix: 0.72 },
+    { r: Math.round(coreR * 1.6), skyMix: 0.48 },
+    { r: Math.round(coreR * 1.3), skyMix: 0.24 },
+  ];
 }
 
 /** One foliage clump: a run of rows a crown's silhouette bulges out over. */
