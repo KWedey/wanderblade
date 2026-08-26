@@ -496,6 +496,14 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   function syncSceneBand(): void {
     const portrait = window.innerWidth < window.innerHeight;
     scene.setSceneTop(portrait ? chromeEl.getBoundingClientRect().bottom : 0);
+    // Landscape docks the panel *over* the canvas, so the world it hides has to
+    // be fenced off or the queue walks creatures in behind it.
+    const dock = root.querySelector('.screen');
+    scene.setSceneRight(
+      portrait || !dock
+        ? 0
+        : Math.max(0, window.innerWidth - dock.getBoundingClientRect().left),
+    );
     syncCollectAnchor();
   }
   syncSceneBand();

@@ -139,6 +139,8 @@ export interface Scene {
   catchArc(bonusGold: number, upgraded: boolean): void;
   /** CSS pixels of chrome above the world band. */
   setSceneTop(cssPx: number): void;
+  /** CSS pixels of chrome docked to the right of the road. */
+  setSceneRight(cssPx: number): void;
   /** Viewport point loot streaks fly to — the HUD's gold readout. */
   setCollectAnchor(clientX: number, clientY: number): void;
   dispose(): void;
@@ -271,8 +273,13 @@ interface Monster {
   spread: number;
 }
 
-/** How far behind the engaged monster the next one in line waits. */
-const QUEUE_GAP = 34;
+/**
+ * How far behind the engaged monster the next one in line waits. Wide enough
+ * that the third one rests clear of the docked panel's edge rather than being
+ * sliced by it, and that the frame reads as a duel with a queue behind it
+ * instead of as a crowd.
+ */
+const QUEUE_GAP = 55;
 /** Monsters visible at once: the one being fought, plus the queue behind it. */
 const QUEUE_DEPTH = 5;
 
@@ -441,6 +448,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let groundY = 60;
   /** CSS pixels of chrome above the world band. The view measures it and tells us. */
   let sceneTopCss = 0;
+  let sceneRightCss = 0;
+  /** Scene x the docked panel starts at: the last column a player can see. */
+  let worldRightX = 100;
   /** Scene units the band is pushed down the display canvas by. */
   let sceneOffsetY = 0;
   /**
@@ -546,6 +556,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     groundY = Math.floor(bandH * (landscape ? 0.72 : 0.66));
     arcBaseY = groundY - 2;
     sceneBottomY = bandH;
+    // The panel is docked over the canvas, not beside it, so the scene is wider
+    // than the world anyone can see. Creatures queued past this were walking on
+    // behind the UI, which sliced the guardian into a third of a sprite.
+    worldRightX = Math.max(40, vw - Math.round(sceneRightCss / pixelScale));
     heroX = Math.floor(vw * (landscape ? HERO_X_FRAC : 0.3));
     if (collectAnchorCss) setCollectAnchor(collectAnchorCss.x, collectAnchorCss.y);
     buildGroundTexture();
@@ -573,6 +587,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const next = Math.max(0, Math.round(cssPx));
     if (next === sceneTopCss) return;
     sceneTopCss = next;
+    resize();
+  }
+
+  function setSceneRight(cssPx: number): void {
+    const next = Math.max(0, Math.round(cssPx));
+    if (next === sceneRightCss) return;
+    sceneRightCss = next;
     resize();
   }
 
@@ -643,7 +664,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function enqueueMonster(killIndex: number): void {
     queue.push({
       shape: speciesAt(model.region, killIndex).shape,
-      x: vw + 30,
+      x: worldRightX + 30,
       flash: 0,
       recoil: 0,
       bob: hash01(killIndex) * Math.PI * 2,
@@ -844,7 +865,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // creature into the climax of a realm.
       if (queue.length !== 1 || queue[0]!.shape !== BOSS_SHAPE) {
         queue.length = 0;
-        queue.push({ shape: BOSS_SHAPE, x: vw + 30, flash: 0, recoil: 0, bob: 0, spread: 0 });
+        queue.push({ shape: BOSS_SHAPE, x: worldRightX + 30, flash: 0, recoil: 0, bob: 0, spread: 0 });
         bossEnteredAtSec = clockSec;
       }
     } else {
@@ -867,7 +888,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // centre-to-centre gap put a wide crawler inside the hero and a narrow one
     // out of reach.
     const stop = heroX + BLADE_REACH + engageInset();
-    const leadTarget = vw + 20 + (stop - (vw + 20)) * eased;
+    const leadTarget = worldRightX + 20 + (stop - (worldRightX + 20)) * eased;
     for (let i = 0; i < queue.length; i++) {
       const m = queue[i]!;
       const target = i === 0 ? leadTarget : leadTarget + i * QUEUE_GAP;
@@ -1570,7 +1591,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
               // standing in identical poses was called out by name.
               Math.round(Math.sin(clockSec * 1.6 + m.bob * 2.3) * 2);
       const x = m.x + m.spread - lunge;
-      if (x < -40 || x > vw + 60) continue;
+      if (x < -40 || x > worldRightX + 60) continue;
       drawShadow(x, sprite.width - 2);
       drawSprite(ctx, sprite, x, groundY + bob, true);
       // The flash lights the creature rather than replacing it. Swapping in the
@@ -1913,7 +1934,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     window.removeEventListener('resize', onResize);
   }
 
-  return { frame, strikeAt, catchArc, setCollectAnchor, setSceneTop, dispose };
+  return { frame, strikeAt, catchArc, setCollectAnchor, setSceneTop, setSceneRight, dispose };
 }
 
 /**
