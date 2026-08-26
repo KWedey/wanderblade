@@ -14,6 +14,9 @@ import {
   sceneFromArcSpace,
   decayTo,
   floaterOffsetY,
+  mergeTargetIndex,
+  type Floater,
+  type FloaterTier,
   lifeRemaining,
   shakeOffset,
   stepParticle,
@@ -313,3 +316,36 @@ describe('the swing carries core dps whatever speed it runs at', () => {
     expect(Number.isFinite(damagePerSwing(1000, 0))).toBe(true);
   });
 });
+
+describe('payouts landing on the same spot', () => {
+  const run = (x: number, value: number, tier: FloaterTier = 'catch'): Floater => ({
+    x,
+    y: 0,
+    age: 0,
+    life: 1,
+    text: '',
+    color: '#fff',
+    tier,
+    lane: 0,
+    owned: false,
+    value,
+  });
+
+  it('joins the nearest live run instead of starting a ladder', () => {
+    const live = [run(100, 5), run(112, 7)];
+    expect(mergeTargetIndex(live, 'catch', 118, 26)).toBe(1);
+  });
+
+  it('starts its own run once the last one is out of reach', () => {
+    expect(mergeTargetIndex([run(100, 5)], 'catch', 140, 26)).toBe(-1);
+  });
+
+  it('never merges across tiers — damage and gold stay separate numbers', () => {
+    const live = [run(100, 5, 'damage')];
+    expect(mergeTargetIndex(live, 'catch', 100, 26)).toBe(-1);
+  });
+
+  it('leaves labels alone — UPGRADED carries no value to add to', () => {
+    expect(mergeTargetIndex([run(100, 0)], 'catch', 100, 26)).toBe(-1);
+  });
+})

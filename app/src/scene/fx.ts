@@ -68,6 +68,27 @@ export interface Floater {
   lane: number;
   /** Belongs to the engaged monster, and dies with it. */
   owned: boolean;
+  /** What the engine paid, kept so a second payout can join this run. 0 = a label. */
+  value: number;
+}
+
+/**
+ * Index of a live run the incoming payout should join, or -1. Rewards land
+ * faster than a floater lives, so separate runs climb the lanes into a ladder
+ * of near-identical numbers. One number that grows reads in a glance and is a
+ * bigger reward besides.
+ */
+export function mergeTargetIndex(
+  floaters: readonly Floater[],
+  tier: FloaterTier,
+  x: number,
+  radius: number,
+): number {
+  for (let i = floaters.length - 1; i >= 0; i--) {
+    const f = floaters[i]!;
+    if (f.tier === tier && f.value > 0 && Math.abs(f.x - x) <= radius) return i;
+  }
+  return -1;
 }
 
 /** Floaters drift up and ease out, so late frames barely move. */

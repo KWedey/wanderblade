@@ -28,6 +28,7 @@ import {
   type HeroPocket,
   type PeakState,
   type FloaterTier,
+  mergeTargetIndex,
   type Particle,
 } from './fx';
 import { arcPositionAt, type ArcPoint, type LootArc } from '@wanderblade/core';
@@ -235,6 +236,8 @@ const STREAK_SEC = 0.5;
 
 const PARTICLE_CAP = 220;
 const FLOATER_CAP = 12;
+/** Scene units within which a second payout joins the run already there. */
+const MERGE_RADIUS = 26;
 
 /**
  * A coin that has landed and is sitting on the road before it flies to the
@@ -638,6 +641,39 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     floaters.push({ ...f, lane });
   }
 
+  interface Payout {
+    x: number;
+    y: number;
+    life: number;
+    value: number;
+    label: (total: number) => string;
+    color: string;
+    tier: FloaterTier;
+    owned: boolean;
+  }
+
+  /**
+   * A number the engine just paid. Joins the run already at this spot instead
+   * of starting a new one, and is re-placed rather than edited in place so the
+   * wider text still gets a lane it fits in.
+   */
+  function payout(p: Payout): void {
+    const at = mergeTargetIndex(floaters, p.tier, p.x, MERGE_RADIUS);
+    const total = at < 0 ? p.value : floaters[at]!.value + p.value;
+    if (at >= 0) floaters.splice(at, 1);
+    addFloater({
+      x: p.x,
+      y: p.y,
+      age: 0,
+      life: p.life,
+      text: p.label(total),
+      color: p.color,
+      tier: p.tier,
+      owned: p.owned,
+      value: total,
+    });
+  }
+
   function burst(x: number, y: number, count: number, colors: string[], speed: number): void {
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2 + hash01(clockSec * 60 + i) * 0.9;
@@ -728,14 +764,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // Honest: real DPS across the interval this swing represents.
     const damage = damagePerSwing(model.dps, model.attackSpeedMult);
     if (damage < 0.05) return;
-    addFloater({
-      // Above the monster's head, not beside its ribs: the blade sweeps
-      // through contact height and a number there is inside the arc.
+    // Above the monster's head, not beside its ribs: the blade sweeps through
+    // contact height and a number there is inside the arc.
+    payout({
       x: lead.x + lead.spread,
       y: groundY - leadHeight - 6,
-      age: 0,
       life: 0.5,
-      text: formatShort(damage),
+      value: damage,
+      label: (v) => formatShort(v),
       color: TEXT_DAMAGE,
       tier: 'damage',
       owned: true,
@@ -797,12 +833,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const guard = pocket();
     const aim = lastAim ?? { x: heroX + 24, y: groundY - 30 };
     const at = nudgeFromPocket(guard, aim.x, aim.y);
-    addFloater({
+    payout({
       x: at.x,
       y: at.y,
-      age: 0,
       life: FLOATER_LIFE,
-      text: `+${formatShort(bonusGold)}`,
+      value: bonusGold,
+      label: (v) => `+${formatShort(v)}`,
       color: TEXT_CATCH,
       tier: 'catch',
       owned: false,
@@ -817,6 +853,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         color: '#ffffff',
         tier: 'catch',
         owned: false,
+        value: 0,
       });
     }
     burst(at.x, at.y + 4, 12, ['#ffffff', skin.accent, LOOT_GLOW], 150);
