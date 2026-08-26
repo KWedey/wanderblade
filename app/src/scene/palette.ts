@@ -586,6 +586,23 @@ export function groundBladeOf(skin: RealmSkin): string {
   return blade;
 }
 
+/** Value steps a ground band darkens by, one step per band moving away from the camera. */
+export const GROUND_BAND_STEP = 0.045;
+
+/**
+ * Turf split into flat value bands, darkest at the horizon edge and true tone
+ * at the camera edge — the receding-surface cue a single flat fill has none
+ * of. `bands` must be at least 1.
+ */
+export function depthBandTones(base: string, bands: number, step = GROUND_BAND_STEP): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < bands; i++) {
+    const fromNear = bands - 1 - i;
+    out.push(fromNear === 0 ? base : mixHex(base, '#000000', Math.min(0.6, fromNear * step)));
+  }
+  return out;
+}
+
 /**
  * Scenery two value steps down, for the layer nearest the camera. Foreground
  * trees, hedge, hills and turf all sat in one green band, so nothing read as

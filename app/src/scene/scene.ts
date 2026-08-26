@@ -39,6 +39,7 @@ import {
   REALM_SKIN_COUNT,
   backdropSkin,
   clampHillStep,
+  depthBandTones,
   depthHaze,
   foliageNotchAt,
   foregroundInk,
@@ -440,6 +441,27 @@ export function drawHills(
     ctx.fillRect(x, groundY - baseBandH, stepPx, baseBandH);
     ctx.fillStyle = cap;
     ctx.fillRect(x, top, stepPx, 2);
+  }
+}
+
+/** Horizontal value bands the turf splits into, far edge to near edge. */
+export const GROUND_BANDS = 4;
+
+/** Paints one tone per horizontal strip of the turf band — the same fixed-band idiom drawHills uses, applied to the ground plane instead of a silhouette. */
+export function drawGroundBands(
+  ctx: FillCtx,
+  vw: number,
+  groundY: number,
+  turfH: number,
+  tones: readonly string[],
+): void {
+  const bandH = Math.max(1, Math.floor(turfH / tones.length));
+  let y = groundY;
+  for (let i = 0; i < tones.length; i++) {
+    const h = i === tones.length - 1 ? groundY + turfH - y : bandH;
+    ctx.fillStyle = tones[i]!;
+    ctx.fillRect(0, y, vw, h);
+    y += h;
   }
 }
 
@@ -1182,8 +1204,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // Momentum climbs the whole lit surface one palette step. A dithered
     // overlay at this size read as static; a palette shift reads as sun.
     const lift = momentumLift(model.momentum);
-    ctx.fillStyle = lighten(skin.turf, lift);
-    ctx.fillRect(0, groundY, vw, turfH);
+    drawGroundBands(ctx, vw, groundY, turfH, depthBandTones(lighten(skin.turf, lift), GROUND_BANDS));
     ctx.fillStyle = lighten(skin.turfLip, lift);
     ctx.fillRect(0, groundY, vw, 3);
     ctx.fillStyle = skin.soil;

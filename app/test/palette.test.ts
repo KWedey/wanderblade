@@ -11,6 +11,7 @@ import {
   backdropSkin,
   clampHillStep,
   coherentRange,
+  depthBandTones,
   depthHaze,
   foliageNotchAt,
   grassClumpBlades,
@@ -157,6 +158,28 @@ describe('hillBaseInk keeps the hill shadow clear of the haze behind it', () => 
     // A colour already at the floor: no amount of backing off the mix opens a
     // gap, so the loop must stop rather than spin forever.
     expect(() => hillBaseInk('#101010', '#101010')).not.toThrow();
+  });
+});
+
+describe('depthBandTones darkens a turf colour toward the horizon, band by band', () => {
+  it('returns the true base tone for the nearest band, at any band count', () => {
+    expect(depthBandTones('#3a6b4f', 1)).toEqual(['#3a6b4f']);
+    const bands = depthBandTones('#3a6b4f', 5);
+    expect(bands[4]).toBe('#3a6b4f');
+  });
+
+  it('darkens strictly monotonically moving away from the near band', () => {
+    const bands = depthBandTones('#3a6b4f', 5);
+    for (let i = 1; i < bands.length; i++) {
+      expect(lightnessOf(bands[i]!), `band ${i}`).toBeGreaterThan(lightnessOf(bands[i - 1]!));
+    }
+  });
+
+  it('never inverts near/far ordering across every realm turf', () => {
+    for (let region = 0; region < REALM_SKIN_COUNT; region++) {
+      const bands = depthBandTones(realmSkin(region).turf, 4);
+      expect(lightnessOf(bands[0]!), `realm ${region}`).toBeLessThanOrEqual(lightnessOf(bands[3]!));
+    }
   });
 });
 

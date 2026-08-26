@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { lightnessOf, MIN_HILL_SHADOW_GAP } from '../src/scene/palette';
-import { drawHills, type FillCtx } from '../src/scene/scene';
+import { drawGroundBands, drawHills, type FillCtx } from '../src/scene/scene';
 
 /** Records what drawHills actually paints — a pure-geometry test alone can pass while the loop that draws it stays broken. */
 function fakeCtx(): { ctx: FillCtx; calls: Array<{ style: string; x: number; y: number; w: number; h: number }> } {
@@ -53,5 +53,27 @@ describe('drawHills paints a filled, sloped silhouette, not a staircase or a flo
       const delta = Math.abs(calls[i * 3]!.h - calls[(i - 1) * 3]!.h);
       expect(delta, `column ${i}`).toBeLessThanOrEqual(maxDelta);
     }
+  });
+});
+
+describe('drawGroundBands paints the turf as stacked flat strips, not one solid rect', () => {
+  it('fills one rect per tone, stacked top to bottom with no gap or overlap', () => {
+    const { ctx, calls } = fakeCtx();
+    const tones = ['#111111', '#222222', '#333333', '#3a6b4f'];
+    drawGroundBands(ctx, 400, 500, 24, tones);
+    expect(calls.length).toBe(tones.length);
+    expect(calls[0]!.y).toBe(500);
+    for (let i = 1; i < calls.length; i++) {
+      expect(calls[i]!.y, `band ${i} start`).toBe(calls[i - 1]!.y + calls[i - 1]!.h);
+      expect(calls[i]!.style, `band ${i} tone`).toBe(tones[i]);
+    }
+    const last = calls[calls.length - 1]!;
+    expect(last.y + last.h).toBe(524);
+  });
+
+  it('covers the full width on every band', () => {
+    const { ctx, calls } = fakeCtx();
+    drawGroundBands(ctx, 400, 500, 20, ['#111111', '#222222']);
+    for (const call of calls) expect(call.w).toBe(400);
   });
 });

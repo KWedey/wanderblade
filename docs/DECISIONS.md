@@ -788,3 +788,18 @@ Fewer, larger islands at higher coverage is the "isolated blades → continuous 
 - Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 699 passed (699)**.
 
 **Not touched:** the near hill layer's cap/base logic (already correct per ADR #53, only re-used here), and the ground turf and sun halo — the remaining two surfaces from the same verdict, addressed in following commits.
+
+## 56. Turf is stacked value bands instead of one flat fill — 2026-08-26
+
+**Decision:** `drawGround`'s single `fillRect` for the whole turf band is replaced by `drawGroundBands` (`scene.ts`), which paints one flat tone per horizontal strip. Tones come from `depthBandTones` (`palette.ts`), a pure function that darkens toward the horizon edge and holds the true turf tone at the camera edge — `GROUND_BANDS` (4) strips per frame.
+
+**Why:** Gauntlet round 36 (`.gauntlet/verdict36.md`, img-4) named the grass as "flat green with tufts pasted over bare gaps — no sense that the ground recedes into the distance." The blade/tuft texture already varies point-to-point, but the surface under it was one solid colour top to bottom, so nothing signalled distance across the band itself.
+
+**Same idiom as the hills, one surface over.** `drawGroundBands` is the fixed-band loop `drawHills` already established (ADR #55) — stacked flat rects, no gradient (DECISIONS.md #13 stands) — applied to a horizontal strip instead of a silhouette.
+
+**Evidence:**
+- Deterministic: `depthBandTones` is a pure function with unit tests in `palette.test.ts` — the near band always equals the true base tone at any band count, lightness increases strictly moving from the far band to the near band, and the ordering holds across every realm's turf colour.
+- Deterministic, draw-level: `app/test/scene.test.ts` calls the real, exported `drawGroundBands` against a fake `FillCtx` and asserts the emitted rects stack with no gap or overlap, in tone order, and each spans the full width — confirming the shipped loop, not just the tone function behind it.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 704 passed (704)**.
+
+**Not touched:** the blade/tuft/strata texture loops (already varied, out of scope this round) and the sun halo — the last surface from the same verdict, addressed in the following commit.
