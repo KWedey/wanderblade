@@ -114,6 +114,10 @@ export interface PermanentUplift {
   rankTarget: number;
   idleRankSec: number | null;
   activeRankSec: number | null;
+  /** Realm where whichever run ended first ran out of content, if either did. */
+  contentEndRealm: number | null;
+  /** When that happened. The comparison cannot be carried past it. */
+  contentEndSec: number | null;
 }
 
 /** Time spent on a realm whose portal is open but not yet entered. */
@@ -177,6 +181,8 @@ export interface SeedResult {
   } | null;
   /** Realm whose guardian is unwinnable, if the headline run reached the frontier. */
   frontierRealm: number | null;
+  /** When the headline run stopped there. */
+  frontierSec: number | null;
   /** How much the upgrade panel offered across the run. */
   spendDepth: SpendDepth;
   /** Time parked on an open portal, and how far realm cadence degraded. */

@@ -60,10 +60,15 @@ export function formatSeedReport(r: SeedResult): string {
   }
 
   if (r.frontierRealm !== null) {
+    const when = r.frontierSec === null ? '' : ` at ${fmtTime(r.frontierSec)}`;
     lines.push('');
     lines.push(
-      `   frontier: the run ended at realm ${r.frontierRealm}, where guardian HP overflows ` +
+      `   frontier: the run ended at realm ${r.frontierRealm}${when}, where guardian HP overflows ` +
         `to Infinity and the portal refuses to open (docs/DECISIONS.md #34)`,
+    );
+    lines.push(
+      `             this is content end, not a stall — every later horizon divides a ` +
+        `frozen total by a growing one, so no ratio past it measures pacing (#48)`,
     );
   }
 
