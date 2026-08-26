@@ -647,7 +647,19 @@ Four base words — Wyrm, Drake, Revenant, Behemoth — do not appear anywhere i
 **Count correction.** The task named "17 names"; the list it enumerated, and the actual matching set in `species.ts`, is 18 — Star Wraith and Ember Wraith are two names sharing one SRD base word. All 18 are in the roster, not 17.
 ## 50. The catch window separates being late from aiming badly — 2026-08-26
 
-**Status: parked, red by one clause.** `ARC_CATCH_SEC` 0.14 → **0.30** (along the coin's path) and a new `ARC_CATCH_PERP` = **0.10** (across it). `arcHitIndex` scores an ellipse aligned to `arcHeadingAt` instead of a circle.
+**Decision:** `ARC_CATCH_SEC` 0.14 → **0.30** (along the coin's path) and a new `ARC_CATCH_PERP` = **0.10** (across it). `arcHitIndex` scores an ellipse aligned to `arcHeadingAt` instead of a circle.
+
+**The clause that parked this is replaced, approved by Kyle.** `degrades with aim error` asserted that a wild tap catches under 20% of coins. It cannot: coins sit ~0.12 units apart in a roughly 1-unit field, so a "miss" lands on a neighbour, and the clause only passes at about one coin airborne — which contradicts the loot stream the arcs exist to be. It was measuring **coin density**, not the catch window. The subsuming test is the same `it` block, asserting the same intent on `intended` — the share of catches that took the coin actually aimed at.
+
+**Bounded to ±0.5 on measurement, not on preference.** `intended` degrades cleanly across the human aim range and then turns around:
+
+| aim scatter | 0 | 0.12 | 0.25 | 0.50 | **1.00** |
+|---|---|---|---|---|---|
+| `intended` | 0.339 | 0.233 | 0.121 | 0.104 | **0.286** |
+
+`thumbAim` scatters at 0.5–1.0× the radius, so at ±1.0 the only wild taps still catching anything are the short ones — which are the ones still near the aimed coin. The rise is selection, not skill. Asserting across it would have replaced one clause that measured an artifact with another that did, so the test stops at ±0.5 and says why.
+
+**Proven able to fail.** Widening `ARC_CATCH_PERP` to 0.30 — the circle this ADR replaced — drops `intended` at perfect aim from **0.339 to 0.013** and reds the first assertion by name.
 
 **Why:** one circle at one instant is simultaneously the aim tolerance and the timing tolerance, so tightening either tightens both. That is why #43 found no value of `ARC_CATCH_SEC` that made aim matter without turning the mechanic into a reflex-time lottery. Latency displaces a tap **along** the path; a stray tap scatters in **every** direction. Splitting the axes is the shape the physics implied, and it is not a cap — the along-path window is still constant in time at every speed, so #35 is untouched.
 

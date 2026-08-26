@@ -252,13 +252,22 @@ describe('the catch window is constant in time, not in distance', () => {
     expect(caught).toBe(0);
   });
 
+  /**
+   * Asserted on `intended` because catch rate in a field this dense partly
+   * measures how many coins are in the air. Stops at ±0.5: `intended` rises
+   * again at ±1.0 (0.10 → 0.29) where only the short scatters still catch, and
+   * asserting across that would pin the sampling artifact.
+   */
   it('degrades with aim error instead of handing out free catches', () => {
-    // Under latency a little scatter can help, because tapping exactly where
-    // the coin *was* is systematically behind it. Wild aim cannot.
-    const sloppy = catchRate('landing', 0.25, 0.12);
-    const wild = catchRate('landing', 0.25, 0.5);
-    expect(wild).toBeLessThan(sloppy / 2);
-    expect(wild).toBeLessThan(0.2);
+    const perfect = intendedShare('landing', 0.25, 0);
+    const sloppy = intendedShare('landing', 0.25, 0.12);
+    const off = intendedShare('landing', 0.25, 0.25);
+    const wide = intendedShare('landing', 0.25, 0.5);
+
+    expect(perfect, `perfect ${perfect.toFixed(3)}`).toBeGreaterThan(0.25);
+    expect(off, `off ${off.toFixed(3)} vs perfect ${perfect.toFixed(3)}`).toBeLessThan(perfect / 2);
+    expect(wide, `wide ${wide.toFixed(3)} vs sloppy ${sloppy.toFixed(3)}`).toBeLessThan(sloppy);
+    expect(catchRate('landing', 0.25, 0.5)).toBeLessThan(catchRate('landing', 0.25, 0.12) / 2);
   });
 });
 
