@@ -215,6 +215,36 @@ function fallBack(el: HTMLElement, holder: HTMLElement | null): void {
  * a container too narrow for even 1× glyphs, or a box with no measurable
  * width. A legible webfont beats a hole or a clipped word.
  */
+/**
+ * The min-height the stylesheet asks for. Cached, because after the first paint
+ * the inline value is this module's and the cascade's is no longer readable.
+ */
+function cascadeMinHeight(el: HTMLElement): number {
+  const seen = el.dataset['pxMinH'];
+  if (seen !== undefined) return Number(seen);
+  const inline = el.style.minHeight;
+  el.style.minHeight = '';
+  const floor = parseFloat(window.getComputedStyle(el).minHeight) || 0;
+  el.style.minHeight = inline;
+  el.dataset['pxMinH'] = String(floor);
+  return floor;
+}
+
+/**
+ * Ceiling for a nowrap claim: the widest ancestor up to the nearest positioned
+ * one. The immediate parent is usually shrink-wrapped to the webfont's reading
+ * of this same text, so capping there caps the bitmap at the width that made it
+ * fall back; the positioned ancestor is a fence someone drew on purpose.
+ */
+function roomFor(el: HTMLElement): number {
+  let room = 0;
+  for (let node = el.parentElement; node; node = node.parentElement) {
+    room = Math.max(room, node.clientWidth);
+    if (window.getComputedStyle(node).position !== 'static') break;
+  }
+  return room > 0 ? room : Infinity;
+}
+
 export function paintElement(
   el: HTMLElement,
   dpr = window.devicePixelRatio || 1,
@@ -242,6 +272,7 @@ export function paintElement(
     holder.textContent = trimmed;
   }
 
+  const floor = cascadeMinHeight(el);
   const style = window.getComputedStyle(el);
   const padLeft = parseFloat(style.paddingLeft) || 0;
   const padTop = parseFloat(style.paddingTop) || 0;
@@ -252,15 +283,17 @@ export function paintElement(
   // largest type that fits on one line, not the largest that fits at all.
   const nowrap = style.whiteSpace === 'nowrap' || style.whiteSpace === 'pre';
   const preferred = pixelScaleFor(parseFloat(style.fontSize) || GLYPH_H);
-  // nowrap is the author saying "this is one token". A content-sized flex or
-  // grid item is only as wide as the webfont needed, which would silently drop
-  // the bitmap a scale step or two; claim the room instead, bounded by the
-  // parent so a phone column cannot overflow.
-  if (nowrap) {
-    const natural = textWidth(trimmed, preferred) + padLeft + (parseFloat(style.paddingRight) || 0);
-    const parentWidth = el.parentElement?.clientWidth ?? natural;
-    const want = Math.min(natural, parentWidth);
-    if (!remeasured && want > outer + 0.5) {
+  // nowrap is the author saying "this is one token". Its box was sized by the
+  // webfont, which is narrower than the bitmap, so claim the room the glyphs
+  // need. Only nowrap: claiming for every leaf took the HUD grid's whole track.
+  const padX = padLeft + (parseFloat(style.paddingRight) || 0);
+  if (nowrap && !remeasured) {
+    const want = Math.min(textWidth(trimmed, preferred) + padX, roomFor(el));
+    if (want > outer + 0.5) {
+      // An inline box ignores min-width, so the claim silently did nothing and
+      // the element fell back anyway. It is a text leaf whose content becomes a
+      // canvas, so inline-block costs nothing here.
+      if (style.display === 'inline') el.style.display = 'inline-block';
       el.style.minWidth = `${Math.ceil(want)}px`;
       return paintElement(el, dpr, true);
     }
@@ -294,8 +327,11 @@ export function paintElement(
   canvas.style.top = `${padTop - pad}px`;
   paintInto(canvas, layout, boxWidth, align, color, outline, dpr);
   // The canvas is out of flow, so the element would otherwise collapse to the
-  // transparent text's height and clip a label that wrapped to more lines.
-  el.style.minHeight = `${layout.height + padTop + (parseFloat(style.paddingBottom) || 0)}px`;
+  // transparent text's height and clip a label that wrapped to more lines. Only
+  // ever a raise: this used to overwrite the floor outright, and it shrank the
+  // Enter the Portal button from a 56px touch target to 23px of glyph.
+  const need = layout.height + padTop + (parseFloat(style.paddingBottom) || 0);
+  el.style.minHeight = `${Math.max(floor, need)}px`;
   return true;
 }
 

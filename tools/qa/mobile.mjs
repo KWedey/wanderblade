@@ -146,6 +146,20 @@ function probe(page, dev) {
       underBottom: targets
         .filter((t) => t.bottomVisible && t.y + t.h > vh - insets.bottom)
         .map((t) => t.label),
+      // A tagged leaf with no canvas fell back to the webfont: the "two type
+      // systems in one frame" a critic named three rounds running.
+      webfontFallbacks: [...document.querySelectorAll('[data-px]')]
+        .filter((el) => !el.querySelector('.px-ink') && el.getBoundingClientRect().width > 0)
+        .map((el) => ({ cls: String(el.className).slice(0, 30), t: (el.textContent || '').trim().slice(0, 20) })),
+      // The HUD floats over the whole window; the docked panel is opaque and
+      // prints over anything the HUD puts there.
+      hudOverPanel: (() => {
+        if (stacked || !screen) return [];
+        const left = screen.getBoundingClientRect().left;
+        return [...document.querySelectorAll('.hud *')]
+          .filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.right > left + 1; })
+          .map((el) => ({ cls: String(el.className).slice(0, 30), over: px(el.getBoundingClientRect().right - left) }));
+      })(),
       overflowingX: [...document.querySelectorAll('.screen *, .hud *')]
         .filter((el) => { const r = el.getBoundingClientRect(); return r.right > vw + 1 || r.left < -1; })
         .slice(0, 8)

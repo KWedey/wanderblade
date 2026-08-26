@@ -121,14 +121,28 @@ function rampAt(vp: Viewport): Map<string, number> {
   return out;
 }
 
-/** Content width of the panel — `min(Npx, Mvw)` in landscape, full width otherwise. */
-function panelWidth(vp: Viewport): number {
-  const raw = declared('.screen', 'width', vp) ?? '100%';
+/** Resolves one `var(--token)` hop, then `min(Npx, Mvw)`, to CSS pixels. */
+function lengthAt(raw: string, vp: Viewport): number {
+  const token = /^var\(\s*(--[\w-]+)\s*\)$/.exec(raw.trim());
+  if (token) {
+    const value = declared(':root', token[1]!, vp);
+    expect(value, `${token[1]} is not defined at ${vp.name}`).not.toBeNull();
+    return lengthAt(value!, vp);
+  }
   const capped = /min\(\s*(\d+)px\s*,\s*(\d+)vw\s*\)/.exec(raw);
-  const outer = capped
-    ? Math.min(Number(capped[1]), (Number(capped[2]) / 100) * vp.w)
-    : vp.w;
-  return outer - PANEL_PAD;
+  if (capped) return Math.min(Number(capped[1]), (Number(capped[2]) / 100) * vp.w);
+  const px = /^([\d.]+)px$/.exec(raw.trim());
+  return px ? Number(px[1]) : vp.w;
+}
+
+/** Content width of the panel — the docked column in landscape, full width otherwise. */
+function panelWidth(vp: Viewport): number {
+  return lengthAt(declared('.screen', 'width', vp) ?? '100%', vp) - PANEL_PAD;
+}
+
+/** True when the panel is docked beside the world rather than under it. */
+function docked(vp: Viewport): boolean {
+  return (declared('.screen', 'width', vp) ?? '100%') !== '100%';
 }
 
 describe('the panel type grid', () => {
@@ -196,6 +210,20 @@ describe('the panel type grid', () => {
         needed,
         `three ${lines}-line entries need ${needed}px and the cap is ${cap}px`,
       ).toBeLessThanOrEqual(cap);
+    });
+  }
+
+  // The HUD floats over the whole window and has to stop where the docked
+  // column starts. It was fenced with its own literal, 28px short of the
+  // panel, and the DPS readout printed its last column under the border.
+  for (const vp of VIEWPORTS.filter(docked)) {
+    it(`stops the HUD exactly at the docked panel at ${vp.name}`, () => {
+      const fence = declared('.hud', 'right', vp);
+      expect(fence, 'the HUD is not fenced off the docked panel').not.toBeNull();
+      expect(
+        lengthAt(fence!, vp),
+        `the HUD reserves ${lengthAt(fence!, vp)}px for a ${lengthAt(declared('.screen', 'width', vp)!, vp)}px panel`,
+      ).toBe(lengthAt(declared('.screen', 'width', vp)!, vp));
     });
   }
 
