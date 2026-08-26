@@ -16,6 +16,7 @@
     "verify": "npm run lint && npm run typecheck && npm test",
     "test": "vitest run --exclude '**/node_modules/**' --exclude '**/.worktrees/**'",
     "sim": "npm run -w sim start --",
+    "thumb": "npm run -w sim thumb --",
     "dev": "npm run -w app dev",
     "build": "npm run -w app build"
   },
