@@ -758,3 +758,18 @@ Fewer, larger islands at higher coverage is the "isolated blades → continuous 
 - Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 36 passed (36)**, **Tests 688 passed (688)**.
 
 **The loot-pickup glow keeps the ring, deliberately.** `glowDisc` and `glowRingRadii` still back `scene.ts:1815`, so the dashed look survives on coins in flight. It was not changed because the two cases have opposite constraints: the sun is one large shape alone in open sky, where an outline reads as a glitch, while a dozen loot halos overlap at once and filling them turned a kill into "a 180px wall of yellow with the creature somewhere inside it". No judge has named the loot glow — the complaint was specific to open sky. Changing it now would be a speculative art change of exactly the kind that lost round 35, so it waits for a judge to name it.
+
+## 54. Tree trunks carry a lit edge and a shadow edge, and foliage overlaps the trunk top — 2026-08-26
+
+**Decision:** `TREE`, `TREE_TALL`, `TREE_WIDE` (`pixels.ts`) redraw the trunk with three inks instead of two — `barkDark` on the shadow side, `bark` mid-tone, and a new `barkLit` (`sceneryInk`/`foregroundInk`, `palette.ts`) on the sun-facing side — and the canopy-to-trunk transition row now interleaves a foliage glyph over the trunk's near column instead of handing off in one clean row.
+
+**Why:** Gauntlet round 36 (`.gauntlet/verdict36.md`, img-4) named "every tree is a smooth round canopy sitting on a thin straight brown trunk line with an abrupt seam where the stick meets the blob — a 'lollipop tree,' most visible on the tall tree left-of-center." `drawGrove`'s procedural background trees (`scene.ts:1265`) already carry this exact lit-edge/shadow-edge split; the static foreground sprites in `pixels.ts` never got it.
+
+**Same light direction as everywhere else in the scene.** The sun sits upper right; `drawGrove`'s comment at `scene.ts:1309` states the convention directly — "the lit face is the far side of the upper mass." `barkLit` is placed at the trunk's rightmost column, `barkDark` at its left, in every trunk and root-flare row of all three sprites.
+
+**Evidence:**
+- Deterministic: `spriteMapFaults` (existing sweep, `pixels.test.ts`) still passes on all three edited grids — rectangular, fully legended.
+- Deterministic, draw-level: two new tests in `pixels.test.ts` read the actual `SpriteMap.rows` strings `bakeSprite` draws from (one fillRect per glyph, no branching in between) rather than a separate geometry function — `barkLit` sits strictly right of `barkDark` on every trunk row across all three sprites, and each sprite has at least one row mixing a foliage glyph with a trunk glyph, confirming the overlap actually ships rather than existing only as intent.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 36 passed (36)**, **Tests 690 passed (690)**.
+
+**Not touched:** the hero sprite (owned by a different agent this round), `drawGrove`'s procedural background trees (already correct), and the background hill, ground turf, and sun halo — the other three surfaces named in the same verdict, addressed in following commits.

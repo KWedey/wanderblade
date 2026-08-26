@@ -47,6 +47,37 @@ describe('sprite grids', () => {
   });
 });
 
+describe('tree trunks carry a lit side, and foliage overlaps the trunk top', () => {
+  // Grid-text assertions are what bakeSprite actually draws from — one glyph
+  // becomes one fillRect, so a column check here is a check on the shipped
+  // pixels, not just on the geometry that describes them.
+  const TREES = ['TREE', 'TREE_TALL', 'TREE_WIDE'] as const;
+
+  it('places barkLit strictly right of barkDark on every trunk row, matching the upper-right sun', () => {
+    for (const name of TREES) {
+      const map: SpriteMap = ALL_SPRITE_MAPS[name]!;
+      for (const [y, row] of map.rows.entries()) {
+        const lit = row.indexOf('b');
+        const shadow = row.indexOf('W');
+        if (lit < 0 || shadow < 0) continue;
+        expect(lit, `${name} row ${y}: 'b' at ${lit}, 'W' at ${shadow}`).toBeGreaterThan(shadow);
+      }
+    }
+  });
+
+  it('gives every tree at least one row where foliage and trunk glyphs share a row', () => {
+    const trunkGlyphs = new Set(['w', 'W', 'b']);
+    const foliageGlyphs = new Set(['l', 'L', 'i']);
+    for (const name of TREES) {
+      const map: SpriteMap = ALL_SPRITE_MAPS[name]!;
+      const overlaps = map.rows.some(
+        (row) => [...row].some((g) => trunkGlyphs.has(g)) && [...row].some((g) => foliageGlyphs.has(g)),
+      );
+      expect(overlaps, `${name} has no row mixing trunk and foliage glyphs`).toBe(true);
+    }
+  });
+});
+
 describe('bitmap font', () => {
   it('has no malformed or missing glyphs', () => {
     expect(fontFaults()).toEqual([]);

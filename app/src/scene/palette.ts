@@ -572,6 +572,7 @@ export function foregroundInk(skin: RealmSkin): InkSet {
     leafLite: down(ink.leafLite!),
     bark: down(ink.bark!),
     barkDark: down(ink.barkDark!),
+    barkLit: down(ink.barkLit!),
     grassBlade: down(ink.grassBlade!),
   };
 }
@@ -586,6 +587,10 @@ export function sceneryInk(skin: RealmSkin): InkSet {
     leafLite: lighten(skin.leaf, 0.3),
     bark: skin.bark,
     barkDark: mixHex(skin.bark, '#000000', 0.35),
+    // Sun sits upper right: a lit edge on the trunk's far side is what gives
+    // the stick its own roundness instead of a flat silhouette pasted below
+    // the canopy.
+    barkLit: lighten(skin.bark, 0.35),
     rock: skin.rock,
     rockLight: skin.rockLight,
     grassBlade: skin.grassBlade,
