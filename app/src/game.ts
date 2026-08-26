@@ -16,11 +16,8 @@ import {
   initialState,
   killsPerZone,
   killTime,
-  levelCost,
   momentumAt,
-  skillCost,
-  SKILLS,
-  SKILL_IDS,
+  purchaseOptions,
   summarizeEvents,
   zonesPerRealm,
   type ArcPoint,
@@ -356,23 +353,23 @@ export class Game {
     const s = this.state;
     const inBoss = s.phase === 'boss';
 
-    const skills: SkillVM[] = SKILL_IDS.map((id) => {
-      const def = SKILLS[id]!;
-      const level = s.hero.skills[id] ?? 0;
-      const unlocked = s.hero.level >= def.unlockLevel;
-      const cost = skillCost(level, s.realm);
-      return {
-        id,
-        name: def.name,
-        level,
-        cost,
-        unlocked,
-        unlockLevel: def.unlockLevel,
-        canAfford: !inBoss && unlocked && s.gold >= cost,
-      };
-    });
+    // The panel prices and gates nothing itself: core's shop rows are the same
+    // rows the simulator counts and the engine will actually accept.
+    const rows = purchaseOptions(s);
+    const skills: SkillVM[] = rows
+      .filter((r) => r.kind === 'skill')
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        level: r.rank,
+        cost: r.cost,
+        unlocked: r.unlocked,
+        unlockLevel: r.unlockLevel,
+        canAfford: r.affordable,
+      }));
 
-    const heroLevelCost = levelCost(s.hero.level, s.realm);
+    const heroRow = rows.find((r) => r.kind === 'hero')!;
+    const heroLevelCost = heroRow.cost;
     // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
     // reflect a purchase immediately instead of lagging one kill behind.
     const goldPerSec = inBoss ? 0 : this.goldPerKill / killTime(s, this.momentum());
@@ -422,7 +419,7 @@ export class Game {
       bankedAscendancy: s.ascendancy.banked,
       bossResult: this.currentBossResult(),
       levelCost: heroLevelCost,
-      canAffordLevel: !inBoss && s.gold >= heroLevelCost,
+      canAffordLevel: heroRow.affordable,
       goldPerSec,
       marchGoal,
       purchaseGoal,

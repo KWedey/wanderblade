@@ -135,6 +135,7 @@ describe('purchaseOptions', () => {
     expect(enterPortal(s).entered).toBe(true);
     expect(purchaseOptions(s).length).toBe(road);
     for (const row of purchaseOptions(s)) {
+      expect(row.affordable).toBe(false);
       expect(buyFrom(clone(s), row)).toBe(false);
     }
   });

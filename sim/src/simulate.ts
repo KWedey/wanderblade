@@ -79,7 +79,11 @@ export interface RunResult {
   snapshots: Map<number, GameState>;
   /** Periodic Road clones, the fixtures the windowed probes replay from. */
   roadStates: GameState[];
-  /** Every look at the upgrade panel, taken before any purchase loop ran. */
+  /**
+   * Every look at the upgrade panel, taken before any purchase loop ran. The
+   * whole run, uncapped: a truncated tail would let the late realms P8 is
+   * really about go unmeasured while the report still printed a large `n`.
+   */
   shopSamples: ShopSample[];
 }
 
@@ -283,7 +287,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
       }
     },
     onShop: (s) => {
-      if (s.phase !== 'road' || shopSamples.length >= 20_000) return;
+      if (s.phase !== 'road') return;
       shopSamples.push({
         timeSec: s.timeSec,
         sinceRealmStartSec: s.timeSec - current().startSec,

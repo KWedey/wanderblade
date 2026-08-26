@@ -196,7 +196,10 @@ export interface AscNodeDef {
   /** Rank r costs costBase * (1 + ASC_COST_STEP * r) banked Ascendancy. */
   costBase: number;
   effect: 'damage' | 'gearPower' | 'attackSpeed';
-  /** Each rank multiplies its effect by (1 + this). Compounding, not additive. */
+  /**
+   * Each rank multiplies its effect by (1 + this). Compounding, not additive —
+   * except on `attackSpeed`, whose curve is ASC_SPEED_MAX_BONUS/DECAY instead.
+   */
   perRank: number;
 }
 
@@ -224,6 +227,7 @@ export const ASC_NODES: Record<string, AscNodeDef> = {
     name: 'Relentless',
     costBase: 34,
     effect: 'attackSpeed',
+    // Unused: the bounded speed curve above sets this node's value.
     perRank: 0.037,
   },
 };
