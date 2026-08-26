@@ -520,9 +520,13 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     detail: HTMLElement,
     base: string,
     cost: number,
+    canAfford: boolean,
     vm: ViewModel,
   ): void {
-    if (vm.gold >= cost) {
+    // Affordability is core's answer, carried on the row. Re-deriving it from
+    // gold vs cost is how the staging harness came to price Ascendancy rows in
+    // gold; the view must not hold a second opinion about what is buyable.
+    if (canAfford) {
       fill.style.width = '100%';
       detail.textContent = base;
       return;
@@ -602,7 +606,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     heroCostEl.textContent = `${formatNumber(vm.levelCost)} g`;
     heroBtn.disabled = !vm.canAffordLevel;
     heroBtn.classList.toggle('affordable', vm.canAffordLevel);
-    showReach(heroFillEl, heroDetailEl, 'Level up your blade', vm.levelCost, vm);
+    showReach(heroFillEl, heroDetailEl, 'Level up your blade', vm.levelCost, vm.canAffordLevel, vm);
 
     // Skills.
     for (const skill of vm.skills) {
@@ -628,7 +632,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
         refs.btn.disabled = !skill.canAfford;
         refs.btn.classList.toggle('affordable', skill.canAfford);
         refs.btn.classList.remove('locked', 'maxed');
-        showReach(refs.fill, refs.detail, `Level ${skill.level}`, skill.cost, vm);
+        showReach(refs.fill, refs.detail, `Level ${skill.level}`, skill.cost, skill.canAfford, vm);
       }
     }
 
