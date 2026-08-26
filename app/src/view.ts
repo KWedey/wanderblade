@@ -14,6 +14,7 @@ import {
   type Recap,
 } from '@wanderblade/core';
 import { HOLD_STRIKE_INTERVAL_SEC } from './active';
+import { createHeldAim } from './hold';
 import {
   clamp01,
   formatDuration,
@@ -515,6 +516,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const strikeHintEl = q(root, '[data-role="strike-hint"]');
   let hintDismissed = false;
   let holdTimer: number | null = null;
+  const heldAim = createHeldAim();
 
   /** Chrome (panels, buttons, modals) is not the road — never a strike. */
   function isChrome(target: EventTarget | null): boolean {
@@ -534,13 +536,17 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
   function startHold(clientX: number | null, clientY: number | null): void {
     stopHold();
-    holdTimer = window.setInterval(
-      () => fireStrike(clientX, clientY),
-      HOLD_STRIKE_INTERVAL_SEC * 1000,
-    );
+    heldAim.begin(clientX === null || clientY === null ? null : { x: clientX, y: clientY });
+    holdTimer = window.setInterval(() => {
+      // Read at fire time, not at pointerdown: the point captured when the
+      // thumb landed kept striking there however far it slid afterwards.
+      const at = heldAim.target();
+      fireStrike(at?.x ?? null, at?.y ?? null);
+    }, HOLD_STRIKE_INTERVAL_SEC * 1000);
   }
 
   function stopHold(): void {
+    heldAim.end();
     if (holdTimer !== null) {
       clearInterval(holdTimer);
       holdTimer = null;
@@ -552,6 +558,10 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     event.preventDefault();
     fireStrike(event.clientX, event.clientY);
     startHold(event.clientX, event.clientY);
+  });
+  window.addEventListener('pointermove', (event) => {
+    if (!heldAim.held()) return;
+    heldAim.moved(event.clientX, event.clientY);
   });
   window.addEventListener('pointerup', stopHold);
   window.addEventListener('pointercancel', stopHold);
