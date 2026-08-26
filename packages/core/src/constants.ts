@@ -162,9 +162,13 @@ export const ARC_CATCH_SEC = 0.14;
 /** Guardian HP = this * enemyHp(realm, last zone) * BOSS_REALM_GAIN^realm. */
 export const bossHpMult = 5600;
 /**
- * Guardians scale slightly faster than their realm. Without it the earnings
- * bonus, which funds hero levels, would shrink every later fight to seconds;
- * with it the Ascendancy tree's bounded power stays the real advantage.
+ * Guardians scale slightly faster than their realm, absorbing both the earnings
+ * bonus that funds hero levels and the Ascendancy tree's compounding damage.
+ *
+ * ⚠️ P6's 90-minute ceiling has about **0.6 minutes of headroom**: per-seed
+ * maxima run 87.6 / 89.4 / 88.2 / 89.4 / 89.4 / 88.2. Anything that raises
+ * guardian HP or lowers hero DPS turns P6 red, including changes with nothing
+ * to do with boss tuning — the margin, not your change, is usually the cause.
  */
 export const BOSS_REALM_GAIN = 1.19;
 

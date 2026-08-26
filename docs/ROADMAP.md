@@ -89,8 +89,27 @@ The former Phase 3–5 sequence is superseded. The scene renderer remains useful
 - [ ] Original realm, portal, monster, gear, and boss presentation through the v1 finale
 - [ ] Collection cadence added to the simulator and retention evaluated in playtests
 - [ ] Revisit future companions only after the solo-hero loop is proven; no v1 party commitment
+- [ ] **An ending at or before realm 300.** The realm ladder has a hard arithmetic horizon and the world must reach a designed conclusion — or a defined endless mode — before a player reaches it. See "The realm-300 horizon" below.
 
-**Exit:** the long-horizon collection and world-saving journey support multi-realm retention.
+**Exit:** the long-horizon collection and world-saving journey support multi-realm retention, and no player can walk off the end of the number line.
+
+### The realm-300 horizon
+
+⚠️ **Realm 300 is the last winnable realm.** At 301 `bossHp` is `Infinity`, `enterPortal` refuses with `reason: 'unwinnable'`, and there is nothing further to play (`docs/DECISIONS.md` #34). A simulated player reaches it around **day 88** of steady play. This is an arithmetic wall, not an ending, and M4 owes the world a real one first.
+
+**A big-number representation is the only thing that removes the wall, and it has to cover all five points, not one:**
+
+| Quantity | Overflows at realm |
+|---|---|
+| `bossHp` | **301** |
+| `enemyHp` | 330 |
+| `gearPower` | 331 |
+| `enemyGold` | 333 |
+| `levelCost` | 341 |
+
+Widening `bossHp` alone buys thirty realms and leaves the wall standing. A real fix is a mantissa/exponent layer through the whole economy **with its own determinism contract** — `advance(s, a + b)` must stay byte-identical to `advance(advance(s, a), b)` under the new arithmetic, and that contract is the load-bearing invariant of this project (`docs/DECISIONS.md` #6). That is why M1R chose a defined finite horizon instead. Anyone reopening this should start here rather than re-deriving the five numbers.
+
+`packages/core/test/magnitude.test.ts` pins every frontier above, so the wall cannot move without a test going red.
 
 ## M5 — Art, audio, and ship decision
 

@@ -148,6 +148,22 @@ Boss HP reaching zero triggers one atomic ascension transaction:
 4. **Collection** — Bestiary, gear-set records, realm stars, and boss trophies.
 5. **World** — completed realms, current realm, threatened settlements, next portal, banked Ascendancy, and the Ascendancy tree.
 6. **Return recap** — road earnings while away or boss damage dealt while away; never claims road income during boss combat.
+7. **World's Edge** — the state at the end of the realm ladder. Specified below.
+
+### World's Edge — the state at realm 300
+
+**The requirement:** a player who finishes realm 300 must see something that reads as *the end of the current world*, never a portal button that quietly does nothing. `enterPortal` returning `reason: 'unwinnable'` is an engine value, not a design (`docs/DECISIONS.md` #34); this is the design it has to carry. Core work is done — the client work is `builder-visual-3`'s.
+
+**What the player sees, and what it must not be:**
+
+| The Road behaves normally | It keeps paying gold, dropping gear, and clearing zones. Nothing is taken away, and nothing hangs. |
+| The portal is visibly closed, not broken | It reads as sealed or spent — a thing that has ended — never as a greyed-out button or a failed tap. Tapping it explains, it does not shrug. |
+| The recap is a conclusion | Realms cleared, guardians felled, Bestiary completion, total banked Ascendancy. The run is *finished*, not stuck. |
+| The hero is at the edge of the map | `docs/VISION.md` already sells "World's Edge" as the long-horizon destination. This is that place, and it should look like arriving somewhere rather than hitting a limit. |
+
+**What it must never be:** a modal that says "maximum realm reached", a number that stops incrementing without comment, an error, or a portal that accepts a tap and does nothing. A player who cannot tell whether they finished the game or found a bug will conclude it is a bug, and they will be right to.
+
+**This is a placeholder for a real ending, and it is scheduled.** `docs/ROADMAP.md` M4 owes the world a designed conclusion — or a defined endless mode — at or before realm 300. Until that lands, World's Edge is what stands between a player and a wall.
 
 ## Deferred expansion: companions
 
