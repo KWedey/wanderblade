@@ -52,6 +52,47 @@ function isValidGearItem(v: unknown): boolean {
   return isFiniteNumber(item.power) && typeof item.rarity === 'string' && isFiniteNumber(item.zone);
 }
 
+function isObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/** Set `key` only when the save has no opinion about it at all. */
+function fill(on: Record<string, unknown>, key: string, value: unknown): void {
+  if (on[key] === undefined) on[key] = value;
+}
+
+/**
+ * Fill in fields the save predates. A field added after a save was written is
+ * absent, not wrong, and discarding the save for it deletes the player's run —
+ * the worst outcome this file can produce. Absent is filled; present-but-wrong
+ * still fails `isValidState` below, because that is corruption, not age.
+ */
+function backfill(v: unknown): void {
+  if (!isObject(v)) return;
+  fill(v, 'phase', 'road');
+  fill(v, 'portalReady', false);
+  fill(v, 'arcs', []);
+  fill(v, 'boss', { hpRemaining: 0, hpMax: 0, enteredAtSec: null });
+  fill(v, 'momentum', { value: 0, atSec: 0 });
+  fill(v, 'ascendancy', {});
+  fill(v, 'collection', {});
+  fill(v, 'lifetime', {});
+  fill(v, 'gear', {});
+
+  if (isObject(v.hero)) fill(v.hero, 'skills', {});
+  if (isObject(v.gear)) for (const slot of GEAR_SLOTS) fill(v.gear, slot, null);
+  if (isObject(v.ascendancy)) {
+    for (const key of ['pending', 'banked', 'victories']) fill(v.ascendancy, key, 0);
+    fill(v.ascendancy, 'nodes', {});
+  }
+  if (isObject(v.collection)) {
+    for (const key of ['bossTrophies', 'gearFound', 'zonesCleared']) fill(v.collection, key, 0);
+  }
+  if (isObject(v.lifetime)) {
+    for (const key of ['kills', 'goldEarned', 'ascensions']) fill(v.lifetime, key, 0);
+  }
+}
+
 /**
  * Runtime shape-guard for a deserialized GameState. `deserialize` is a bare
  * JSON.parse, so a same-version but partial or hand-edited payload ('{}', 'null',
@@ -167,7 +208,8 @@ export function readSave(): LoadedSave | null {
     ) {
       return null;
     }
-    const state = deserialize(envelope.state);
+    const state: unknown = deserialize(envelope.state);
+    backfill(state);
     if (!isValidState(state)) return null;
     return { state, savedAt: envelope.savedAt };
   } catch {
