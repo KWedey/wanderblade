@@ -51,6 +51,7 @@ import {
   monsterInk,
   realmSkin,
   sceneryInk,
+  sunHaloBands,
   type FoliageLobe,
   type RealmSkin,
 } from './palette';
@@ -1051,23 +1052,34 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     sunX = Math.floor(vw * 0.6);
     sunR = Math.max(5, Math.floor(vw / 26));
-    // Far enough down that the halo clears the top edge.
-    sunY = Math.max(Math.ceil(sunR * 1.6), Math.floor(skyH * 0.13));
+    // Far enough down that the widest halo band (sunHaloBands' 2x) clears the top edge.
+    sunY = Math.max(Math.ceil(sunR * 2.15), Math.floor(skyH * 0.13));
+  }
+
+  /** A filled circle, scanline by scanline — mass, not an outline. */
+  function fillDisc(cx: number, cy: number, r: number): void {
+    for (let dy = -r; dy <= r; dy++) {
+      const y = cy + dy;
+      if (y < 0 || y >= sceneBottomY) continue;
+      const half = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
+      ctx.fillRect(cx - half, y, half * 2 + 1, 1);
+    }
   }
 
   /**
-   * Stacked rects, never a radial gradient, and drawn over the treeline
+   * Stacked solid discs, never a radial gradient, and drawn over the treeline
    * rather than behind it: behind, the canopy tore the disc into two yellow
    * fragments with sky between them, which a critic read as a rendering
-   * artifact. The soft halo over the leaves reads as glare instead.
+   * artifact. Each halo band fully overpaints the one before it, so the glow
+   * is carried by filled area and colour, not by which pixels are left out.
    */
   function drawSun(skin: RealmSkin): void {
-    glowDisc(sunX, sunY, Math.round(sunR * 1.45), skin.sun, 0.34);
-    ctx.fillStyle = skin.sun;
-    for (let dy = -sunR; dy <= sunR; dy++) {
-      const half = Math.floor(Math.sqrt(Math.max(0, sunR * sunR - dy * dy)));
-      ctx.fillRect(sunX - half, sunY + dy, half * 2 + 1, 1);
+    for (const band of sunHaloBands(sunR)) {
+      ctx.fillStyle = mixHex(skin.sun, skin.skyTop, band.skyMix);
+      fillDisc(sunX, sunY, band.r);
     }
+    ctx.fillStyle = skin.sun;
+    fillDisc(sunX, sunY, sunR);
   }
 
   /** A third depth on the horizon, behind the far hills. */
@@ -1111,7 +1123,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  /** Stepped hill band — quantized columns give the hard pixel silhouette. */
+  /**
+   * Stepped hill band — quantized columns give the hard pixel silhouette. A
+   * dark base and a lit cap carry the slope's own form, the same two-band
+   * trick drawRange uses below; a single flat fill read as a cardboard
+   * cutout, not a hillside catching light from one direction.
+   */
   function drawHills(
     color: string,
     lip: string | null,
@@ -1121,18 +1138,21 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     freq: number,
     stepPx: number,
   ): void {
+    const base = mixHex(color, '#000000', 0.18);
+    const cap = lip ?? lighten(color, 0.22);
     for (let x = 0; x < vw; x += stepPx) {
       const wx = (x + scroll) * freq;
       const h = Math.floor(
         baseH + Math.sin(wx * 0.035) * amp + Math.sin(wx * 0.0131 + 1.3) * amp * 0.6,
       );
       const top = groundY - h;
+      const baseBandH = Math.max(1, Math.floor(h * 0.4));
       ctx.fillStyle = color;
       ctx.fillRect(x, top, stepPx, h);
-      if (lip) {
-        ctx.fillStyle = lip;
-        ctx.fillRect(x, top, stepPx, 2);
-      }
+      ctx.fillStyle = base;
+      ctx.fillRect(x, groundY - baseBandH, stepPx, baseBandH);
+      ctx.fillStyle = cap;
+      ctx.fillRect(x, top, stepPx, 2);
     }
   }
 

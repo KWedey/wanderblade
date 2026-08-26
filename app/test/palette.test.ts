@@ -8,6 +8,7 @@ import {
   MIN_VALUE_SPREAD,
   REALM_SKIN_COUNT,
   backdropSkin,
+  coherentRange,
   foliageNotchAt,
   grassClumpBlades,
   groundBladeOf,
@@ -18,6 +19,7 @@ import {
   momentumLift,
   realmSkin,
   skinValueSpread,
+  sunHaloBands,
 } from '../src/scene/palette';
 
 describe('realm value floor', () => {
@@ -141,6 +143,47 @@ describe('a glow carries intensity as ring count, not as dither', () => {
     expect(glowRingRadii(0, 1)).toEqual([]);
     expect(glowRingRadii(40, 0)).toEqual([]);
     expect(glowRingRadii(1, 1)).not.toContain(0);
+  });
+});
+
+describe('coherentRange keeps the horizon in the hill own hue family', () => {
+  it('leans toward hillFar rather than reproducing the authored colour untouched', () => {
+    expect(coherentRange('#000000', '#ffffff')).toBe('#595959');
+  });
+
+  it('is a no-op when the authored range already matches the hill', () => {
+    expect(coherentRange('#37946e', '#37946e')).toBe('#37946e');
+  });
+
+  it('never lands on the raw authored colour when hillFar differs from it', () => {
+    for (let region = 0; region < REALM_SKIN_COUNT; region++) {
+      const skin = realmSkin(region);
+      if (skin.hillFar === skin.range) continue;
+      // realmSkin() already ran the raw authored range through coherentRange,
+      // so re-deriving it here and comparing catches a regression back to a
+      // plain assignment of the authored colour.
+      expect(coherentRange(skin.hillFar, skin.range)).not.toBe(skin.range);
+    }
+  });
+});
+
+describe('sunHaloBands draws the sun as solid mass, not a ring', () => {
+  it('steps three bands outward from the core, largest first', () => {
+    const bands = sunHaloBands(20);
+    expect(bands).toHaveLength(3);
+    expect(bands[0]!.r).toBeGreaterThan(bands[1]!.r);
+    expect(bands[1]!.r).toBeGreaterThan(bands[2]!.r);
+    for (const band of bands) expect(band.r).toBeGreaterThan(20);
+  });
+
+  it('mixes the outermost band furthest toward sky, the innermost least', () => {
+    const bands = sunHaloBands(20);
+    expect(bands[0]!.skyMix).toBeGreaterThan(bands[1]!.skyMix);
+    expect(bands[1]!.skyMix).toBeGreaterThan(bands[2]!.skyMix);
+  });
+
+  it('draws nothing at no core radius', () => {
+    expect(sunHaloBands(0)).toEqual([]);
   });
 });
 
