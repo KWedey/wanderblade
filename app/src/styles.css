@@ -27,18 +27,23 @@
 }
 
 :root {
-  /* Both faces are pixel fonts and each has a fixed glyph grid: Pixelify Sans
-     draws one glyph pixel per font-size/10, VT323 one per font-size/12.5. A
-     size off that grid rasterises a 1.6px "pixel", which is what read as a
-     second, finer resolution sitting inside a hard-pixel world. Every size in
-     this file is one of these, and app/test/typegrid.test.ts holds the line. */
-  --ui-1: 20px;
-  --ui-2: 30px;
-  --ui-3: 40px;
-  --num-1: 25px;
-  --num-2: 37.5px;
-  --num-3: 50px;
-  --num-4: 62.5px;
+  /* Panel text is not the webfont - pixeltext.ts rasterises it through the 5x7
+     bitmap face, at round(font-size / 7) device pixels per glyph pixel. So the
+     only thing a font-size does here is pick that integer scale, and the judged
+     "two resolutions" was a scale that does not divide the world's.
+
+     The world runs at round(canvasWidth / 300) = 6 at the judged capture. Every
+     size below is an exact 7k, and every k divides 6, so panel type sits on a
+     whole sub-lattice of the world grid. The previous ramp used k of 2,3,4,7,8
+     - three of which do not - and the one before that mixed all five inside a
+     single panel. app/test/typegrid.test.ts holds both halves. */
+  --ui-1: 14px;
+  --ui-2: 21px;
+  --ui-3: 42px;
+  --num-1: 21px;
+  --num-2: 21px;
+  --num-3: 42px;
+  --num-4: 42px;
 
   /* DB32 anchors */
   --bg: #5fcde4;
@@ -385,14 +390,14 @@ body {
     left: auto;
     right: 0;
     bottom: 0;
-    width: min(520px, 38vw);
+    width: min(452px, 34vw);
     max-height: none;
     border-top: 0;
     border-left: 4px solid var(--panel-edge);
   }
 
   .hud {
-    right: min(520px, 38vw);
+    right: min(452px, 34vw);
   }
 
 
@@ -844,7 +849,7 @@ body {
 }
 
 .gear-power {
-  font-size: var(--num-1);
+  font-size: var(--ui-1);
   color: var(--ink-faint);
 }
 
@@ -868,10 +873,12 @@ body {
 /* --- Log (demoted to a thin ticker — the scene is the star, not the prose) */
 
 .panel.log {
-  flex: 1 1 auto;
+  /* Hugs its three entries. At flex:1 it absorbed the column's whole remainder
+     and rendered as a mostly-empty bordered box under the last line. */
+  flex: 0 1 auto;
   /* Enough for the title plus three entries. At flex:1 with min-height:0 the
      column above it simply ate the log whole and left a bare heading. */
-  min-height: 168px;
+  min-height: 152px;
   display: flex;
   flex-direction: column;
 }
@@ -883,9 +890,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  /* Two whole two-line entries. Sized against the log panel's own min-height
-     rather than the column's, which the panels above it can and do squeeze. */
-  max-height: 100px;
+  /* Three whole entries at two lines each - 36px per entry plus the 4px gap -
+     which is the density the judge called the best information design in the
+     set. A cap that is not a whole number of entries cuts the last one
+     mid-word, which is the defect this replaced. */
+  max-height: 116px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }

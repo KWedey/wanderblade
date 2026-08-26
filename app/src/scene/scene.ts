@@ -147,7 +147,7 @@ export interface Scene {
 // --- Tuning --------------------------------------------------------------
 
 /** Scene units across the viewport, before integer-scale rounding. */
-const TARGET_SCENE_WIDTH = 300;
+export const TARGET_SCENE_WIDTH = 300;
 const MIN_PIXEL_SCALE = 2;
 const MAX_PIXEL_SCALE = 8;
 
