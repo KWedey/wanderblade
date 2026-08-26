@@ -36,7 +36,17 @@ import { clearSave, readSave, writeSave } from './save';
 import type { SceneModel } from './scene/scene';
 import type { BossVM, GearVM, PortalVM, SkillVM, View, ViewModel } from './view';
 
-const TICK_MS = 250;
+/**
+ * Engine tick. A strike only reaches `state.momentum` when `advance` ingests
+ * it, so the tick period is the age of the newest momentum the client can
+ * know about: at 250ms a player pinned at the cap rendered x1.70 against a
+ * true x1.75, because the last strike had not been applied yet. Rendering
+ * already evaluates core's own momentumAt at display time (DECISIONS.md #12),
+ * so this is the whole of the remaining lag. Split-invariance makes a shorter
+ * period free of behaviour change - the same elapsed time in more pieces is
+ * byte-identical by contract.
+ */
+const TICK_MS = 100;
 const SAVE_INTERVAL_MS = 5000;
 /** Cold-load / offline gap above which the "Back on the Road" recap appears. */
 const RECAP_SEC = 60;

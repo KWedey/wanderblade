@@ -1566,7 +1566,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /** Segments, cells and label on one row: a widget, not a banner. */
-  const COMBO_MARGIN = 4;
   const COMBO_SEGS = 6;
   const COMBO_SEG_W = 3;
   const COMBO_GAP = 1;
@@ -1598,13 +1597,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   function comboBox(): { x: number; w: number; top: number; height: number } {
     const w = textWidth(comboLabel(), 1, BODY_FONT) + 3 + COMBO_METER_W;
     return {
-      // Docked to the left margin, off the centre line. Centred over the hero
-      // it was named twice as the thing competing with the action, and the
-      // action is all to the hero's right, where the road brings the monsters.
-      x: COMBO_MARGIN,
-      w: w + 4,
-      top: laneBaseline(COMBO_LANE, groundY) - 2,
-      height: GLYPH_H + 4,
+      // Carried by the hero, not floated over the scene. Centred it was "dead
+      // centre"; docked left it was "a black brick across the mid-left".
+      // Position was never the fault - a plated slab is not pixel art, so it
+      // reads as another app's UI wherever it sits. It rides above his head in
+      // the world's own idiom now, and it moves when he does.
+      x: Math.floor(heroX - w / 2),
+      w,
+      top: laneBaseline(COMBO_LANE, groundY) - 1,
+      height: GLYPH_H + 2,
     };
   }
 
@@ -1628,20 +1629,22 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const y = laneY(COMBO_LANE);
     const hot = heldMomentum.value > 0.7;
 
-    // Opaque plate: anything that does reach this band reads as behind a
-    // widget rather than as garbled type.
-    ctx.fillStyle = OUTLINE_INK;
-    ctx.fillRect(box.x, box.top, box.w, box.height);
-
-    drawText(ctx, label, box.x + 2, y, {
+    // Outlined type, no plate. The 1px ring is what every other number in the
+    // world wears, and it is what keeps this legible over sky or canopy
+    // without pasting a rectangle of chrome across the frame.
+    drawText(ctx, label, box.x, y, {
       scale: 1,
       fill: hot ? '#ffffff' : skin.accent,
-      outline: null,
+      outline: OUTLINE_INK,
       align: 'left',
     });
 
-    const meterX = box.x + 2 + labelW + 3;
+    const meterX = box.x + labelW + 3;
     const meterY = y + 1;
+    // The pip track is built the way the creature health bar is built: a dark
+    // frame with cells inside it, so the two read as the same world's meters.
+    ctx.fillStyle = OUTLINE_INK;
+    ctx.fillRect(meterX - 1, meterY - 1, COMBO_METER_W + 2, GLYPH_H);
     const filled = Math.min(COMBO_SEGS, Math.round(heldMomentum.value * COMBO_SEGS));
     // At rest a row of dark cells reads as broken, not idle. A slow chase
     // light across the empty cells reads as armed and waiting.
