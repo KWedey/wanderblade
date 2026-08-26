@@ -44,6 +44,9 @@
   --num-3: 42px;
   --num-4: 42px;
 
+  /* One number for the docked column: the panel is this wide, the HUD stops here. */
+  --dock-w: min(480px, 34vw);
+
   /* DB32 anchors */
   --bg: #5fcde4;
   --panel: #4a2f27;
@@ -404,14 +407,14 @@ body {
     left: auto;
     right: 0;
     bottom: 0;
-    width: min(480px, 34vw);
+    width: var(--dock-w);
     max-height: none;
     border-top: 0;
     border-left: 4px solid var(--panel-edge);
   }
 
   .hud {
-    right: min(452px, 34vw);
+    right: var(--dock-w);
   }
 
 
@@ -437,9 +440,13 @@ body {
     3px 3px 0 #1a1c2c, -3px 3px 0 #1a1c2c, 3px -3px 0 #1a1c2c, -3px -3px 0 #1a1c2c;
 }
 
+/* Wraps, so the realm block's minimum is one reading rather than both. The
+   bitmap face is wider than the webfont that sized these boxes, and on a
+   landscape phone the three HUD columns together asked for 650px of 529. */
 .header-sub {
   margin-top: 4px;
   display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   font-size: var(--ui-1);
   color: #fff;
@@ -450,9 +457,11 @@ body {
   color: var(--parchment);
 }
 
+/* Bounded by the column, not by the window: a viewport-relative floor made the
+   realm block's minimum 240px and pushed the DPS readout under the panel. */
 .zone-track {
   margin-top: 8px;
-  width: min(240px, 42vw);
+  width: min(240px, 100%);
   height: 12px;
   background: var(--panel-sunk);
   border: 3px solid #1a1c2c;
@@ -475,10 +484,13 @@ body {
   }
 }
 
+/* One step under the total it sits beneath. At --num-1 the bitmap face needed
+   123px inside a 108px column, so it could not fit at 2x and reverted to the
+   webfont - a second type system beside a 42px number. */
 .gold-rate {
   color: var(--parchment);
   text-transform: none;
-  font-size: var(--num-1);
+  font-size: var(--ui-1);
 }
 
 /* --- Goal strip --------------------------------------------------------- */
@@ -1350,13 +1362,23 @@ body {
     text-align: right;
   }
 
-  /* Power drops to its own row. Three columns left the name 31px on a 263px
-     panel and pushed the power reading off the panel's right edge. */
+  /* One column. Three left the name 31px on a 263px panel and pushed the power
+     reading off the right edge; two still left it 80px once the camera housing
+     took its inset, and "Longsword" needs 106 at the smallest UI scale. */
   .gear-slot {
-    grid-template-columns: auto 1fr;
+    grid-template-columns: 1fr;
     grid-template-areas:
-      'label name'
-      'power power';
+      'label'
+      'name'
+      'power';
+  }
+
+  /* Two cells side by side left each one 101px in the goal strip and 71px in
+     the portal stats. "Greenwood" needs 106 at the smallest scale UI type is
+     allowed, so both dropped out of the bitmap face into the webfont. */
+  .goal-strip,
+  .portal-stats {
+    flex-direction: column;
   }
 }
 
@@ -1370,4 +1392,17 @@ body {
   .hud {
     padding-left: calc(12px + env(safe-area-inset-left, 0px));
   }
+}
+
+/* Single tokens, and the bitmap face is wider than the webfont that measured
+   their boxes. Without this they cannot fit at 2x and revert to the webfont,
+   which is the "two type systems" a critic found three rounds running. */
+.gold,
+.dps,
+.zone,
+.leagues,
+.gold-rate,
+.hud-label,
+.asc-open-label {
+  white-space: nowrap;
 }
