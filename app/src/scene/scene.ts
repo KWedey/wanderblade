@@ -38,10 +38,14 @@ import {
   OUTLINE_INK,
   REALM_SKIN_COUNT,
   backdropSkin,
+  clampHillStep,
+  depthBandTones,
+  depthHaze,
   foliageNotchAt,
   foregroundInk,
   grassClumpBlades,
   groundBladeOf,
+  hillBaseInk,
   inFoliageLobe,
   inRun,
   lighten,
@@ -388,6 +392,77 @@ interface SkinnedSprites {
   flower: BakedSprite;
   fern: BakedSprite;
   birds: BakedSprite[];
+}
+
+/** The subset of CanvasRenderingContext2D a flat-fill draw loop needs — narrow enough to fake in a test without a real canvas. */
+export interface FillCtx {
+  fillStyle: string | CanvasGradient | CanvasPattern;
+  fillRect(x: number, y: number, w: number, h: number): void;
+}
+
+/**
+ * Stepped hill band — quantized columns give the hard pixel silhouette. A
+ * dark base and a lit cap carry the slope's own form, the same two-band
+ * trick drawRange uses below; a single flat fill read as a cardboard
+ * cutout, not a hillside catching light from one direction.
+ */
+export function drawHills(
+  ctx: FillCtx,
+  vw: number,
+  groundY: number,
+  color: string,
+  lip: string | null,
+  scroll: number,
+  amp: number,
+  baseH: number,
+  freq: number,
+  stepPx: number,
+  haze: string,
+): void {
+  const base = hillBaseInk(color, haze);
+  const cap = lip ?? lighten(color, 0.22);
+  // Column height is clamped to a slope the column width can actually draw
+  // — the raw sine profile jumps further than a step is wide, which is what
+  // a staircased silhouette looks like at this resolution.
+  const maxDelta = stepPx * 1.5;
+  let prevH: number | null = null;
+  for (let x = 0; x < vw; x += stepPx) {
+    const wx = (x + scroll) * freq;
+    const rawH = Math.floor(
+      baseH + Math.sin(wx * 0.035) * amp + Math.sin(wx * 0.0131 + 1.3) * amp * 0.6,
+    );
+    const h = clampHillStep(prevH, rawH, maxDelta);
+    prevH = h;
+    const top = groundY - h;
+    const baseBandH = Math.max(1, Math.floor(h * 0.4));
+    ctx.fillStyle = color;
+    ctx.fillRect(x, top, stepPx, h);
+    ctx.fillStyle = base;
+    ctx.fillRect(x, groundY - baseBandH, stepPx, baseBandH);
+    ctx.fillStyle = cap;
+    ctx.fillRect(x, top, stepPx, 2);
+  }
+}
+
+/** Horizontal value bands the turf splits into, far edge to near edge. */
+export const GROUND_BANDS = 4;
+
+/** Paints one tone per horizontal strip of the turf band — the same fixed-band idiom drawHills uses, applied to the ground plane instead of a silhouette. */
+export function drawGroundBands(
+  ctx: FillCtx,
+  vw: number,
+  groundY: number,
+  turfH: number,
+  tones: readonly string[],
+): void {
+  const bandH = Math.max(1, Math.floor(turfH / tones.length));
+  let y = groundY;
+  for (let i = 0; i < tones.length; i++) {
+    const h = i === tones.length - 1 ? groundY + turfH - y : bandH;
+    ctx.fillStyle = tones[i]!;
+    ctx.fillRect(0, y, vw, h);
+    y += h;
+  }
 }
 
 export function createScene(canvas: HTMLCanvasElement): Scene {
@@ -1052,8 +1127,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     sunX = Math.floor(vw * 0.6);
     sunR = Math.max(5, Math.floor(vw / 26));
-    // Far enough down that the widest halo band (sunHaloBands' 2x) clears the top edge.
-    sunY = Math.max(Math.ceil(sunR * 2.15), Math.floor(skyH * 0.13));
+    // Far enough down that the widest halo band (sunHaloBands' 2.3x) clears the top edge.
+    sunY = Math.max(Math.ceil(sunR * 2.45), Math.floor(skyH * 0.13));
   }
 
   /** A filled circle, scanline by scanline — mass, not an outline. */
@@ -1123,47 +1198,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  /**
-   * Stepped hill band — quantized columns give the hard pixel silhouette. A
-   * dark base and a lit cap carry the slope's own form, the same two-band
-   * trick drawRange uses below; a single flat fill read as a cardboard
-   * cutout, not a hillside catching light from one direction.
-   */
-  function drawHills(
-    color: string,
-    lip: string | null,
-    scroll: number,
-    amp: number,
-    baseH: number,
-    freq: number,
-    stepPx: number,
-  ): void {
-    const base = mixHex(color, '#000000', 0.18);
-    const cap = lip ?? lighten(color, 0.22);
-    for (let x = 0; x < vw; x += stepPx) {
-      const wx = (x + scroll) * freq;
-      const h = Math.floor(
-        baseH + Math.sin(wx * 0.035) * amp + Math.sin(wx * 0.0131 + 1.3) * amp * 0.6,
-      );
-      const top = groundY - h;
-      const baseBandH = Math.max(1, Math.floor(h * 0.4));
-      ctx.fillStyle = color;
-      ctx.fillRect(x, top, stepPx, h);
-      ctx.fillStyle = base;
-      ctx.fillRect(x, groundY - baseBandH, stepPx, baseBandH);
-      ctx.fillStyle = cap;
-      ctx.fillRect(x, top, stepPx, 2);
-    }
-  }
-
   function drawGround(skin: RealmSkin): void {
     const belowH = Math.max(8, sceneBottomY - groundY);
     const turfH = Math.max(6, Math.floor(belowH * 0.76));
     // Momentum climbs the whole lit surface one palette step. A dithered
     // overlay at this size read as static; a palette shift reads as sun.
     const lift = momentumLift(model.momentum);
-    ctx.fillStyle = lighten(skin.turf, lift);
-    ctx.fillRect(0, groundY, vw, turfH);
+    drawGroundBands(ctx, vw, groundY, turfH, depthBandTones(lighten(skin.turf, lift), GROUND_BANDS));
     ctx.fillStyle = lighten(skin.turfLip, lift);
     ctx.fillRect(0, groundY, vw, 3);
     ctx.fillStyle = skin.soil;
@@ -2003,12 +2044,25 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     ctx.clearRect(0, 0, vw, vh);
 
     const far = backdropSkin(skin);
+    const haze = depthHaze(skin);
     drawSky(skin);
     drawClouds(skin);
     drawBirds(sprites);
     drawRange(far);
-    drawHills(far.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4);
-    drawHills(far.hillNear, far.hillLip, scrollHillNear, groundY * 0.11, groundY * 0.18, 1.7, 3);
+    drawHills(ctx, vw, groundY, far.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4, haze);
+    drawHills(
+      ctx,
+      vw,
+      groundY,
+      far.hillNear,
+      far.hillLip,
+      scrollHillNear,
+      groundY * 0.11,
+      groundY * 0.18,
+      1.7,
+      3,
+      haze,
+    );
     drawGrove(far);
     drawDrift(far);
     drawTreeline(sprites);

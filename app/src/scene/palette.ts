@@ -536,6 +536,38 @@ export function backdropSkin(skin: RealmSkin): RealmSkin {
 }
 
 /**
+ * Largest height change one hill column may take from its neighbour. The raw
+ * sine profile could jump 14px between 3-4px-wide columns — steeper than the
+ * column is wide — which draws as a staircase of right angles, not a slope.
+ */
+export function clampHillStep(prevH: number | null, targetH: number, maxDelta: number): number {
+  if (prevH === null) return targetH;
+  const delta = targetH - prevH;
+  if (delta > maxDelta) return prevH + maxDelta;
+  if (delta < -maxDelta) return prevH - maxDelta;
+  return targetH;
+}
+
+/** Minimum lightness a hill's shadow base must hold over the haze behind it. */
+export const MIN_HILL_SHADOW_GAP = 0.1;
+
+/**
+ * A hill's dark base band, backed off until it clears the depth haze the
+ * grove's shadow tones recede toward. A fixed 18% mix landed only 0.084 above
+ * that haze in Greenwood, so the "shadow" merged into the real one behind it.
+ */
+export function hillBaseInk(color: string, floor: string, amount = 0.18): string {
+  let mix = amount;
+  let out = mixHex(color, '#000000', mix);
+  for (let step = 0; step < 24 && mix > 0; step++) {
+    if (lightnessOf(out) - lightnessOf(floor) >= MIN_HILL_SHADOW_GAP) break;
+    mix = Math.max(0, mix - 0.02);
+    out = mixHex(color, '#000000', mix);
+  }
+  return out;
+}
+
+/**
  * Ceiling on how far ground texture may stray from the turf under it. Blade
  * tones were hand-authored accents, so the road read as "a confetti field that
  * fights the sprites": texture modulates a surface, it does not compete with
@@ -552,6 +584,23 @@ export function groundBladeOf(skin: RealmSkin): string {
     blade = mixHex(blade, skin.turf, 0.18);
   }
   return blade;
+}
+
+/** Value steps a ground band darkens by, one step per band moving away from the camera. */
+export const GROUND_BAND_STEP = 0.045;
+
+/**
+ * Turf split into flat value bands, darkest at the horizon edge and true tone
+ * at the camera edge — the receding-surface cue a single flat fill has none
+ * of. `bands` must be at least 1.
+ */
+export function depthBandTones(base: string, bands: number, step = GROUND_BAND_STEP): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < bands; i++) {
+    const fromNear = bands - 1 - i;
+    out.push(fromNear === 0 ? base : mixHex(base, '#000000', Math.min(0.6, fromNear * step)));
+  }
+  return out;
 }
 
 /**
@@ -572,6 +621,7 @@ export function foregroundInk(skin: RealmSkin): InkSet {
     leafLite: down(ink.leafLite!),
     bark: down(ink.bark!),
     barkDark: down(ink.barkDark!),
+    barkLit: down(ink.barkLit!),
     grassBlade: down(ink.grassBlade!),
   };
 }
@@ -586,6 +636,10 @@ export function sceneryInk(skin: RealmSkin): InkSet {
     leafLite: lighten(skin.leaf, 0.3),
     bark: skin.bark,
     barkDark: mixHex(skin.bark, '#000000', 0.35),
+    // Sun sits upper right: a lit edge on the trunk's far side is what gives
+    // the stick its own roundness instead of a flat silhouette pasted below
+    // the canopy.
+    barkLit: lighten(skin.bark, 0.35),
     rock: skin.rock,
     rockLight: skin.rockLight,
     grassBlade: skin.grassBlade,
@@ -776,14 +830,18 @@ export interface HaloBand {
  * Sun halo as solid stacked discs, outermost first — mass and a value step
  * carry the glow, same as a hill's lit cap, rather than a ring of gaps in the
  * sky. A ring of separated pixels only reads as light while it is finer than
- * the eye can resolve; upscaled pixel art never is (DECISIONS.md #53).
+ * the eye can resolve; upscaled pixel art never is (DECISIONS.md #53). Five
+ * bands instead of three, and an outermost mix close enough to sky colour
+ * that the last step fades rather than stopping on a hard edge.
  */
 export function sunHaloBands(coreR: number): HaloBand[] {
   if (coreR <= 0) return [];
   return [
-    { r: Math.round(coreR * 2), skyMix: 0.72 },
-    { r: Math.round(coreR * 1.6), skyMix: 0.48 },
-    { r: Math.round(coreR * 1.3), skyMix: 0.24 },
+    { r: Math.round(coreR * 2.3), skyMix: 0.82 },
+    { r: Math.round(coreR * 2.0), skyMix: 0.66 },
+    { r: Math.round(coreR * 1.7), skyMix: 0.48 },
+    { r: Math.round(coreR * 1.4), skyMix: 0.3 },
+    { r: Math.round(coreR * 1.15), skyMix: 0.14 },
   ];
 }
 

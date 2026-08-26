@@ -758,3 +758,63 @@ Fewer, larger islands at higher coverage is the "isolated blades → continuous 
 - Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 36 passed (36)**, **Tests 688 passed (688)**.
 
 **The loot-pickup glow keeps the ring, deliberately.** `glowDisc` and `glowRingRadii` still back `scene.ts:1815`, so the dashed look survives on coins in flight. It was not changed because the two cases have opposite constraints: the sun is one large shape alone in open sky, where an outline reads as a glitch, while a dozen loot halos overlap at once and filling them turned a kill into "a 180px wall of yellow with the creature somewhere inside it". No judge has named the loot glow — the complaint was specific to open sky. Changing it now would be a speculative art change of exactly the kind that lost round 35, so it waits for a judge to name it.
+
+## 54. Tree trunks carry a lit edge and a shadow edge, and foliage overlaps the trunk top — 2026-08-26
+
+**Decision:** `TREE`, `TREE_TALL`, `TREE_WIDE` (`pixels.ts`) redraw the trunk with three inks instead of two — `barkDark` on the shadow side, `bark` mid-tone, and a new `barkLit` (`sceneryInk`/`foregroundInk`, `palette.ts`) on the sun-facing side — and the canopy-to-trunk transition row now interleaves a foliage glyph over the trunk's near column instead of handing off in one clean row.
+
+**Why:** Gauntlet round 36 (`.gauntlet/verdict36.md`, img-4) named "every tree is a smooth round canopy sitting on a thin straight brown trunk line with an abrupt seam where the stick meets the blob — a 'lollipop tree,' most visible on the tall tree left-of-center." `drawGrove`'s procedural background trees (`scene.ts:1265`) already carry this exact lit-edge/shadow-edge split; the static foreground sprites in `pixels.ts` never got it.
+
+**Same light direction as everywhere else in the scene.** The sun sits upper right; `drawGrove`'s comment at `scene.ts:1309` states the convention directly — "the lit face is the far side of the upper mass." `barkLit` is placed at the trunk's rightmost column, `barkDark` at its left, in every trunk and root-flare row of all three sprites.
+
+**Evidence:**
+- Deterministic: `spriteMapFaults` (existing sweep, `pixels.test.ts`) still passes on all three edited grids — rectangular, fully legended.
+- Deterministic, draw-level: two new tests in `pixels.test.ts` read the actual `SpriteMap.rows` strings `bakeSprite` draws from (one fillRect per glyph, no branching in between) rather than a separate geometry function — `barkLit` sits strictly right of `barkDark` on every trunk row across all three sprites, and each sprite has at least one row mixing a foliage glyph with a trunk glyph, confirming the overlap actually ships rather than existing only as intent.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 36 passed (36)**, **Tests 690 passed (690)**.
+
+**Not touched:** the hero sprite (owned by a different agent this round), `drawGrove`'s procedural background trees (already correct), and the background hill, ground turf, and sun halo — the other three surfaces named in the same verdict, addressed in following commits.
+
+## 55. Background hills stop staircasing and their shadow band clears the haze behind it — 2026-08-26
+
+**Decision:** `drawHills` moves out of the `createScene()` closure into a standalone exported function taking a narrow `FillCtx` (`fillStyle`/`fillRect` only). Two pure helpers in `palette.ts` back it: `clampHillStep` caps how far one column's height can jump from its neighbour, and `hillBaseInk` backs off its shadow-mix percentage until the base band clears `depthHaze` by `MIN_HILL_SHADOW_GAP` (0.1 lightness) instead of using a fixed 18% mix regardless of realm.
+
+**Why:** Gauntlet round 36 (`.gauntlet/verdict36.md`, img-4) named the background hill's edge as "stepped/staircased, like a jagged EKG line" and its base shadow as "nearly merging with the shadow under the trees in front of it — you can't tell where one ends and the other begins." Both were mechanical: the raw sine profile could jump 14px between 3-4px-wide columns (steeper than the column is wide, which draws as right angles), and a fixed 18% black mix landed only 0.084 lightness above Greenwood's haze — visually indistinguishable from it.
+
+**Same light direction as everywhere else.** The lit cap and dark base are the same two-band trick `drawRange` and the near hills already used (ADR #53); this round extends it to the far hill layer and fixes the two defects specific to it.
+
+**Evidence:**
+- Deterministic: `clampHillStep` and `hillBaseInk` are pure functions with unit tests in `palette.test.ts` — bounds in both directions, the null-prior first-column case, and a sweep over every realm's `hillFar` confirming the shadow gap holds everywhere, not just the one realm that failed at 18%.
+- Deterministic, draw-level: `app/test/scene.test.ts` calls the real, now-exported `drawHills` against a fake `FillCtx` that records every `fillRect` call — confirming the shipped draw loop, not just the geometry functions it calls, fills every column, keeps the base band above the haze floor, and never lets adjacent columns jump past the clamp. This is the fake-context pattern the tree fix (ADR #54) didn't need but this surface does, since the defect lived in the loop's column-to-column stepping, not in a static sprite grid.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 699 passed (699)**.
+
+**Not touched:** the near hill layer's cap/base logic (already correct per ADR #53, only re-used here), and the ground turf and sun halo — the remaining two surfaces from the same verdict, addressed in following commits.
+
+## 56. Turf is stacked value bands instead of one flat fill — 2026-08-26
+
+**Decision:** `drawGround`'s single `fillRect` for the whole turf band is replaced by `drawGroundBands` (`scene.ts`), which paints one flat tone per horizontal strip. Tones come from `depthBandTones` (`palette.ts`), a pure function that darkens toward the horizon edge and holds the true turf tone at the camera edge — `GROUND_BANDS` (4) strips per frame.
+
+**Why:** Gauntlet round 36 (`.gauntlet/verdict36.md`, img-4) named the grass as "flat green with tufts pasted over bare gaps — no sense that the ground recedes into the distance." The blade/tuft texture already varies point-to-point, but the surface under it was one solid colour top to bottom, so nothing signalled distance across the band itself.
+
+**Same idiom as the hills, one surface over.** `drawGroundBands` is the fixed-band loop `drawHills` already established (ADR #55) — stacked flat rects, no gradient (DECISIONS.md #13 stands) — applied to a horizontal strip instead of a silhouette.
+
+**Evidence:**
+- Deterministic: `depthBandTones` is a pure function with unit tests in `palette.test.ts` — the near band always equals the true base tone at any band count, lightness increases strictly moving from the far band to the near band, and the ordering holds across every realm's turf colour.
+- Deterministic, draw-level: `app/test/scene.test.ts` calls the real, exported `drawGroundBands` against a fake `FillCtx` and asserts the emitted rects stack with no gap or overlap, in tone order, and each spans the full width — confirming the shipped loop, not just the tone function behind it.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 704 passed (704)**.
+
+**Not touched:** the blade/tuft/strata texture loops (already varied, out of scope this round) and the sun halo — the last surface from the same verdict, addressed in the following commit.
+
+## 57. Sun halo gets two more steps and fades toward sky colour at its edge — 2026-08-26
+
+**Decision:** `sunHaloBands` (`palette.ts`) grows from 3 stacked discs to 5, and the outermost band's `skyMix` rises from 0.72 to 0.82 — closer to pure sky colour, so the last visible step is subtler instead of stopping on one hard-edged ring. `drawSun`/`fillDisc` (`scene.ts`) are unchanged; the loop already iterated over whatever `sunHaloBands` returned. The `sunY` clearance margin moves from `sunR * 2.15` to `sunR * 2.45` to match the new widest band (`2.3x` core radius, was `2x`).
+
+**Why:** Gauntlet round 36 (`.gauntlet/verdict36.md`, img-4) named the sun as "3 flat value steps with a hard outer edge — a ring sticker pasted on the sky, not light falling off into the sky around it."
+
+**Still no gradients** (DECISIONS.md #13) — five hard flat discs, same idiom as three, one step closer to sky colour at the edge instead of a blend.
+
+**Evidence:**
+- Deterministic: `sunHaloBands`'s existing pure-function tests in `palette.test.ts` are widened to loop over all 5 bands (radius and `skyMix` both strictly decreasing outward-to-inward) instead of the 3 hardcoded pairs, plus a new assertion that the outermost `skyMix` is at least 0.8.
+- Draw-loop coverage carries over from ADR #53 without a new fake-context test: `drawSun`'s loop (`for (const band of sunHaloBands(sunR))`) makes no assumption about band count, so it was already proven correct for any array length the pure function returns.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 704 passed (704)**.
+
+**Not touched:** `glowDisc`/`glowRingRadii` (loot-pickup glow, deliberately left alone per ADR #53). All four surfaces named in round 36's verdict — trees (#54), background hill (#55), turf (#56), sun (#57) — are now addressed.

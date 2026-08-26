@@ -3,15 +3,20 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_TEXTURE_CONTRAST,
   MIN_ACCENT_LIGHTNESS,
+  MIN_HILL_SHADOW_GAP,
   MIN_SKY_LIGHTNESS,
   MIN_SPRITE_BACKDROP_GAP,
   MIN_VALUE_SPREAD,
   REALM_SKIN_COUNT,
   backdropSkin,
+  clampHillStep,
   coherentRange,
+  depthBandTones,
+  depthHaze,
   foliageNotchAt,
   grassClumpBlades,
   groundBladeOf,
+  hillBaseInk,
   inFoliageLobe,
   inRun,
   lightnessOf,
@@ -117,6 +122,67 @@ describe('ground texture never fights the sprites', () => {
   });
 });
 
+describe('clampHillStep bounds how far one hill column can jump from its neighbour', () => {
+  it('passes the target through unclamped when the change fits', () => {
+    expect(clampHillStep(10, 12, 4)).toBe(12);
+    expect(clampHillStep(10, 7, 4)).toBe(7);
+  });
+
+  it('clamps a jump larger than maxDelta in either direction', () => {
+    expect(clampHillStep(10, 30, 4)).toBe(14);
+    expect(clampHillStep(10, -30, 4)).toBe(6);
+  });
+
+  it('passes the first column through with no prior height to compare against', () => {
+    expect(clampHillStep(null, 999, 1)).toBe(999);
+  });
+});
+
+describe('hillBaseInk keeps the hill shadow clear of the haze behind it', () => {
+  it('holds the fixed 18% mix when it already clears the floor', () => {
+    expect(hillBaseInk('#ffffff', '#000000')).toBe('#d1d1d1');
+  });
+
+  it('backs the mix off until the gap opens, for every realm', () => {
+    for (let region = 0; region < REALM_SKIN_COUNT; region++) {
+      const skin = realmSkin(region);
+      const haze = depthHaze(skin);
+      const base = hillBaseInk(skin.hillFar, haze);
+      expect(lightnessOf(base) - lightnessOf(haze), `realm ${region}`).toBeGreaterThanOrEqual(
+        MIN_HILL_SHADOW_GAP - 1e-9,
+      );
+    }
+  });
+
+  it('gives up bounded, without darkening past the floor when the colour cannot clear it', () => {
+    // A colour already at the floor: no amount of backing off the mix opens a
+    // gap, so the loop must stop rather than spin forever.
+    expect(() => hillBaseInk('#101010', '#101010')).not.toThrow();
+  });
+});
+
+describe('depthBandTones darkens a turf colour toward the horizon, band by band', () => {
+  it('returns the true base tone for the nearest band, at any band count', () => {
+    expect(depthBandTones('#3a6b4f', 1)).toEqual(['#3a6b4f']);
+    const bands = depthBandTones('#3a6b4f', 5);
+    expect(bands[4]).toBe('#3a6b4f');
+  });
+
+  it('darkens strictly monotonically moving away from the near band', () => {
+    const bands = depthBandTones('#3a6b4f', 5);
+    for (let i = 1; i < bands.length; i++) {
+      expect(lightnessOf(bands[i]!), `band ${i}`).toBeGreaterThan(lightnessOf(bands[i - 1]!));
+    }
+  });
+
+  it('never inverts near/far ordering across every realm turf', () => {
+    for (let region = 0; region < REALM_SKIN_COUNT; region++) {
+      const bands = depthBandTones(realmSkin(region).turf, 4);
+      expect(lightnessOf(bands[0]!), `realm ${region}`).toBeLessThanOrEqual(lightnessOf(bands[3]!));
+    }
+  });
+});
+
 describe('momentumLift', () => {
   it('is zero at rest and clamped at full', () => {
     expect(momentumLift(0)).toBe(0);
@@ -168,18 +234,21 @@ describe('coherentRange keeps the horizon in the hill own hue family', () => {
 });
 
 describe('sunHaloBands draws the sun as solid mass, not a ring', () => {
-  it('steps three bands outward from the core, largest first', () => {
+  it('steps five bands outward from the core, largest first', () => {
     const bands = sunHaloBands(20);
-    expect(bands).toHaveLength(3);
-    expect(bands[0]!.r).toBeGreaterThan(bands[1]!.r);
-    expect(bands[1]!.r).toBeGreaterThan(bands[2]!.r);
+    expect(bands).toHaveLength(5);
+    for (let i = 1; i < bands.length; i++) {
+      expect(bands[i - 1]!.r, `band ${i - 1} vs ${i}`).toBeGreaterThan(bands[i]!.r);
+    }
     for (const band of bands) expect(band.r).toBeGreaterThan(20);
   });
 
-  it('mixes the outermost band furthest toward sky, the innermost least', () => {
+  it('mixes each band further toward sky than the one inside it, ending close to sky colour', () => {
     const bands = sunHaloBands(20);
-    expect(bands[0]!.skyMix).toBeGreaterThan(bands[1]!.skyMix);
-    expect(bands[1]!.skyMix).toBeGreaterThan(bands[2]!.skyMix);
+    for (let i = 1; i < bands.length; i++) {
+      expect(bands[i - 1]!.skyMix, `band ${i - 1} vs ${i}`).toBeGreaterThan(bands[i]!.skyMix);
+    }
+    expect(bands[0]!.skyMix).toBeGreaterThanOrEqual(0.8);
   });
 
   it('draws nothing at no core radius', () => {
