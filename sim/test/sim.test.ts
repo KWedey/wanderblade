@@ -1,103 +1,326 @@
-import { describe, it, expect } from 'vitest';
-import { initialState, SKILLS, type GameState } from '@wanderblade/core';
+import { describe, expect, it } from 'vitest';
+import {
+  advance,
+  arcPositionAt,
+  ARC_FLIGHT_SEC,
+  initialState,
+  SKILL_IDS,
+  zonesPerRealm,
+  type GameState,
+  type LootArc,
+} from '@wanderblade/core';
 import { parseArgs } from '../src/args';
-import { botBuy } from '../src/bot';
-import { Collector } from '../src/collector';
-import { simulateSeed } from '../src/simulate';
-import { runValidators } from '../src/validators';
-import type { SimConfig } from '../src/types';
+import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
+import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
+import { twentyFourHourReturn } from '../src/probes';
+import { runPlayer } from '../src/simulate';
+import { runCorrectness, runPacing } from '../src/validators';
+import type { BreachKind, SeedResult, SimConfig } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
   days: 1,
   seed: 1,
   seeds: 1,
-  checkinsPerDay: 4,
+  sessionMin: 20,
+  sessionsPerDay: 2,
   csv: false,
+  quick: false,
   ...over,
 });
 
 describe('parseArgs', () => {
   it('applies documented defaults with no flags', () => {
     expect(parseArgs([])).toEqual({
-      days: 10,
+      days: 14,
       seed: 1,
       seeds: 3,
-      checkinsPerDay: 4,
+      sessionMin: 20,
+      sessionsPerDay: 2,
       csv: false,
+      quick: false,
     });
   });
 
   it('parses space- and equals-separated flags plus the --csv boolean', () => {
-    expect(parseArgs(['--days', '5', '--seed=7', '--seeds', '2', '--checkins-per-day=6', '--csv'])).toEqual({
+    expect(
+      parseArgs(['--days', '5', '--seed=7', '--seeds', '2', '--session-min=30', '--csv']),
+    ).toEqual({
       days: 5,
       seed: 7,
       seeds: 2,
-      checkinsPerDay: 6,
+      sessionMin: 30,
+      sessionsPerDay: 2,
       csv: true,
+      quick: false,
     });
   });
 
-  it('rejects unknown flags and non-positive integers', () => {
+  it('returns help and rejects bad input', () => {
+    expect(parseArgs(['--help'])).toBe('help');
     expect(() => parseArgs(['--nope'])).toThrow();
     expect(() => parseArgs(['--days', '0'])).toThrow();
     expect(() => parseArgs(['--seed', 'x'])).toThrow();
+    expect(() => parseArgs(['--session-min', '800'])).toThrow();
   });
 });
 
-describe('botBuy termination guard', () => {
+describe('bot termination guards', () => {
   it('makes zero purchases and terminates when gold has overflowed to Infinity', () => {
     const state: GameState = initialState(1);
     state.gold = Infinity;
-    const bought = botBuy(state, new Collector());
-    // Infinite balance never drops below cost — the guard must stop the loop.
-    expect(bought).toBe(0);
+    expect(botBuyGold(state)).toBe(0);
   });
 
   it('spends a finite balance down and then stops', () => {
     const state: GameState = initialState(1);
     state.gold = 1000;
-    const bought = botBuy(state, new Collector());
-    expect(bought).toBeGreaterThan(0);
+    expect(botBuyGold(state)).toBeGreaterThan(0);
     expect(Number.isFinite(state.gold)).toBe(true);
     expect(state.gold).toBeLessThan(1000);
   });
 
-  it('skips capped skills instead of stalling the greedy loop', () => {
-    // A skill at its cap offers no buyable ΔDPS; the bot must skip it and keep
-    // spending on hero levels, not break out of the loop early.
+  it('terminates on skills whose marginal value has decayed to nothing', () => {
     const state: GameState = initialState(1);
-    state.hero.level = 15; // both skills unlocked
-    state.hero.skills.cleave = SKILLS.cleave!.maxLevel; // capped
-    state.hero.skills.warcry = SKILLS.warcry!.maxLevel; // capped
+    state.hero.level = 20;
+    for (const id of SKILL_IDS) state.hero.skills[id] = 4_000;
     state.gold = 1e6;
-    const bought = botBuy(state, new Collector());
-    expect(bought).toBeGreaterThan(0); // kept buying hero levels
-    expect(state.hero.skills.cleave).toBe(SKILLS.cleave!.maxLevel); // no over-buy
-    expect(state.hero.skills.warcry).toBe(SKILLS.warcry!.maxLevel);
+    expect(botBuyGold(state)).toBeGreaterThan(0);
+    expect(state.gold).toBeLessThan(1e6);
+  });
+
+  it('spends banked Ascendancy down to nothing affordable', () => {
+    const state: GameState = initialState(1);
+    state.ascendancy.banked = 200;
+    expect(botBuyTree(state)).toBeGreaterThan(0);
+    expect(state.ascendancy.banked).toBeLessThan(200);
+    expect(botBuyTree(state)).toBe(0);
+  });
+
+  it('buys nothing from the tree during a boss attempt', () => {
+    const state: GameState = initialState(1);
+    state.phase = 'boss';
+    state.ascendancy.banked = 1e6;
+    expect(botBuyTree(state)).toBe(0);
+    expect(botBuyGold(state)).toBe(0);
   });
 });
 
-describe('simulateSeed determinism', () => {
-  it('produces identical measurements for the same seed', () => {
-    const a = simulateSeed(1, cfg());
-    const b = simulateSeed(1, cfg());
-    expect(a.finalZone).toBe(b.finalZone);
-    expect(a.firstPurchaseSec).toBe(b.firstPurchaseSec);
-    expect(a.firstBossSec).toBe(b.firstBossSec);
-    expect(a.maxTrashKillTime).toBe(b.maxTrashKillTime);
-    expect(a.checkins.map((c) => c.purchases)).toEqual(b.checkins.map((c) => c.purchases));
+describe('strikeTimes', () => {
+  it('emits evenly spaced timestamps strictly inside the window', () => {
+    expect(strikeTimes(10, 1, 4).map((s) => s.atSec)).toEqual([10.25, 10.5, 10.75, 11]);
+    expect(strikeTimes(0, 0, 4)).toEqual([]);
+    expect(strikeTimes(0, 10, 0)).toEqual([]);
   });
 
-  it('produces the six M0 validators, ordered 1..6', () => {
-    const r = simulateSeed(1, cfg());
-    r.validators = runValidators(r);
-    expect(r.validators.map((v) => v.id)).toEqual([1, 2, 3, 4, 5, 6]);
-    for (const v of r.validators) expect(typeof v.pass).toBe('boolean');
+  it('carries the aim it was given, and no aim by default', () => {
+    expect(strikeTimes(0, 1, 4).every((s) => s.aim === null)).toBe(true);
+    const aimed = strikeTimes(0, 1, 4, { x: 0.5, y: 1 });
+    expect(aimed.every((s) => s.aim?.x === 0.5 && s.aim.y === 1)).toBe(true);
   });
 
-  it('measures a finite, non-negative max trash kill time', () => {
-    const r = simulateSeed(1, cfg());
-    expect(Number.isFinite(r.maxTrashKillTime)).toBe(true);
-    expect(r.maxTrashKillTime).toBeGreaterThanOrEqual(0);
+  it('uses the momentum-sustaining rate as the reference cadence', () => {
+    expect(CAP_RATE).toBeGreaterThan(3);
+    expect(CAP_RATE).toBeLessThan(4);
+  });
+});
+
+// `f?.(advance(...))` never calls advance when f is undefined, so a driver loop
+// that folds the advance into the optional report spins forever on the callers
+// that pass no callback — every P1 probe arm among them.
+describe('the driver loops advance whether or not anyone is listening', () => {
+  it('runIdle moves the clock with no hooks at all', () => {
+    const s = initialState(11);
+    runIdle(s, 600);
+    expect(s.timeSec).toBe(600);
+    expect(s.lifetime.kills).toBeGreaterThan(0);
+  });
+
+  it('strikeThrough moves the clock with no onEvents, striking and idle alike', () => {
+    const striking = initialState(11);
+    strikeThrough(striking, 600, CAP_RATE);
+    expect(striking.timeSec).toBeGreaterThanOrEqual(600 - 1e-9);
+    expect(striking.lifetime.kills).toBeGreaterThan(0);
+
+    const idle = initialState(11);
+    strikeThrough(idle, 600, 0);
+    expect(idle.timeSec).toBeGreaterThanOrEqual(600 - 1e-9);
+    expect(idle.lifetime.kills).toBeGreaterThan(0);
+  });
+
+  it('reports the same events it would have advanced silently', () => {
+    const quiet = initialState(12);
+    strikeThrough(quiet, 300, CAP_RATE);
+
+    const loud = initialState(12);
+    let seen = 0;
+    strikeThrough(loud, 300, CAP_RATE, (e) => {
+      seen += e.length;
+    });
+    expect(seen).toBeGreaterThan(0);
+    expect(loud.gold).toBe(quiet.gold);
+  });
+});
+
+describe('aimAtOldestArc', () => {
+  it('aims at the oldest arc still in flight, and nowhere when all have landed', () => {
+    const s = initialState(31);
+    advance(s, 4.001);
+    expect(s.arcs.length).toBeGreaterThanOrEqual(2);
+
+    const aim = aimAtOldestArc(s, 4.05);
+    expect(aim).toEqual(arcPositionAt(s.arcs[0] as LootArc, 4.05));
+
+    // Long past every arc's flight time, there is nothing left to aim at.
+    expect(aimAtOldestArc(s, 4.05 + ARC_FLIGHT_SEC * 2)).toBeNull();
+  });
+
+  it('turns strikes into catches that blind striking never gets', () => {
+    const blind = initialState(37);
+    advance(blind, 600, strikeTimes(0, 600, CAP_RATE));
+
+    const aimed = initialState(37);
+    strikeThrough(aimed, 600, CAP_RATE);
+
+    expect(aimed.gold).toBeGreaterThan(blind.gold);
+  });
+});
+
+/** How far down the whole run a state has come, across realm resets. */
+function progress(s: GameState): number {
+  return s.realm * zonesPerRealm + s.zone;
+}
+
+describe('runPlayer determinism and contract watching', () => {
+  it('produces identical runs for the same seed and policy', () => {
+    const a = runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' });
+    const b = runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' });
+    expect(a.state.timeSec).toBe(b.state.timeSec);
+    expect(a.state.gold).toBe(b.state.gold);
+    expect(a.state.lifetime.kills).toBe(b.state.lifetime.kills);
+    expect(a.realms.map((r) => r.portalReadySec)).toEqual(b.realms.map((r) => r.portalReadySec));
+  });
+
+  it('reports no phase-contract violations on a clean run', () => {
+    const r = runPlayer(2, cfg({ days: 2 }), { policy: 'road-active', entry: 'prompt' });
+    expect(r.violations).toEqual([]);
+  });
+
+  it('the active policy strikes and the idle policy never does', () => {
+    const active = runPlayer(3, cfg(), { policy: 'road-active', entry: 'prompt' });
+    const idle = runPlayer(3, cfg(), { policy: 'road-idle', entry: 'prompt' });
+    expect(active.totalActiveSec).toBeGreaterThan(0);
+    expect(idle.totalActiveSec).toBe(0);
+    expect(idle.state.momentum.value).toBe(0);
+    // Progress, not kill count: the active player ascends sooner and so spends
+    // the same hours on fewer, larger enemies. Raw kills favour whoever stayed
+    // behind in the cheap zones.
+    expect(progress(active.state)).toBeGreaterThan(progress(idle.state));
+    expect(active.state.ascendancy.victories).toBeGreaterThanOrEqual(
+      idle.state.ascendancy.victories,
+    );
+  });
+
+  it('stops at portal-ready when asked', () => {
+    const r = runPlayer(4, cfg({ days: 30 }), {
+      policy: 'road-active',
+      entry: 'prompt',
+      stopAtPortalReady: true,
+    });
+    expect(r.state.portalReady).toBe(true);
+    expect(r.state.phase).toBe('road');
+  });
+});
+
+/** One real run, reused by every stub — building it is the expensive part. */
+let cachedRun: ReturnType<typeof runPlayer> | null = null;
+
+function stubResult(over: Partial<SeedResult> = {}): SeedResult {
+  const main = (cachedRun ??= runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' }));
+  return {
+    seed: 1,
+    config: cfg(),
+    realms: main.realms,
+    samples: main.samples,
+    correctness: [],
+    pacing: [],
+    roadUplift: [],
+    roadWindowUplift: [],
+    bossUplift: [],
+    eightHourBuys: [],
+    twentyFourHourZones: [],
+    portalReachSec: { idle: null, active: null },
+    promptVsOverfarm: null,
+    abandonProbe: null,
+    totalKills: main.state.lifetime.kills,
+    finalRealm: main.state.realm,
+    victories: 0,
+    correctnessBreaches: main.breaches,
+    correctnessLive: main.violations,
+    offlineMatchesLive: true,
+    offlineMatchesLiveDetail: '',
+    replayIdentical: true,
+    replayIdenticalDetail: '',
+    abandonClean: true,
+    abandonCleanDetail: '',
+    remainingTimeCarried: true,
+    remainingTimeCarriedDetail: '',
+    earningsBonusIsolated: true,
+    earningsBonusIsolatedDetail: '',
+    ...over,
+  };
+}
+
+describe('validators are total', () => {
+  it('emits every C and P id with a boolean verdict', () => {
+    const stub = stubResult();
+    const c = runCorrectness(stub);
+    const p = runPacing(stub);
+    expect(c.map((v) => v.id)).toEqual(['C1','C2','C3','C4','C5','C6','C7','C8','C9','C10']);
+    expect(p.map((v) => v.id)).toEqual(['P1','P2','P3','P4','P5','P6','P7']);
+    for (const v of [...c, ...p]) expect(typeof v.pass).toBe('boolean');
+  });
+});
+
+// The readable message list is capped at 20 lines, so a validator that read only
+// that list would call its own breach clean once some other breach had filled it.
+describe('a full message list cannot hide a breach', () => {
+  const noisy = Array.from({ length: 20 }, (_, i) => `t=${i}: gold moved during boss elapsed time`);
+  const cases: Array<[BreachKind, string]> = [
+    ['auto-entry', 'C1'],
+    ['boss-income', 'C2'],
+    ['non-finite', 'C9'],
+    ['hp-regen', 'C10'],
+  ];
+
+  for (const [kind, id] of cases) {
+    it(`${id} still fails on a '${kind}' breach with no message left to show it`, () => {
+      const verdict = runCorrectness(
+        stubResult({ correctnessBreaches: [kind], correctnessLive: noisy }),
+      );
+      expect(verdict.find((v) => v.id === id)?.pass).toBe(false);
+    });
+  }
+
+  it('passes every live validator when the breach set is empty', () => {
+    const verdict = runCorrectness(stubResult({ correctnessBreaches: [], correctnessLive: noisy }));
+    for (const id of ['C1', 'C2', 'C9', 'C10']) {
+      expect(verdict.find((v) => v.id === id)?.pass).toBe(true);
+    }
+  });
+});
+
+describe('the idle-return probes measure a return, not a session', () => {
+  it('makes no purchase inside the 24h window', () => {
+    const s = initialState(5);
+    for (let i = 0; i < 24; i++) advance(s, 300);
+    botTouch(s); // the last thing the player did before walking away
+    const before = { level: s.hero.level, gold: s.gold, banked: s.ascendancy.banked };
+
+    expect(twentyFourHourReturn([s])[0]).toBeGreaterThan(0);
+    // The probe clones, so the fixture is untouched either way; what it must not
+    // do is spend the gold that accrues inside the window.
+    expect(s.hero.level).toBe(before.level);
+    expect(s.gold).toBe(before.gold);
+    expect(s.ascendancy.banked).toBe(before.banked);
   });
 });

@@ -1,12 +1,12 @@
-import { describe, it, expect } from 'vitest';
-import { initialState, advance } from '../src/index';
+import { describe, expect, it } from 'vitest';
+import { advance, enterPortal, initialState } from '../src/index';
+import { portalReady, strikesAt } from './helpers';
 
-// PERFORMANCE: a 10-day advance must run in seconds (plain loop, no per-kill
-// allocation beyond capped events).
+// A long offline gap must reconcile in seconds — it runs on a cold app start.
 describe('performance smoke', () => {
-  it('advances 10 simulated days of pure idle in well under 10s', () => {
+  it('advances 10 idle days of Road in well under 10s', () => {
     const s = initialState(7);
-    const tenDays = 10 * 24 * 60 * 60; // 864000s
+    const tenDays = 10 * 86_400;
 
     const t0 = Date.now();
     advance(s, tenDays);
@@ -14,13 +14,24 @@ describe('performance smoke', () => {
 
     expect(elapsedMs).toBeLessThan(10_000);
     expect(s.timeSec).toBe(tenDays);
-    // A real 10-day idle run is hundreds of thousands of kills (the 2s walking
-    // floor caps the rate at 43_200/day) — confirms we truly looped.
     expect(s.lifetime.kills).toBeGreaterThan(100_000);
-    // Pure idle (zero taps) is a slow, gate-walled gear farm now, so 10 days does
-    // NOT reach World's Edge — but it does cross real gates, proving the gate loop
-    // (form → park → farm → auto-challenge → advance) ran end-to-end.
-    expect(s.lifetime.bossKills).toBeGreaterThan(0);
-    expect(s.zone).toBeGreaterThan(9);
+    expect(s.collection.zonesCleared).toBeGreaterThan(0);
+  });
+
+  it('advances a 10-day boss stretch in well under 10s', () => {
+    const s = portalReady(7, 30 * 86_400);
+    enterPortal(s);
+
+    const t0 = Date.now();
+    advance(s, 10 * 86_400);
+    expect(Date.now() - t0).toBeLessThan(10_000);
+    expect(s.lifetime.bossDamage).toBeGreaterThan(0);
+  });
+
+  it('advances an hour of capped-rate striking in well under 5s', () => {
+    const s = initialState(7);
+    const t0 = Date.now();
+    advance(s, 3600, strikesAt(0, 3600, 4));
+    expect(Date.now() - t0).toBeLessThan(5000);
   });
 });

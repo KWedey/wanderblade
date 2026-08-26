@@ -1,32 +1,46 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  initialState,
+  advance,
+  ASC_NODE_IDS,
   buyHeroLevel,
   buySkill,
+  enterPortal,
   heroDps,
+  initialState,
   levelCost,
   skillCost,
+  SKILL_IDS,
   skillMult,
+  skillRankMult,
+  SKILL_MAX_BONUS,
   SKILLS,
-  skillMultPerLevel,
 } from '../src/index';
+import { portalReady } from './helpers';
 
 describe('buyHeroLevel', () => {
   it('deducts gold and raises level when affordable', () => {
     const s = initialState(1);
     s.gold = 100;
-    const cost = levelCost(0); // 10
     expect(buyHeroLevel(s)).toBe(true);
     expect(s.hero.level).toBe(1);
-    expect(s.gold).toBeCloseTo(100 - cost, 6);
+    expect(s.gold).toBeCloseTo(100 - levelCost(0, 0), 6);
   });
 
   it('is a no-op when unaffordable', () => {
     const s = initialState(1);
-    s.gold = 5; // < levelCost(0) = 10
+    s.gold = 5; // < levelCost(0, 0) = 10
     expect(buyHeroLevel(s)).toBe(false);
     expect(s.hero.level).toBe(0);
     expect(s.gold).toBe(5);
+  });
+
+  it('charges the realm-scaled cost in a later realm', () => {
+    const s = initialState(1);
+    s.realm = 2;
+    s.gold = levelCost(0, 2);
+    expect(buyHeroLevel(s)).toBe(true);
+    expect(s.gold).toBeCloseTo(0, 6);
+    expect(buyHeroLevel(s)).toBe(false);
   });
 
   it('increases hero DPS', () => {
@@ -39,9 +53,15 @@ describe('buyHeroLevel', () => {
 });
 
 describe('buySkill unlock gates', () => {
-  it('defines the v1 skills at the spec unlock levels', () => {
-    expect(SKILLS.cleave?.unlockLevel).toBe(5);
-    expect(SKILLS.warcry?.unlockLevel).toBe(15);
+  it('opens at least two skills at hero level 0, so minute one has real choice', () => {
+    const atZero = SKILL_IDS.filter((id) => SKILLS[id]?.unlockLevel === 0);
+    expect(atZero.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('opens every skill inside the first stretch of a realm', () => {
+    for (const id of SKILL_IDS) {
+      expect(SKILLS[id]!.unlockLevel).toBeLessThanOrEqual(20);
+    }
   });
 
   it('rejects an unknown skill id', () => {
@@ -50,81 +70,101 @@ describe('buySkill unlock gates', () => {
     expect(buySkill(s, 'nope')).toBe(false);
   });
 
-  it('cannot buy cleave before hero level 5', () => {
-    const s = initialState(1);
-    s.gold = 1e9;
-    s.hero.level = 4;
-    expect(buySkill(s, 'cleave')).toBe(false);
-    expect(s.hero.skills.cleave).toBe(0);
-
-    s.hero.level = 5; // cleave unlock
-    expect(buySkill(s, 'cleave')).toBe(true);
-    expect(s.hero.skills.cleave).toBe(1);
-  });
-
-  it('cannot buy warcry before hero level 15', () => {
-    const s = initialState(1);
-    s.gold = 1e9;
-    s.hero.level = 14;
-    expect(buySkill(s, 'warcry')).toBe(false);
-
-    s.hero.level = 15; // warcry unlock
-    expect(buySkill(s, 'warcry')).toBe(true);
-    expect(s.hero.skills.warcry).toBe(1);
+  it('gates every skill exactly at its unlock level', () => {
+    for (const id of SKILL_IDS) {
+      const def = SKILLS[id]!;
+      const s = initialState(1);
+      s.gold = 1e9;
+      if (def.unlockLevel > 0) {
+        s.hero.level = def.unlockLevel - 1;
+        expect(buySkill(s, id)).toBe(false);
+        expect(s.hero.skills[id]).toBe(0);
+      }
+      s.hero.level = def.unlockLevel;
+      expect(buySkill(s, id)).toBe(true);
+      expect(s.hero.skills[id]).toBe(1);
+    }
   });
 
   it('charges the skill cost curve and is a no-op when unaffordable', () => {
     const s = initialState(1);
-    s.hero.level = 5;
-    s.gold = skillCost(0); // exactly 50
+    s.hero.level = 20;
+    s.gold = skillCost(0, 0); // exactly 50
     expect(buySkill(s, 'cleave')).toBe(true);
     expect(s.gold).toBeCloseTo(0, 6);
-    // next rank costs skillCost(1) = 57.5, now unaffordable
     expect(buySkill(s, 'cleave')).toBe(false);
     expect(s.hero.skills.cleave).toBe(1);
   });
 
-  it('each skill rank multiplies DPS by (1 + skillMultPerLevel * level)', () => {
+  it('each rank multiplies DPS by skillRankMult(rank)', () => {
     const s = initialState(1);
     s.hero.level = 5;
     s.gold = 1e9;
     const base = heroDps(s);
-    buySkill(s, 'cleave'); // level 1
-    expect(heroDps(s)).toBeCloseTo(base * (1 + skillMultPerLevel * 1), 8);
-    buySkill(s, 'cleave'); // level 2
-    expect(heroDps(s)).toBeCloseTo(base * (1 + skillMultPerLevel * 2), 8);
+    buySkill(s, 'cleave');
+    expect(heroDps(s)).toBeCloseTo(base * skillRankMult(1), 8);
+    buySkill(s, 'cleave');
+    expect(heroDps(s)).toBeCloseTo(base * skillRankMult(2), 8);
   });
 });
 
-describe('buySkill hard cap (bounded multiplier)', () => {
-  it('refuses to buy past maxLevel and spends no gold at the cap', () => {
+describe('skill ranks are uncapped, and the asymptote is what bounds them', () => {
+  it('never refuses a rank for being too high, only for gold', () => {
     const s = initialState(1);
-    s.hero.level = 15; // both skills unlocked
-    s.gold = 1e12;
-    const cap = SKILLS.cleave!.maxLevel;
-    for (let i = 0; i < cap; i++) expect(buySkill(s, 'cleave')).toBe(true);
-    expect(s.hero.skills.cleave).toBe(cap);
+    s.hero.level = 20;
+    s.gold = 1e18;
+    for (let i = 0; i < 200; i++) expect(buySkill(s, 'cleave')).toBe(true);
+    expect(s.hero.skills.cleave).toBe(200);
 
-    const goldAtCap = s.gold;
-    expect(buySkill(s, 'cleave')).toBe(false); // capped → no-op
-    expect(s.hero.skills.cleave).toBe(cap);
-    expect(s.gold).toBe(goldAtCap);
+    s.gold = 0;
+    const rankAtBroke = s.hero.skills.cleave;
+    expect(buySkill(s, 'cleave')).toBe(false);
+    expect(s.hero.skills.cleave).toBe(rankAtBroke);
   });
 
-  it('bounds skillMult: each skill tops out at 1 + skillMultPerLevel * maxLevel', () => {
+  it('holds skillMult under the ceiling however much gold is poured in', () => {
     const s = initialState(1);
-    s.hero.level = 15;
+    s.hero.level = 20;
+    s.gold = 1e18;
+    for (const id of SKILL_IDS) for (let i = 0; i < 300; i++) buySkill(s, id);
+    const ceiling = Math.pow(1 + SKILL_MAX_BONUS, SKILL_IDS.length);
+    expect(skillMult(s.hero.skills)).toBeLessThan(ceiling);
+  });
+
+  it('charges the rising price for every rank, so gold strictly falls', () => {
+    const s = initialState(1);
+    s.hero.level = 20;
     s.gold = 1e12;
-    const capC = SKILLS.cleave!.maxLevel;
-    const capW = SKILLS.warcry!.maxLevel;
-    for (let i = 0; i < capC; i++) buySkill(s, 'cleave');
-    for (let i = 0; i < capW; i++) buySkill(s, 'warcry');
-    const perSkillCeil = 1 + skillMultPerLevel * capC;
-    // Both maxed → the product is a fixed, finite ceiling (×2.25 at 0.05/cap 10).
-    expect(skillMult(s.hero.skills)).toBeCloseTo(
-      (1 + skillMultPerLevel * capC) * (1 + skillMultPerLevel * capW),
-      10,
-    );
-    expect(perSkillCeil).toBeCloseTo(1.5, 10);
+    let prev = s.gold;
+    let prevSpend = 0;
+    for (let i = 0; i < 30; i++) {
+      expect(buySkill(s, 'warcry')).toBe(true);
+      const spend = prev - s.gold;
+      expect(spend).toBeGreaterThan(prevSpend);
+      prevSpend = spend;
+      prev = s.gold;
+    }
+  });
+});
+
+describe('the id lists are what a fresh and a post-ascension state are built from', () => {
+  it('gives a fresh state a rank-0 entry for every skill and every tree node', () => {
+    const s = initialState(1);
+    expect(Object.keys(s.hero.skills).sort()).toEqual([...SKILL_IDS].sort());
+    expect(Object.keys(s.ascendancy.nodes).sort()).toEqual([...ASC_NODE_IDS].sort());
+    expect(Object.values(s.hero.skills).every((r) => r === 0)).toBe(true);
+    expect(Object.values(s.ascendancy.nodes).every((r) => r === 0)).toBe(true);
+  });
+
+  it('rebuilds the same skill map on ascension, keeping the tree untouched', () => {
+    const s = portalReady(41, 600);
+    s.hero.level = 20;
+    for (const id of SKILL_IDS) s.hero.skills[id] = 3;
+    enterPortal(s);
+    advance(s, 3600);
+    expect(s.lifetime.ascensions).toBe(1);
+    expect(Object.keys(s.hero.skills).sort()).toEqual([...SKILL_IDS].sort());
+    expect(Object.values(s.hero.skills).every((r) => r === 0)).toBe(true);
+    expect(Object.keys(s.ascendancy.nodes).sort()).toEqual([...ASC_NODE_IDS].sort());
   });
 });

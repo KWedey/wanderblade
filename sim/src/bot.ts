@@ -1,130 +1,138 @@
-// The deterministic bot player (docs/ECONOMY.md "Bot policy").
+// The deterministic purchase policy, shared by every player policy.
 //
-// At each touch the bot repeatedly buys the affordable upgrade with the highest
-// expected ΔDPS-per-gold among {hero level, each unlocked skill}, breaking ties
-// by lowest cost, until nothing is affordable. Then, if parked at a gate with
-// readiness ≥ 1.0 and no active cooldown, it challenges the boss.
-//
-// ΔDPS is computed analytically from the same ECONOMY formulas the engine uses,
-// so ranking matches the real state exactly; the purchases themselves execute
-// through the engine's buyHeroLevel / buySkill so state mutation is authoritative.
+// Greedy on ΔDPS-per-gold, then the same over banked Ascendancy. ΔDPS is
+// derived from the engine's own formulas so the ranking matches real state;
+// the purchases themselves still execute through the engine.
 
 import {
+  ascNodeCost,
+  ascSpeedMultiplier,
+  ASC_NODES,
+  ASC_NODE_IDS,
+  buyAscendancyNode,
   buyHeroLevel,
   buySkill,
-  challengeBoss,
   gearPowerTotal,
   heroBaseDamage,
+  heroDps,
   levelCost,
-  readiness,
   skillCost,
   skillMult,
-  skillMultPerLevel,
-  SKILL_IDS,
+  skillRankMult,
   SKILLS,
+  SKILL_IDS,
   type GameState,
 } from '@wanderblade/core';
-import type { Collector } from './collector';
 
 interface Candidate {
-  kind: 'hero' | 'skill';
+  kind: 'hero' | 'skill' | 'node';
   id: string | null;
   cost: number;
-  ratio: number; // expected ΔDPS per gold
+  ratio: number;
 }
 
-/** Best affordable upgrade, or null if nothing is affordable. */
-function bestCandidate(state: GameState): Candidate | null {
-  const level = state.hero.level;
-  const base = heroBaseDamage(level);
-  const gear = gearPowerTotal(state.gear);
-  const mult = skillMult(state.hero.skills);
-  const flat = base + gear; // (base + gear); currentDps = flat * mult
-
-  const candidates: Candidate[] = [];
-
-  // Hero level: ΔDPS = (base(level+1) - base(level)) * skillMult.
-  {
-    const cost = levelCost(level);
-    if (Number.isFinite(cost) && cost <= state.gold) {
-      const dDps = (heroBaseDamage(level + 1) - base) * mult;
-      const ratio = dDps / cost;
-      // Skip once damage overflows to Infinity (ΔDPS → NaN): a hero at level
-      // ~4370 has base = 25·1.12^level = Infinity, so no finite improvement.
-      if (Number.isFinite(ratio) && ratio > 0) {
-        candidates.push({ kind: 'hero', id: null, cost, ratio });
-      }
-    }
-  }
-
-  // Each unlocked skill: buying rank sl→sl+1 scales skillMult by newF/oldF.
-  for (const id of SKILL_IDS) {
-    const def = SKILLS[id];
-    if (!def || level < def.unlockLevel) continue;
-    const sl = state.hero.skills[id] ?? 0;
-    // A skill at its cap offers no further ΔDPS (buySkill would refuse). Skip it
-    // cleanly so the greedy loop never picks an unbuyable candidate and stalls.
-    if (sl >= def.maxLevel) continue;
-    const cost = skillCost(sl);
-    if (!Number.isFinite(cost) || cost > state.gold) continue;
-    const oldF = 1 + skillMultPerLevel * sl;
-    const newF = 1 + skillMultPerLevel * (sl + 1);
-    const dDps = flat * mult * (newF / oldF - 1);
-    const ratio = dDps / cost;
-    if (Number.isFinite(ratio) && ratio > 0) {
-      candidates.push({ kind: 'skill', id, cost, ratio });
-    }
-  }
-
+function pickBest(candidates: Candidate[]): Candidate | null {
   if (candidates.length === 0) return null;
-
-  // Highest ΔDPS-per-gold; tie-break lowest cost. Candidate insertion order
-  // (hero, then SKILL_IDS order) makes any remaining exact tie deterministic.
   let best = candidates[0] as Candidate;
   for (let i = 1; i < candidates.length; i++) {
     const c = candidates[i] as Candidate;
-    if (c.ratio > best.ratio || (c.ratio === best.ratio && c.cost < best.cost)) {
-      best = c;
-    }
+    if (c.ratio > best.ratio || (c.ratio === best.ratio && c.cost < best.cost)) best = c;
   }
   return best;
 }
 
-/** Run the greedy buy loop. Returns the number of purchases made. */
-export function botBuy(state: GameState, collector: Collector): number {
+/** Best affordable gold upgrade, or null. */
+function bestGoldBuy(state: GameState): Candidate | null {
+  const level = state.hero.level;
+  const base = heroBaseDamage(level, state.realm);
+  const mult = skillMult(state.hero.skills);
+  const flat = base + gearPowerTotal(state.gear);
+  const candidates: Candidate[] = [];
+
+  const heroCost = levelCost(level, state.realm);
+  if (Number.isFinite(heroCost) && heroCost <= state.gold) {
+    const dDps = (heroBaseDamage(level + 1, state.realm) - base) * mult;
+    const ratio = dDps / heroCost;
+    if (Number.isFinite(ratio) && ratio > 0) {
+      candidates.push({ kind: 'hero', id: null, cost: heroCost, ratio });
+    }
+  }
+
+  for (const id of SKILL_IDS) {
+    const def = SKILLS[id];
+    if (!def || level < def.unlockLevel) continue;
+    const rank = state.hero.skills[id] ?? 0;
+    const cost = skillCost(rank, state.realm);
+    if (!Number.isFinite(cost) || cost > state.gold) continue;
+    const oldF = skillRankMult(rank);
+    const newF = skillRankMult(rank + 1);
+    const ratio = (flat * mult * (newF / oldF - 1)) / cost;
+    if (Number.isFinite(ratio) && ratio > 0) candidates.push({ kind: 'skill', id, cost, ratio });
+  }
+
+  return pickBest(candidates);
+}
+
+/**
+ * Best affordable Ascendancy node. Speed nodes are ranked by the DPS they are
+ * worth, so all three effects compete on one scale.
+ */
+function bestNodeBuy(state: GameState): Candidate | null {
+  const dps = heroDps(state);
+  const base = heroBaseDamage(state.hero.level, state.realm);
+  const gear = gearPowerTotal(state.gear);
+  const mult = skillMult(state.hero.skills);
+  const asc = state.ascendancy;
+  const candidates: Candidate[] = [];
+
+  for (const id of ASC_NODE_IDS) {
+    const def = ASC_NODES[id];
+    if (!def) continue;
+    const rank = asc.nodes[id] ?? 0;
+    if (rank >= def.maxRank) continue;
+    const cost = ascNodeCost(id, rank);
+    if (!Number.isFinite(cost) || cost > asc.banked) continue;
+
+    let dDps: number;
+    if (def.effect === 'damage') dDps = base * def.perRank * mult;
+    else if (def.effect === 'gearPower') dDps = gear * def.perRank * mult;
+    else {
+      const speed = ascSpeedMultiplier(asc);
+      dDps = (dps * def.perRank) / speed;
+    }
+    const ratio = dDps / cost;
+    if (Number.isFinite(ratio) && ratio > 0) candidates.push({ kind: 'node', id, cost, ratio });
+  }
+
+  return pickBest(candidates);
+}
+
+/** Run the greedy gold loop. Returns purchases made. */
+export function botBuyGold(state: GameState): number {
   let purchases = 0;
-  // Guard the endless-scaling tail: once income overflows to Infinity, "gold ≥
-  // cost" is always true and no purchase reduces the balance, so the loop would
-  // never terminate. Past that ceiling there is nothing meaningful left to buy.
   while (Number.isFinite(state.gold)) {
-    const pick = bestCandidate(state);
+    const pick = bestGoldBuy(state);
     if (!pick) break;
     const ok = pick.kind === 'hero' ? buyHeroLevel(state) : buySkill(state, pick.id as string);
-    // bestCandidate only ever returns affordable, unlocked upgrades, so the buy
-    // must succeed; guard defensively to avoid any infinite loop.
     if (!ok) break;
-    collector.notePurchase(state.timeSec);
     purchases += 1;
   }
   return purchases;
 }
 
-/**
- * Challenge the gate boss if parked, ready (≥ 1.0), and off cooldown.
- * Emits events into the collector. Returns true on a win.
- */
-export function botChallenge(state: GameState, collector: Collector): boolean {
-  if (!state.gate.atGate) return false;
-  if (state.timeSec < state.gate.cooldownUntilSec) return false;
-  if (readiness(state) < 1.0) return false;
-  const res = challengeBoss(state);
-  collector.processEvents(res.events);
-  return res.won;
+/** Run the greedy Ascendancy-tree loop. Returns purchases made. */
+export function botBuyTree(state: GameState): number {
+  let purchases = 0;
+  while (Number.isFinite(state.ascendancy.banked)) {
+    const pick = bestNodeBuy(state);
+    if (!pick) break;
+    if (!buyAscendancyNode(state, pick.id as string)) break;
+    purchases += 1;
+  }
+  return purchases;
 }
 
-/** A full bot touch: greedy buy loop, then one boss challenge. */
-export function botTouch(state: GameState, collector: Collector): number {
-  const purchases = botBuy(state, collector);
-  botChallenge(state, collector);
-  return purchases;
+/** A full bot touch. Purchases are refused during a boss attempt by the engine. */
+export function botTouch(state: GameState): { gold: number; tree: number } {
+  return { gold: botBuyGold(state), tree: botBuyTree(state) };
 }

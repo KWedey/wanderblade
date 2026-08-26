@@ -1,43 +1,64 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  initialState,
   advance,
-  summarizeEvents,
-  EVENT_CAP,
   dropChance,
+  EVENT_CAP,
+  initialState,
+  killsPerZone,
   leaguePerKill,
+  summarizeEvents,
+  zonesPerRealm,
+  type EventLog,
+  type GameEvent,
 } from '../src/index';
+import { aimAtOldestArc, nearPortal, ROAD_KILL0_SEC } from './helpers';
 
-describe('progression sanity', () => {
-  it('the first kill lands at ~2s and pays gold', () => {
+describe('road progression sanity', () => {
+  it('the first kill lands on schedule and pays gold', () => {
     const s = initialState(1);
-    // initial dps d0 (25) > hp(0) 10, so kill time is the 2s walking floor;
-    // advance just over one kill.
-    const events = advance(s, 2.001);
+    const events = advance(s, ROAD_KILL0_SEC + 1e-6);
     expect(s.lifetime.kills).toBe(1);
-    expect(s.gold).toBeCloseTo(1, 6); // enemyGold(0) = 1
+    expect(s.gold).toBeCloseTo(1, 6); // enemyGold(0, 0) = 1
     expect(s.leagues).toBeCloseTo(leaguePerKill, 6);
-    expect(events[0]).toMatchObject({ type: 'kill', killIndex: 1 });
+    expect(events[0]).toMatchObject({ type: 'kill', killIndex: 1, realm: 0, zone: 0 });
+  });
+
+  it('clears a zone every killsPerZone kills and emits the step', () => {
+    const s = initialState(1);
+    const events: GameEvent[] = [];
+    while (s.zone === 0 && s.timeSec < 200_000) events.push(...advance(s, 60));
+
+    expect(s.zone).toBe(1);
+    expect(s.collection.zonesCleared).toBe(1);
+    const step = events.findIndex((e) => e.type === 'zone');
+    expect(step).toBeGreaterThanOrEqual(0);
+    expect(events.slice(0, step).filter((e) => e.type === 'kill')).toHaveLength(killsPerZone);
+    expect(events.filter((e) => e.type === 'zone')).toHaveLength(1);
+  });
+
+  it('opens the portal after the last zone, exactly once', () => {
+    const s = nearPortal(9, 1);
+    const events = advance(s, 5);
+    expect(s.portalReady).toBe(true);
+    expect(s.zone).toBe(zonesPerRealm - 1);
+    expect(events.filter((e) => e.type === 'portalReady')).toHaveLength(1);
+
+    const more = advance(s, 3600);
+    expect(more.filter((e) => e.type === 'portalReady')).toHaveLength(0);
   });
 
   it('drops occur, auto-equip only on improvement, and gear raises DPS', () => {
     const s = initialState(1);
-    advance(s, 600);
-    // At least one slot equipped after 600s of drops.
-    const equippedSlots = [s.gear.weapon, s.gear.armor, s.gear.trinket].filter(
-      (g) => g !== null,
-    );
-    expect(equippedSlots.length).toBeGreaterThan(0);
-    for (const g of equippedSlots) {
-      expect(g.power).toBeGreaterThan(0);
-    }
+    advance(s, 3600);
+    const equipped = [s.gear.weapon, s.gear.armor, s.gear.trinket].filter((g) => g !== null);
+    expect(equipped.length).toBeGreaterThan(0);
+    for (const g of equipped) expect(g.power).toBeGreaterThan(0);
   });
 
-  it('every drop event carries a valid slot and rarity; equips beat the prior power', () => {
+  it('every drop carries a valid slot and rarity; equips beat the prior power', () => {
     const s = initialState(2);
-    const events = advance(s, 1200);
+    const events = advance(s, 7200);
     const drops = events.filter((e) => e.type === 'drop');
-    const equips = events.filter((e) => e.type === 'equip');
     expect(drops.length).toBeGreaterThan(0);
     for (const d of drops) {
       if (d.type !== 'drop') continue;
@@ -45,14 +66,22 @@ describe('progression sanity', () => {
       expect(['common', 'uncommon', 'rare', 'epic']).toContain(d.rarity);
       expect(d.power).toBeGreaterThan(0);
     }
-    for (const e of equips) {
+    for (const e of events) {
       if (e.type !== 'equip') continue;
       expect(e.power).toBeGreaterThan(e.previousPower);
     }
-    // Drop rate is in the right ballpark (0.6% per kill).
+
     const recap = summarizeEvents(events);
     expect(recap.drops / recap.kills).toBeGreaterThan(dropChance * 0.4);
     expect(recap.drops / recap.kills).toBeLessThan(dropChance * 2.2);
+  });
+
+  it('collection records track drops and zones cleared', () => {
+    const s = initialState(2);
+    const events = advance(s, 7200);
+    const recap = summarizeEvents(events);
+    expect(s.collection.gearFound).toBe(recap.drops);
+    expect(s.collection.zonesCleared).toBe(recap.zonesCleared);
   });
 });
 
@@ -61,37 +90,41 @@ describe('recap accuracy', () => {
     const s = initialState(11);
     const goldBefore = s.gold;
     const killsBefore = s.lifetime.kills;
-    const bossBefore = s.lifetime.bossKills;
 
-    const events = advance(s, 5000);
+    // Aimed strikes, so the recap has catch gold in it as well as kill gold.
+    const events: GameEvent[] = [];
+    for (let t = 0.5; t <= 5000 + 1e-9; t += 0.5) {
+      events.push(...advance(s, t - s.timeSec, [{ atSec: t, aim: aimAtOldestArc(s, t) }]));
+    }
     const recap = summarizeEvents(events);
 
-    expect(recap.seconds).toBe(5000);
     expect(recap.kills).toBe(s.lifetime.kills - killsBefore);
     expect(recap.goldEarned).toBeCloseTo(s.gold - goldBefore, 3);
-    expect(recap.bossWins).toBe(s.lifetime.bossKills - bossBefore);
     expect(recap.leaguesTraveled).toBeCloseTo(s.leagues, 6);
+    expect(recap.arcCatches).toBeGreaterThan(0);
   });
 
   it('keeps the recap exact even when raw events are capped', () => {
-    // A long idle run past World's Edge generates far more than EVENT_CAP events.
     const s = initialState(1);
-    const killsBefore = s.lifetime.kills;
-    const events = advance(s, 10 * 24 * 60 * 60); // 10 days
+    const events = advance(s, 10 * 86_400);
     const recap = summarizeEvents(events);
 
     expect(events.length).toBeLessThanOrEqual(EVENT_CAP);
-    expect(recap.kills).toBe(s.lifetime.kills - killsBefore);
+    expect(recap.kills).toBe(s.lifetime.kills);
     expect(recap.kills).toBeGreaterThan(EVENT_CAP); // proves capping was exercised
   });
 
-  it('summarizeEvents can also recompute from a hand-assembled event list', () => {
+  it('recomputes from a hand-assembled event list', () => {
     const s = initialState(4);
-    const events = advance(s, 800);
-    // Strip the attached recap to force the fallback counting path.
-    const plain = [...events];
+    const events: EventLog = advance(s, 3000);
+    expect(events.recap?.seconds).toBe(3000);
+
+    const plain = [...events]; // the spread strips the attached recap
     const recap = summarizeEvents(plain);
     expect(recap.kills).toBe(s.lifetime.kills);
-    expect(recap.drops).toBeGreaterThanOrEqual(0);
+    expect(recap.leaguesTraveled).toBeCloseTo(s.leagues, 6);
+    // Recomputed seconds come from the last event, so they trail the advance.
+    expect(recap.seconds).toBeGreaterThan(0);
+    expect(recap.seconds).toBeLessThanOrEqual(3000);
   });
 });

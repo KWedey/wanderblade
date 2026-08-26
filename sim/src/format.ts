@@ -1,221 +1,133 @@
-// Console tables + CSV output for the sim harness. Plain ASCII, no deps.
+// Report and CSV rendering. Presentation only — no measurement happens here.
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { SeedResult } from './types';
 import { fmtTime } from './validators';
+import type { SeedResult, ValidatorResult } from './types';
 
-const SEC_PER_HOUR = 3_600;
-
-type Align = 'l' | 'r';
-
-/** Render a simple fixed-width table with a header rule. */
-export function table(headers: string[], rows: string[][], align?: Align[]): string {
-  const cols = headers.length;
-  const widths = headers.map((h, i) => {
-    let w = h.length;
-    for (const row of rows) {
-      const cell = row[i] ?? '';
-      if (cell.length > w) w = cell.length;
-    }
-    return w;
-  });
-  const pad = (s: string, i: number): string => {
-    const w = widths[i] ?? 0;
-    const a = align?.[i] ?? 'l';
-    return a === 'r' ? s.padStart(w) : s.padEnd(w);
-  };
-  const line = (cells: string[]): string =>
-    cells.map((c, i) => pad(c, i)).join('  ').replace(/\s+$/, '');
-  const rule = widths.map((w) => '-'.repeat(w)).join('  ');
-  const out: string[] = [];
-  out.push(line(headers));
-  out.push(rule);
-  for (const row of rows) {
-    const cells: string[] = [];
-    for (let i = 0; i < cols; i++) cells.push(row[i] ?? '');
-    out.push(line(cells));
-  }
-  return out.join('\n');
+function num(x: number): string {
+  if (!Number.isFinite(x)) return '∞';
+  if (Math.abs(x) >= 1e6) return x.toExponential(2);
+  if (Math.abs(x) >= 100) return x.toFixed(0);
+  return x.toFixed(2);
 }
 
-function fmtGold(g: number): string {
-  if (!Number.isFinite(g)) return 'Inf'; // endless-tail numeric overflow
-  if (g < 1_000) return g.toFixed(0);
-  if (g < 1_000_000) return `${(g / 1_000).toFixed(1)}k`;
-  if (g < 1e9) return `${(g / 1e6).toFixed(1)}M`;
-  if (g < 1e12) return `${(g / 1e9).toFixed(1)}B`;
-  return g.toExponential(2);
+function mark(v: ValidatorResult): string {
+  return `  ${v.pass ? 'PASS' : 'FAIL'}  ${v.id}  ${v.name}\n          ${v.detail}`;
 }
 
-function fmtReadiness(r: number): string {
-  if (!Number.isFinite(r)) return '-'; // overflow tail: dps/bossHp is Inf/Inf
-  return r >= 1 ? 'Ready' : r.toFixed(2);
-}
-
-function fmtHours(sec: number): string {
-  return `${(sec / SEC_PER_HOUR).toFixed(1)}h`;
-}
-
-/** Full per-seed report: headline, gate walls, check-in timeline, validators. */
 export function formatSeedReport(r: SeedResult): string {
-  const out: string[] = [];
-  out.push('');
-  out.push(`=== Seed ${r.seed} — ${r.config.days}d, ${r.config.checkinsPerDay} check-ins/day ===`);
-
-  // Headline milestones.
-  out.push('');
-  out.push(
-    [
-      `first buy: ${fmtTime(r.firstPurchaseSec)}`,
-      `first boss: ${fmtTime(r.firstBossSec)}`,
-      `final: region ${r.finalRegion} zone ${r.finalZone}`,
-      `leagues: ${r.finalLeagues.toFixed(1)}`,
-      `kills: ${r.totalKills.toLocaleString('en-US')}`,
-      r.worldsEdgeReached ? "World's Edge reached" : '',
-    ]
-      .filter(Boolean)
-      .join('  |  '),
+  const lines: string[] = [];
+  lines.push('');
+  lines.push(`── seed ${r.seed} ${'─'.repeat(52)}`);
+  lines.push(
+    `   ${r.config.days}d · ${r.config.sessionsPerDay}×${r.config.sessionMin}min sessions · ` +
+      `${r.victories} victories · realm ${r.finalRealm} · ${r.totalKills.toLocaleString()} kills`,
   );
 
-  // Gate walls.
-  if (r.gates.length > 0) {
-    out.push('');
-    out.push('Gate walls (region boss gates):');
-    const rows = r.gates.map((g) => [
-      `R${g.region}`,
-      `z${g.zone}`,
-      fmtTime(g.formSec),
-      g.crossed ? fmtTime(g.crossSec) : 'not crossed',
-      fmtHours(g.parkedSec) + (g.crossed ? '' : '+'),
-    ]);
-    out.push(
-      table(
-        ['region', 'gateZone', 'reached', 'crossed', 'parked'],
-        rows,
-        ['l', 'l', 'r', 'r', 'r'],
-      ),
+  lines.push('');
+  lines.push('   realm  road      portalReady  entered   victory   boss      eta@entry  banked');
+  for (const x of r.realms) {
+    lines.push(
+      `   ${String(x.realm).padEnd(6)} ${fmtTime(x.roadSec).padEnd(9)} ` +
+        `${fmtTime(x.portalReadySec === null ? null : x.portalReadySec - x.startSec).padEnd(12)} ` +
+        `${fmtTime(x.portalEnterSec === null ? null : x.portalEnterSec - x.startSec).padEnd(9)} ` +
+        `${fmtTime(x.victorySec === null ? null : x.victorySec - x.startSec).padEnd(9)} ` +
+        `${fmtTime(x.bossSec).padEnd(9)} ` +
+        `${fmtTime(x.bossEtaAtEntrySec).padEnd(10)} ` +
+        `${x.bankedAfter === null ? '—' : num(x.bankedAfter)}`,
     );
   }
 
-  // Check-in timeline (purchases per check-in).
-  out.push('');
-  out.push('Check-in timeline:');
-  const rows = r.checkins.map((c) => [
-    String(c.index),
-    fmtHours(c.timeSec),
-    `d${c.day}`,
-    String(c.arrivalRegion),
-    String(c.arrivalZone),
-    fmtGold(c.arrivalGold),
-    String(c.purchases),
-    String(c.heroLevel),
-    fmtReadiness(c.readiness),
-    c.eightHourProbePurchases === null ? '-' : String(c.eightHourProbePurchases),
-  ]);
-  out.push(
-    table(
-      ['#', 't', 'day', 'reg', 'zone', 'gold@in', 'buys', 'lvl', 'rdy', '8h?'],
-      rows,
-      ['r', 'r', 'l', 'r', 'r', 'r', 'r', 'r', 'r', 'r'],
-    ),
-  );
+  lines.push('');
+  lines.push('   correctness');
+  for (const v of r.correctness) lines.push(mark(v));
+  lines.push('');
+  lines.push('   pacing');
+  for (const v of r.pacing) lines.push(mark(v));
 
-  // Per-seed validator results.
-  out.push('');
-  out.push('Validators:');
-  const vrows = r.validators.map((v) => [
-    String(v.id),
-    v.name,
-    v.pass ? (v.warn ? 'PASS*' : 'PASS') : 'FAIL',
-    v.detail,
-  ]);
-  out.push(table(['#', 'target', 'result', 'detail'], vrows, ['r', 'l', 'l', 'l']));
-
-  return out.join('\n');
-}
-
-/** Aggregate PASS/FAIL matrix across all seeds. */
-export function formatSummary(results: SeedResult[]): string {
-  const out: string[] = [];
-  out.push('');
-  out.push('==================== M0 PACING SUMMARY ====================');
-
-  const headers = ['#', 'target', ...results.map((r) => `seed ${r.seed}`), 'aggregate'];
-  const align: Align[] = ['r', 'l', ...results.map((): Align => 'l'), 'l'];
-
-  const rows: string[][] = [];
-  const aggregatePass: boolean[] = [];
-  for (let i = 0; i < (results[0]?.validators.length ?? 0); i++) {
-    const name = results[0]?.validators[i]?.name ?? '';
-    const cells: string[] = [String(i + 1), name];
-    let allPass = true;
-    for (const r of results) {
-      const v = r.validators[i];
-      if (!v) {
-        cells.push('?');
-        allPass = false;
-        continue;
-      }
-      cells.push(v.pass ? (v.warn ? 'PASS*' : 'PASS') : 'FAIL');
-      if (!v.pass) allPass = false;
+  if (r.roadWindowUplift.length > 0) {
+    const rs = r.roadWindowUplift.map((u) => u.ratio).filter((x) => Number.isFinite(x));
+    if (rs.length > 0) {
+      lines.push('');
+      lines.push(
+        `   context: the same 20-min window with road progression left in runs ` +
+          `${Math.min(...rs).toFixed(2)}–${Math.max(...rs).toFixed(2)}x — active play also ` +
+          `reaches richer zones, which P1 deliberately holds constant`,
+      );
     }
-    aggregatePass.push(allPass);
-    cells.push(allPass ? 'PASS' : 'FAIL');
-    rows.push(cells);
   }
-  out.push(table(headers, rows, align));
 
-  const overall = aggregatePass.every(Boolean);
-  out.push('');
-  out.push(`OVERALL M0 EXIT: ${overall ? 'PASS' : 'FAIL'}  (all targets, all seeds)`);
-  out.push('  * = PASS with a soft warning (see per-seed detail)');
-  out.push('===========================================================');
-  return out.join('\n');
+  if (r.abandonProbe) {
+    lines.push('');
+    lines.push(
+      `   abandon probe: ${fmtTime(r.abandonProbe.investedSec)} committed then abandoned ` +
+        `forfeits ${fmtTime(r.abandonProbe.lostBossSec)} of guardian damage; the same span ` +
+        `on the Road earns ${num(r.abandonProbe.roadGoldGained)} gold and cuts ` +
+        `${fmtTime(Math.max(0, r.abandonProbe.etaImprovement))} off the next attempt`,
+    );
+  }
+  return lines.join('\n');
 }
 
-/** Write the per-check-in timeline for one seed to sim/out/run-<seed>.csv. */
-export function writeCsv(r: SeedResult, outDir: string): string {
-  mkdirSync(outDir, { recursive: true });
-  const header = [
-    'checkin_index',
-    'time_sec',
-    'time_hours',
-    'day',
-    'after_day1',
-    'arrival_region',
-    'arrival_zone',
-    'arrival_gold',
-    'leagues',
-    'hero_level',
-    'gear_power',
-    'dps',
-    'readiness',
-    'purchases',
-    'eight_hour_probe_purchases',
-  ].join(',');
+export function formatSummary(results: SeedResult[]): string {
+  const lines: string[] = [];
+  lines.push('');
+  lines.push('═'.repeat(72));
+  lines.push('SUMMARY');
+  lines.push('');
 
-  const lines = r.checkins.map((c) =>
+  const ids = new Map<string, { name: string; pass: number; total: number; fails: string[] }>();
+  for (const r of results) {
+    for (const v of [...r.correctness, ...r.pacing]) {
+      const row = ids.get(v.id) ?? { name: v.name, pass: 0, total: 0, fails: [] };
+      row.total += 1;
+      if (v.pass) row.pass += 1;
+      else row.fails.push(`seed ${r.seed}: ${v.detail}`);
+      ids.set(v.id, row);
+    }
+  }
+
+  let allPass = true;
+  for (const [id, row] of ids) {
+    const pass = row.pass === row.total;
+    if (!pass) allPass = false;
+    lines.push(`  ${pass ? 'PASS' : 'FAIL'}  ${id}  ${row.name}  (${row.pass}/${row.total} seeds)`);
+    for (const f of row.fails) lines.push(`          ${f}`);
+  }
+
+  lines.push('');
+  lines.push(
+    allPass
+      ? `ALL PASS — ${ids.size} validators × ${results.length} seeds`
+      : `FAIL — ${[...ids.values()].filter((r) => r.pass < r.total).length} of ${ids.size} validators failed on at least one seed`,
+  );
+  lines.push('');
+  lines.push('The harness always exits 0; the verdict is the line above.');
+  return lines.join('\n');
+}
+
+export function writeCsv(r: SeedResult, dir: string): string {
+  mkdirSync(dir, { recursive: true });
+  const path = join(dir, `run-${r.seed}.csv`);
+  const header =
+    'timeSec,phase,realm,zone,gold,gearPower,dps,heroLevel,pending,banked,bossHpFrac,earningsMult';
+  const rows = r.samples.map((s) =>
     [
-      c.index,
-      c.timeSec,
-      (c.timeSec / SEC_PER_HOUR).toFixed(3),
-      c.day,
-      c.afterDay1 ? 1 : 0,
-      c.arrivalRegion,
-      c.arrivalZone,
-      c.arrivalGold.toFixed(3),
-      c.leagues.toFixed(1),
-      c.heroLevel,
-      c.gearPower.toFixed(3),
-      c.dps.toFixed(3),
-      c.readiness.toFixed(4),
-      c.purchases,
-      c.eightHourProbePurchases === null ? '' : c.eightHourProbePurchases,
+      s.timeSec.toFixed(1),
+      s.phase,
+      s.realm,
+      s.zone,
+      s.gold.toExponential(4),
+      s.gearPower.toExponential(4),
+      s.dps.toExponential(4),
+      s.heroLevel,
+      s.pending.toFixed(3),
+      s.banked.toFixed(3),
+      s.bossHpFrac.toFixed(5),
+      s.earningsMult.toFixed(4),
     ].join(','),
   );
-
-  const path = join(outDir, `run-${r.seed}.csv`);
-  writeFileSync(path, header + '\n' + lines.join('\n') + '\n', 'utf8');
+  writeFileSync(path, [header, ...rows].join('\n') + '\n', 'utf8');
   return path;
 }

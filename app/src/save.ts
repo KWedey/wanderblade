@@ -6,6 +6,13 @@ import { deserialize, serialize, GEAR_SLOTS, type GameState } from '@wanderblade
 
 const SAVE_KEY = 'wanderblade-save-v1';
 const SAVE_VERSION = 1;
+/**
+ * Earliest wall clock a real save can carry. The offline gap is
+ * `Date.now() - savedAt`, so a corrupt or epoch-0 timestamp asks `advance` for
+ * decades of kills and freezes the first load. This rejects garbage; it is not
+ * a cap on a genuine absence (docs/DECISIONS.md #8).
+ */
+const EARLIEST_SAVED_AT_MS = 1_577_836_800_000;
 
 interface SaveEnvelope {
   version: number;
@@ -61,8 +68,9 @@ function isValidState(v: unknown): v is GameState {
     !isFiniteNumber(s.seed) ||
     !isFiniteNumber(s.rngState) ||
     !isFiniteNumber(s.timeSec) ||
-    !isFiniteNumber(s.nextKillAtSec) ||
+    !isFiniteNumber(s.nextActionAtSec) ||
     !isFiniteNumber(s.killIndex) ||
+    !isFiniteNumber(s.realm) ||
     !isFiniteNumber(s.zone) ||
     !isFiniteNumber(s.killsInZone) ||
     !isFiniteNumber(s.leagues) ||
@@ -70,7 +78,9 @@ function isValidState(v: unknown): v is GameState {
   ) {
     return false;
   }
-  if (typeof s.worldsEdgeReached !== 'boolean') return false;
+  if (s.phase !== 'road' && s.phase !== 'boss') return false;
+  if (typeof s.portalReady !== 'boolean') return false;
+  if (!Array.isArray(s.arcs)) return false;
 
   // hero.level + the skills map (skillMult iterates its values).
   const hero = s.hero as Record<string, unknown> | null;
@@ -88,17 +98,47 @@ function isValidState(v: unknown): v is GameState {
     if (!(slot in gear) || !isValidGearItem(gear[slot])) return false;
   }
 
-  // gate + lifetime: objects the engine mutates in place during advance.
-  const gate = s.gate as Record<string, unknown> | null;
-  if (typeof gate !== 'object' || gate === null) return false;
-  if (typeof gate.atGate !== 'boolean' || !isFiniteNumber(gate.cooldownUntilSec)) return false;
+  // Objects the engine mutates in place during advance.
+  const boss = s.boss as Record<string, unknown> | null;
+  if (typeof boss !== 'object' || boss === null) return false;
+  if (!isFiniteNumber(boss.hpRemaining) || !isFiniteNumber(boss.hpMax)) return false;
+  if (boss.enteredAtSec !== null && !isFiniteNumber(boss.enteredAtSec)) return false;
+
+  const momentum = s.momentum as Record<string, unknown> | null;
+  if (typeof momentum !== 'object' || momentum === null) return false;
+  if (!isFiniteNumber(momentum.value) || !isFiniteNumber(momentum.atSec)) return false;
+
+  const asc = s.ascendancy as Record<string, unknown> | null;
+  if (typeof asc !== 'object' || asc === null) return false;
+  if (
+    !isFiniteNumber(asc.pending) ||
+    !isFiniteNumber(asc.banked) ||
+    !isFiniteNumber(asc.victories)
+  ) {
+    return false;
+  }
+  const nodes = asc.nodes as Record<string, unknown> | null;
+  if (typeof nodes !== 'object' || nodes === null) return false;
+  for (const rank of Object.values(nodes)) {
+    if (!isFiniteNumber(rank)) return false;
+  }
+
+  const collection = s.collection as Record<string, unknown> | null;
+  if (typeof collection !== 'object' || collection === null) return false;
+  if (
+    !isFiniteNumber(collection.bossTrophies) ||
+    !isFiniteNumber(collection.gearFound) ||
+    !isFiniteNumber(collection.zonesCleared)
+  ) {
+    return false;
+  }
 
   const lifetime = s.lifetime as Record<string, unknown> | null;
   if (typeof lifetime !== 'object' || lifetime === null) return false;
   if (
     !isFiniteNumber(lifetime.kills) ||
     !isFiniteNumber(lifetime.goldEarned) ||
-    !isFiniteNumber(lifetime.bossKills)
+    !isFiniteNumber(lifetime.ascensions)
   ) {
     return false;
   }
@@ -122,7 +162,8 @@ export function readSave(): LoadedSave | null {
       !envelope ||
       envelope.version !== SAVE_VERSION ||
       typeof envelope.state !== 'string' ||
-      typeof envelope.savedAt !== 'number'
+      !isFiniteNumber(envelope.savedAt) ||
+      envelope.savedAt < EARLIEST_SAVED_AT_MS
     ) {
       return null;
     }

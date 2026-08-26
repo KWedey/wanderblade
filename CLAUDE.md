@@ -17,7 +17,7 @@ npm run dev                  # Vite dev server at http://localhost:5173
 npm run dev -- --host        # expose on LAN for phone testing
 npm run build                # production build of app/
 npm run verify               # THE GATE: lint + typecheck + test
-npm test                     # vitest across all workspaces (14 files / 116 tests)
+npm test                     # vitest across all workspaces (15 files / 223 tests)
 npm run typecheck            # tsc --noEmit over core, sim, and app
 npm run lint                 # eslint (type-aware); --fix for the autofixable ones
 npm run sim                  # economy simulator, default 3 seeds × 10 days
@@ -33,7 +33,9 @@ npx vitest run -t "split-advance determinism"
 npx vitest packages/core/test           # watch mode
 ```
 
-**The gate is `npm run verify`.** All three stages must pass before any task is complete. There is no vitest config file — vitest uses defaults from the repo root and resolves `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
+**The gate is `npm run verify`.** All three stages must pass before any task is complete. `vitest.config.ts` sets only a 30 s `testTimeout` — the long-gap tests replay millions of kills on purpose — and vitest otherwise uses defaults, resolving `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
+
+**A fresh worktree needs its own `npm install`.** Without the local `node_modules/@wanderblade/*` symlinks, vitest silently resolves the core from the parent checkout and the tests grade someone else's code; `tsc` and `tsx` do not, because they follow tsconfig `paths`.
 
 **Lint is not a style checker.** `eslint.config.js` polices the two invariants `tsc` cannot express, and nothing else:
 
@@ -58,7 +60,8 @@ packages/core  ──►  app   (Vite client, DOM)
 
 - `advance(s, a + b)` must produce byte-identical state *and* events to `advance(advance(s, a), b)`.
 - All randomness flows through the seeded mulberry32 in `rng.ts`, consumed once per kill in kill-index order. The 32-bit stream position lives on `GameState.rngState` so a save reconstructs the stream exactly.
-- The clock is event-stepped per kill against an **absolute** `nextKillAtSec`. A relative "time remaining" carry would drift under float re-accumulation and break split-invariance — do not refactor it into one.
+- The clock is event-stepped against an **absolute** `nextActionAtSec` — the next Road kill or the next boss swing, depending on `phase`. A relative "time remaining" carry would drift under float re-accumulation and break split-invariance — do not refactor it into one.
+- Strikes are `{ atSec, aim }` inputs merged into that same schedule. Momentum is a lazily-decayed `(value, atSec)` pair, and loot-arc positions are pure functions of stored numbers, so nothing is integrated across an interval and every split sees identical operands.
 - Offline progress is not a separate code path. A 10-day gap is the same `advance` call as a live tick, which is why `EVENT_CAP` (50,000) truncates the raw event stream while the aggregate `recap` attached to the returned array stays exact.
 
 **`app` — controller/view split, no game math in either.**
@@ -71,7 +74,7 @@ packages/core  ──►  app   (Vite client, DOM)
 
 **`sim` — the economy evidence, consuming the same core.** `run.ts` → `simulate.ts` runs a deterministic bot (`bot.ts`) per seed, `collector.ts` records milestones, `validators.ts` holds the numbered PASS/FAIL pacing validators from `docs/ECONOMY.md`, `format.ts` prints the report and CSV. The simulator reports honest results; it never tunes constants.
 
-**Legacy-vs-current caveat.** The shipped code still implements the superseded readiness-gate / auto-challenge prototype (`GateState`, `readiness`, `challengeBoss`, `autoChallengeReadiness`). Decisions #14–#18 replace it with Road → Portal Boss → Ascension. When touching that area, check `docs/DECISIONS.md` and `docs/ROADMAP.md` M1R before extending mechanics that are already scheduled for deletion.
+**The readiness-gate prototype is gone.** `GateState`, `readiness`, `challengeBoss`, and `autoChallengeReadiness` were deleted in M1R.3; the core is Road → Portal Boss → Ascension per Decisions #14–#18, with the active layer in #19–#25. `packages/core/test/phase.test.ts` is what replaced the old gate/boss/auto-challenge tests.
 
 ## Source of truth
 

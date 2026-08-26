@@ -1,79 +1,61 @@
-// Every tunable in one place. Values below are the M0-tuned economy: they were
-// tuned in `sim/` against docs/ECONOMY.md's 10-day pacing targets.
+// Every tunable in one place. Values are tuned in `sim/` against the pacing
+// bands in docs/ACTIVE-PLAY.md and the validators in docs/ECONOMY.md.
 //
 // Naming: terse math symbols (hp0, rH, ...) mirror ECONOMY.md's formulas.
 
 import type { Rarity } from './types';
 
+// --- Realm scaling -------------------------------------------------------
+/**
+ * Scales every gold- and power-denominated quantity by `REALM_STEP^realm`,
+ * making a realm ratio-identical to realm 0. Ascendancy and the earnings bonus
+ * are then the only cross-realm asymmetries (docs/DECISIONS.md #21).
+ */
+export const REALM_STEP = 8;
+
 // --- Enemies -------------------------------------------------------------
-/** Enemy HP base: hp(z) = hp0 * rH^z */
+/** Enemy HP: hp(realm, z) = hp0 * REALM_STEP^realm * rH^z */
 export const hp0 = 10;
 export const rH = 1.55;
 
-/** Enemy gold base: gold(z) = g0 * rG^z (income grows slower than difficulty). */
+/** Enemy gold: gold(realm, z) = g0 * REALM_STEP^realm * rG^z. */
 export const g0 = 1;
 export const rG = 1.48;
 
-/**
- * Region boss HP multiplier: bossHp(z) = bossHpMult * hp(z).
- * Tuned to 60 (from the v0 guess of 25): the readiness bar is high enough that a
- * typical farmed gear set does NOT clear a gate on arrival — the hero parks and
- * farms the approach for a luckier drop mix, which is what turns each region end
- * into a real soft wall (see docs/ECONOMY.md). Kept below the all-epic ceiling
- * gearPowerBase*32 = 64: a maxed all-epic set gives readiness 72/60 = 1.2, above
- * the 1.1 auto-challenge bar, so the pure-idle player always breaks through via
- * farmed gear alone (DECISIONS.md #9); the autochallenge property test enforces it.
- */
-export const bossHpMult = 60;
-
 // --- Hero ----------------------------------------------------------------
-/**
- * Hero base damage: base(level) = d0 * rD^level (the *smoothing* scaler).
- * d0 tuned to 25 (from the v0 guess of 5): with the low dropChance the soft walls
- * require, early gear is scarce, so the opening session leans on purchased levels
- * to fell the first boss inside the 5-10 min window. rD (1.12 < rH 1.55) still
- * fades base against enemy HP over zones, so gear stays the primary scaler past
- * the opening.
- */
+/** Hero base damage: base(level) = d0 * rD^level, scaled by the realm. */
 export const d0 = 25;
 export const rD = 1.12;
 
-/** Hero level cost: levelCost(level) = levelCostBase * rC^level. */
+/** Hero level cost: levelCost(level) = levelCostBase * rC^level, realm-scaled. */
 export const levelCostBase = 10;
 export const rC = 1.15;
 
-/** Skill upgrade cost: skillCost(lvl) = skillCostBase * skillCostRate^lvl. */
+/** Skill rank cost: skillCost(rank) = skillCostBase * skillCostRate^rank. */
 export const skillCostBase = 50;
 export const skillCostRate = 1.15;
 
 /**
- * Each skill level contributes (1 + skillMultPerLevel * level) to the DPS
- * product. The multiplicative skill term used to be an *unbounded* power axis
- * (the greedy bot poured banked gold in, the product ran away, kill time floored
- * and every gate wall dissolved). It is now *bounded* by a per-skill maxLevel
- * (see SkillDef.maxLevel): at 0.05/rank and a cap of 10 ranks each skill tops out
- * at ×1.5, and both together at ×2.25 — a fixed, finite ceiling that cannot run
- * away. Skills are live in M0: a real, buyable second upgrade track with a hard
- * cap (see docs/ECONOMY.md "Skills in the M0 baseline").
+ * A skill's DPS factor approaches `1 + SKILL_MAX_BONUS` as its rank rises,
+ * closing the remaining gap by `1 - SKILL_RANK_DECAY` each rank. Ranks are
+ * uncapped: the asymptote is what keeps `skillMult` bounded, so the panel never
+ * has to show MAX and the player always has a priced row to buy.
  */
-export const skillMultPerLevel = 0.05;
+export const SKILL_MAX_BONUS = 0.176;
+export const SKILL_RANK_DECAY = 0.85;
 
-// --- Gear (the primary power scaler) -------------------------------------
-/** Drop power: gearPowerBase * gearPowerRate^z * rarityMult. */
+// --- Gear (the primary realm-local power scaler) -------------------------
+/** Drop power: gearPowerBase * REALM_STEP^realm * gearPowerRate^z * rarityMult. */
 export const gearPowerBase = 2;
-/** Gear power grows on the same base as enemy HP, so it tracks difficulty by construction. */
+/** Gear power grows on the same base as enemy HP, so it tracks difficulty. */
 export const gearPowerRate = rH;
 
 /**
- * Chance of a gear drop per kill. Tuned down from the v0 0.05 to 0.006. Because
- * gear power grows on the same base as enemy HP (gearPowerRate = rH), readiness
- * is scale-invariant: with frequent drops the equipped set tracks the frontier
- * and every gate either always clears (runaway to the float-precision tail) or
- * never does. Scarce drops make the equipped set *lag* the frontier by a variable
- * amount, so a gate clears only when a lucky recent, high-rarity mix lands — that
- * drop variance is what creates the farmable soft walls and paces the tail.
+ * Chance of a gear drop per kill. Kept scarce: gear power grows on enemy HP's
+ * base, so frequent drops make the equipped set track the frontier exactly and
+ * every boss becomes the same fight. Scarcity is what makes a build vary.
  */
-export const dropChance = 0.006;
+export const dropChance = 0.008;
 
 /** Rarity roll weights (sum = 100). */
 export const RARITY_WEIGHTS: Record<Rarity, number> = {
@@ -91,58 +73,153 @@ export const RARITY_MULTIPLIERS: Record<Rarity, number> = {
   epic: 4,
 };
 
-/** Rarity order used for the cumulative-weight roll. */
+/** Rarity order, low to high — the cumulative-weight roll and the arc-catch
+ * tier upgrade both walk it. */
 export const RARITIES: readonly Rarity[] = ['common', 'uncommon', 'rare', 'epic'];
 
 export const GEAR_SLOTS = ['weapon', 'armor', 'trinket'] as const;
 
-// --- World structure -----------------------------------------------------
-export const killsPerZone = 10;
-export const zonesPerRegion = 10;
-/** Regions in the v1 realm: Greenwood .. World's Edge (7th is the finale). */
-export const regionsCount = 7;
-/** Leagues gained per (non-parked) kill. Zone length = 1 league = 10 kills. */
-export const leaguePerKill = 0.1;
-
-// --- Boss gates ----------------------------------------------------------
-/** Enrage window: Readiness = (dps * enrageWindowSec) / bossHp. */
-export const enrageWindowSec = 30;
-/** Auto-challenge fires (online or offline) once Readiness crosses this. */
-export const autoChallengeReadiness = 1.1;
-/** Cooldown after a failed manual challenge. */
-export const bossRetryCooldownSec = 60;
+// --- Realm structure -----------------------------------------------------
+export const killsPerZone = 1200;
+/** Zones in a realm's road. Clearing the last one makes the portal available. */
+export const zonesPerRealm = 50;
+/** Leagues gained per Road kill. Zone length = 1 league. */
+export const leaguePerKill = 1 / killsPerZone;
 
 // --- Combat pacing -------------------------------------------------------
 /**
- * Walking floor: kill time is clamped to at least this many seconds. Held at 2.
- * With gates in every region (including the endless tail), the readiness walls —
- * not this floor — are the anti-runaway mechanism, so the floor was reconsidered
- * for a return toward its lower v0 value (0.3). The sim says keep 2: V1 (first
- * upgrade < 30 s) needs 10 gold within 30 s = 10 zone-0 kills, so 10 * floor < 30
- * pins the floor below 3; and lowering it only marches the hero into the
- * float-precision tail faster without improving any pacing target.
+ * Idle walking floor for a Road kill, in seconds. Momentum divides *through*
+ * this floor (see `killTime`), so active play is never capped by it.
  */
-export const minKillTimeSec = 2;
+export const minKillTimeSec = 0.35;
 
-// --- Skills --------------------------------------------------------------
+/** Nominal seconds per hero swing against a guardian at zero momentum. */
+export const bossSwingSec = 1;
+
+// --- Momentum (the one active input, shared by both phases) --------------
+/** Momentum added by one Strike, clamped into [0, 1]. */
+export const MOMENTUM_PER_STRIKE = 0.1;
+/** Seconds for momentum to halve with no input (~zero ≈ 6 s after the last). */
+export const MOMENTUM_HALF_LIFE_SEC = 2;
+/**
+ * Attack-speed bonus at full momentum: multiplier = 1 + this * momentum.
+ * Tuned so a capped boss fight lands mid-band (1.4x-1.8x faster).
+ */
+export const MOMENTUM_MAX_BONUS = 0.75;
+
+// --- Loot arcs (the Road's active gold layer) ----------------------------
+/** Seconds a kill's loot arc stays catchable. */
+export const ARC_FLIGHT_SEC = 1.5;
+/**
+ * A caught arc pays this multiple of its base gold. The kill already credited
+ * 1.0x at full value, so a catch pays only the increment and idle loses nothing.
+ * Tuned with MOMENTUM_MAX_BONUS so capped Road play lands at 1.75 * 1.15 ~= 2.0x.
+ */
+export const ARC_CATCH_MULT = 1.15;
+/** Arc space reach: the nearest and furthest an arc lands from the hero. */
+export const ARC_MIN_REACH = 0.5;
+export const ARC_MAX_REACH = 1.5;
+/**
+ * How near a strike must land to catch. Wide enough that aiming at a coin
+ * works, tight enough that a strike at empty sky misses.
+ */
+export const ARC_CATCH_RADIUS = 0.12;
+
+// --- Portal guardian -----------------------------------------------------
+/** Guardian HP = this * enemyHp(realm, last zone) * BOSS_REALM_GAIN^realm. */
+export const bossHpMult = 30000;
+/**
+ * Guardians scale slightly faster than their realm. Without it the earnings
+ * bonus, which funds hero levels, would shrink every later fight to seconds;
+ * with it the Ascendancy tree's bounded power stays the real advantage.
+ */
+export const BOSS_REALM_GAIN = 1.22;
+
+// --- Ascendancy ----------------------------------------------------------
+/**
+ * Pending Ascendancy is granted per zone cleared, never per second, so farming
+ * an already portal-ready realm earns none of it (docs/DECISIONS.md #22).
+ */
+export const ASC_PER_ZONE = 1;
+/** Guardian victory payout, the dominant share of a realm's Ascendancy. */
+export const ASC_BOSS_PAYOUT = 8;
+/** Both accruals grow linearly per realm: amount * (1 + this * realm). */
+export const ASC_REALM_GROWTH = 0.5;
+
+/** Automatic per-victory bonus to gold and passive earnings. Never touches DPS. */
+export const EARNINGS_BONUS_PER_VICTORY = 0.15;
+
+export interface AscNodeDef {
+  id: string;
+  name: string;
+  maxRank: number;
+  /** Rank r costs costBase * costRate^r banked Ascendancy. */
+  costBase: number;
+  costRate: number;
+  effect: 'damage' | 'gearPower' | 'attackSpeed';
+  perRank: number;
+}
+
+/** The persistent combat tree — the only source of persistent combat power. */
+export const ASC_NODES: Record<string, AscNodeDef> = {
+  edge: {
+    id: 'edge',
+    name: "Wanderer's Edge",
+    maxRank: 12,
+    costBase: 18,
+    costRate: 1.6,
+    effect: 'damage',
+    perRank: 0.12,
+  },
+  heft: {
+    id: 'heft',
+    name: 'Ironhand',
+    maxRank: 12,
+    costBase: 22,
+    costRate: 1.6,
+    effect: 'gearPower',
+    perRank: 0.12,
+  },
+  fury: {
+    id: 'fury',
+    name: 'Relentless',
+    maxRank: 8,
+    costBase: 34,
+    costRate: 1.75,
+    effect: 'attackSpeed',
+    perRank: 0.05,
+  },
+};
+
+/** Stable order → deterministic iteration over the tree. */
+export const ASC_NODE_IDS: readonly string[] = ['edge', 'heft', 'fury'];
+
+// --- Realm-local skills --------------------------------------------------
 export interface SkillDef {
   id: string;
   name: string;
   /** Hero level at which the skill becomes purchasable. */
   unlockLevel: number;
-  /**
-   * Hard rank cap. buySkill refuses to sell past this, so skillMult is bounded:
-   * at skillMultPerLevel=0.05 a cap of 10 tops each skill out at ×1.5 (both at
-   * ×2.25). This ceiling is what keeps skills from running the DPS product away.
-   */
-  maxLevel: number;
 }
 
-/** v1 signature skills (bounded multiplier: each caps at ×1.5, both at ×2.25). */
+/**
+ * Five tracks, two of them live from level 0, the rest arriving inside the
+ * first few minutes. Breadth is the point: the panel must answer "what do I
+ * spend on next" without a greyed lock being the answer.
+ */
 export const SKILLS: Record<string, SkillDef> = {
-  cleave: { id: 'cleave', name: 'Cleave', unlockLevel: 5, maxLevel: 10 },
-  warcry: { id: 'warcry', name: 'Warcry', unlockLevel: 15, maxLevel: 10 },
+  cleave: { id: 'cleave', name: 'Cleave', unlockLevel: 0 },
+  warcry: { id: 'warcry', name: 'Warcry', unlockLevel: 0 },
+  riposte: { id: 'riposte', name: 'Riposte', unlockLevel: 2 },
+  sunder: { id: 'sunder', name: 'Sunder', unlockLevel: 6 },
+  secondWind: { id: 'secondWind', name: 'Second Wind', unlockLevel: 14 },
 };
 
 /** Ordered skill ids (stable order → deterministic skillMult product). */
-export const SKILL_IDS: readonly string[] = ['cleave', 'warcry'];
+export const SKILL_IDS: readonly string[] = [
+  'cleave',
+  'warcry',
+  'riposte',
+  'sunder',
+  'secondWind',
+];
