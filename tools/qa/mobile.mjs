@@ -35,6 +35,7 @@ and does anything load-bearing sit under the notch or the home indicator?
   --no-insets       leave safe-area insets at 0, as a bare browser reports them
   --bands           draw the inset bands onto the screenshots
   --port <n>        dev server port          (default ${DEFAULT_PORT}, or $WB_QA_PORT)
+  --selftest        plant decoy buttons under the insets and prove the check fires
 
 Devices: ${DEVICES.map((d) => d.id).join(', ')}
 
@@ -54,6 +55,9 @@ const seed = flag('seed', '7');
 const only = flag('only', null);
 const withInsets = !argv.includes('--no-insets');
 const drawBands = argv.includes('--bands');
+// A safe-area check that has never fired is indistinguishable from one that
+// cannot. This plants a button under each inset and fails if they go unseen.
+const selfTest = argv.includes('--selftest');
 const port = resolvePort(argv);
 
 const repo = fileURLToPath(new URL('../..', import.meta.url));
@@ -97,11 +101,28 @@ function probe(page, dev) {
     const stacked = screen ? getComputedStyle(screen).position === 'static' : false;
     const chrome = document.querySelector('.chrome') ?? screen;
     const chromeRect = chrome ? chrome.getBoundingClientRect() : null;
+    // A row scrolled out of its panel still reports its real page position, so
+    // a rect test alone called five upgrades "under the home indicator" when
+    // they were merely below the fold. Hit-test the pixel instead: if the
+    // element at that point is not the button, nothing there is tappable.
+    const onScreenAt = (el, x, y) => {
+      if (x < 0 || y < 0 || x >= vw || y >= vh) return false;
+      const hit = document.elementFromPoint(x, y);
+      return hit !== null && (hit === el || el.contains(hit) || hit.contains(el));
+    };
     const targets = [...document.querySelectorAll('button')]
       .filter((b) => b.getBoundingClientRect().width > 0)
       .map((b) => {
         const r = b.getBoundingClientRect();
-        return { label: (b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 28), w: px(r.width), h: px(r.height), y: px(r.y) };
+        const cx = r.x + r.width / 2;
+        return {
+          label: (b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 28),
+          w: px(r.width),
+          h: px(r.height),
+          y: px(r.y),
+          topVisible: onScreenAt(b, cx, r.y + 2),
+          bottomVisible: onScreenAt(b, cx, r.bottom - 2),
+        };
       });
     return {
       viewport: { vw, vh, dpr },
@@ -121,8 +142,10 @@ function probe(page, dev) {
       type: ['.gold', '.dps', '.region', '.header-sub', '.upgrade-name', '.upgrade-cost', '.log-line'].map(typeOf).filter(Boolean),
       // The iOS floor is 44pt square; anything under it is a mis-tap waiting.
       smallTargets: targets.filter((t) => t.h < 44 || t.w < 44),
-      underTop: targets.filter((t) => t.y < insets.top).map((t) => t.label),
-      underBottom: targets.filter((t) => t.y + t.h > vh - insets.bottom).map((t) => t.label),
+      underTop: targets.filter((t) => t.topVisible && t.y < insets.top).map((t) => t.label),
+      underBottom: targets
+        .filter((t) => t.bottomVisible && t.y + t.h > vh - insets.bottom)
+        .map((t) => t.label),
       overflowingX: [...document.querySelectorAll('.screen *, .hud *')]
         .filter((el) => { const r = el.getBoundingClientRect(); return r.right > vw + 1 || r.left < -1; })
         .slice(0, 8)
@@ -155,7 +178,29 @@ for (const dev of chosen) {
     }, { timeout: 60000 });
   }
   await page.waitForTimeout(600);
+  if (selfTest) {
+    await page.evaluate(() => {
+      const decoy = (pos, label) => {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.style.cssText = `position:fixed;left:8px;${pos};width:60px;height:20px;z-index:9999`;
+        document.body.appendChild(b);
+      };
+      decoy('top:0', 'DECOY-TOP');
+      decoy('bottom:0', 'DECOY-BOTTOM');
+    });
+  }
   const result = { id: dev.id, ...(await probe(page, dev)) };
+  if (selfTest) {
+    const saw = (list, name) => list.some((l) => l.includes(name));
+    const top = dev.insets.top === 0 || saw(result.underTop, 'DECOY-TOP');
+    const bottom = dev.insets.bottom === 0 || saw(result.underBottom, 'DECOY-BOTTOM');
+    result.selftest = { top, bottom, insets: dev.insets };
+    if (!top || !bottom) {
+      console.error(`selftest FAILED on ${dev.id}: top=${top} bottom=${bottom}`);
+      process.exitCode = 1;
+    }
+  }
   if (drawBands) {
     await page.evaluate((insets) => {
       const band = (pos, h, label) => {
