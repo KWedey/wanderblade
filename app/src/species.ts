@@ -2,6 +2,8 @@
 // species a kill produces is decided here and read by both; neither picks its
 // own. Presentational only — nothing here reaches the economy (DECISIONS.md #12).
 
+import { speciesIndex } from '@wanderblade/core';
+
 import { INK } from './scene/palette';
 
 /**
@@ -115,26 +117,33 @@ export const GUARDIAN_BODY = INK.purple;
  * with the biome names and the scene's skins, which cycle on the same modulo.
  */
 export function speciesAt(realm: number, killIndex: number): Species {
-  const r = realm < 0 ? 0 : realm;
-  const roster = ROSTERS[r % ROSTERS.length];
-  if (!roster || roster.length === 0) return FALLBACK;
-  const i = ((killIndex % roster.length) + roster.length) % roster.length;
-  return roster[i] ?? FALLBACK;
+  const roster = rosterAt(realm);
+  if (roster.length === 0) return FALLBACK;
+  return roster[speciesIndexAt(realm, killIndex)] ?? FALLBACK;
 }
 
 /**
- * The roster slot `killIndex` lands on, for callers that index a per-species
- * cache rather than reading the species itself.
+ * The roster slot `killIndex` lands on. The engine decides which species a kill
+ * is and stamps it on the event; this only maps that answer onto the realm's
+ * roster. Computing it here instead put the log and the sprite back on separate
+ * sequences (DECISIONS.md #12 - the client never re-derives a game answer).
  */
 export function speciesIndexAt(realm: number, killIndex: number): number {
-  const r = realm < 0 ? 0 : realm;
-  const roster = ROSTERS[r % ROSTERS.length];
-  const n = roster?.length ?? 1;
-  return ((killIndex % n) + n) % n;
+  const n = rosterAt(realm).length || 1;
+  const i = speciesIndex(killIndex);
+  return ((i % n) + n) % n;
 }
 
 /** One realm's creatures, in slot order. */
 export function rosterAt(realm: number): readonly Species[] {
   const r = realm < 0 ? 0 : realm;
   return ROSTERS[r % ROSTERS.length] ?? [FALLBACK];
+}
+
+/** The realm's creature in the slot the engine already chose. */
+export function speciesNamed(realm: number, slot: number): Species {
+  const roster = rosterAt(realm);
+  if (roster.length === 0) return FALLBACK;
+  const i = ((slot % roster.length) + roster.length) % roster.length;
+  return roster[i] ?? FALLBACK;
 }

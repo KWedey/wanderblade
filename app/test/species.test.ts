@@ -1,3 +1,4 @@
+import { speciesIndex } from '@wanderblade/core';
 import { describe, expect, it } from 'vitest';
 
 import { BOSS_SHAPE, MONSTER_SHAPES } from '../src/scene/pixels';
@@ -21,7 +22,16 @@ import {
 } from '../src/scene/palette';
 
 function killEvent(realm: number, killIndex: number) {
-  return { type: 'kill', timeSec: 1, realm, zone: 3, killIndex, gold: 10 } as const;
+  // The species is the engine's answer, exactly as it stamps it on a real kill.
+  return {
+    type: 'kill',
+    timeSec: 1,
+    realm,
+    zone: 3,
+    killIndex,
+    gold: 10,
+    species: speciesIndex(killIndex),
+  } as const;
 }
 
 describe('the log and the scene name one creature', () => {
@@ -81,10 +91,10 @@ describe('the roster follows the realm', () => {
 });
 
 describe('every realm fields a varied roster', () => {
+  // The roster itself, not a window of kills: the engine picks slots from an
+  // irrational sequence, so five consecutive kills no longer visit five slots.
   function shapesOf(realm: number): Set<number> {
-    return new Set(
-      Array.from({ length: ROSTER_SIZE }, (_, k) => speciesAt(realm, k).shape),
-    );
+    return new Set(rosterAt(realm).map((sp) => sp.shape));
   }
 
   // A realm drawn from two silhouettes reads as a smaller game than the one
@@ -109,10 +119,22 @@ describe('every realm fields a varied roster', () => {
     }
   });
 
-  it('cycles the whole roster before repeating a creature', () => {
+  it('names every creature in the roster once, so none is a duplicate', () => {
     for (let realm = 0; realm < ROSTER_COUNT; realm++) {
-      const names = Array.from({ length: ROSTER_SIZE }, (_, k) => speciesAt(realm, k).name);
+      const names = rosterAt(realm).map((sp) => sp.name);
       expect(new Set(names).size, `realm ${realm}`).toBe(names.length);
+    }
+  });
+
+  // Replaces "cycles the whole roster before repeating": the engine no longer
+  // cycles, so the thing worth holding is that nothing is stranded - a creature
+  // drawn and coloured but never fielded is dead content.
+  it('fields every creature in the roster within a session of kills', () => {
+    for (let realm = 0; realm < ROSTER_COUNT; realm++) {
+      const seen = new Set(
+        Array.from({ length: 200 }, (_, k) => speciesAt(realm, k).name),
+      );
+      expect(seen.size, `realm ${realm} strands a creature`).toBe(ROSTER_SIZE);
     }
   });
 });
@@ -219,3 +241,27 @@ function satOf(hex: string): number {
   const l = (max + min) / 2;
   return (max - min) / (l > 0.5 ? 2 - max - min : max + min);
 }
+
+describe('the app never re-derives which species a kill was', () => {
+  it('maps the engine\'s own species index onto the realm roster', () => {
+    for (const realm of [0, 2, 5, 9, 13]) {
+      for (let kill = 0; kill < 60; kill++) {
+        const n = rosterAt(realm).length;
+        expect(speciesIndexAt(realm, kill), `realm ${realm} kill ${kill}`).toBe(
+          speciesIndex(kill) % n,
+        );
+      }
+    }
+  });
+
+  // The engine picks from an irrational sequence, not killIndex % 5. An app
+  // that computes its own slot draws a different creature from the one the log
+  // names — the break the species roster exists to prevent.
+  it('does not agree with a modulo of the kill index', () => {
+    const n = ROSTER_SIZE;
+    const differs = [...Array<number>(200).keys()].filter(
+      (k) => speciesIndexAt(0, k) !== k % n,
+    );
+    expect(differs.length, 'the engine now picks by modulo after all').toBeGreaterThan(20);
+  });
+});

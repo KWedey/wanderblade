@@ -5,7 +5,7 @@
 
 import type { GameEvent, GearSlot, Rarity } from '@wanderblade/core';
 import { formatNumber } from './format';
-import { speciesAt } from './species';
+import { speciesNamed } from './species';
 
 /** One rendered log line. `kind` drives its CSS accent. */
 export interface LogEntry {
@@ -110,7 +110,9 @@ function article(word: string): string {
 export function describeEvent(e: GameEvent): LogEntry | null {
   switch (e.type) {
     case 'kill': {
-      const name = speciesAt(e.realm, e.killIndex).name;
+      // The engine stamped the species on the event; re-deriving it is how the
+      // log and the drawn creature drifted apart before.
+      const name = speciesNamed(e.realm, e.species).name;
       return {
         kind: 'kill',
         text: `Felled ${article(name)} ${name} — +${formatNumber(e.gold)} gold`,
