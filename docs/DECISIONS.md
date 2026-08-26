@@ -563,3 +563,34 @@ The last row is the whole problem in one line: **sloppy aim scores 19% where per
 
 **One implementation note worth keeping.** The caught coin is identified by matching `bonusGold`, not by splitting the advance around the strike. `advance` skips a strike stamped exactly at its start, so stopping the clock on the strike instant silently drops it and every catch rate reads zero. Coin shares are spread per-coin (#44), so the match is near-unique — acceptable for a reported number, never for an assertion.
 
+## 48. Content end is day 76, and no ratio past it measures pacing — 2026-08-26
+
+**Decision:** The realm-300 ceiling of #34 has a date: a steady active player reaches it on **day 74.8–78.9**, an idle player on **day 91.5–92.1**. No economy constant moves. The sim now labels content end wherever a horizon number is printed beside it, because a bare ratio taken past that point reads as a pacing failure and is not one.
+
+**What was reported.** A day-by-day active/idle multiple showed `1.92` at day 75 and `1.17` at day 90, against P10's stated band of `1.4–2.3x`. Read as a collapse in the tail of an otherwise healthy curve.
+
+**It is a cliff, and the cliff is #34.** `bossHp(300)` is `4.629411143378215e+307`; `bossHp(301)` is `Infinity` — the float64 exponent runs out between them, with `Number.MAX_VALUE` at `1.7976931348623157e+308`. `enterPortal` refuses realm 301 with `'unwinnable'` (`packages/core/src/engine.ts:154`), and the simulator stops the run there (`sim/src/simulate.ts:312-314`) because a Road with no reward at its end is not play.
+
+**The tail is arithmetic, not behaviour.** The active run's earned total freezes at `1.5561e6` on arrival. Predicting the multiple as `frozen / idleEarned(t)` reproduces the measured curve exactly:
+
+| day | measured multiple | `frozen / idle` | difference |
+|---|---|---|---|
+| 75 | 1.780 | — | still earning |
+| 77.5 | 1.726 | 1.726 | **0.0e+0** |
+| 80 | 1.600 | 1.600 | **0.0e+0** |
+| 85 | 1.389 | 1.389 | **0.0e+0** |
+| 90 | **1.218** | 1.218 | **0.0e+0** |
+| 92.5 | 1.166 | 1.166 | **0.0e+0** |
+
+Seven checkpoints at zero difference. There is no economy behaviour in that slope to diagnose — it is one constant over a growing denominator, which is a hyperbola by construction.
+
+Across five seeds every run reaches realm 301: active stops at days 74.80 / 74.97 / 76.31 / 76.74 / 78.90, idle at 91.53–92.05. The 12.8–17.3 day gap **is** active play working; it is the reward for playing, seen after both players have run out of ladder.
+
+**P10 never read the number.** `PERMANENT_HORIZON_SEC = 14 * SEC_PER_DAY` (`sim/src/probes.ts:287`) and `measuredAtSec = Math.min(PERMANENT_HORIZON_SEC, shortest)` (`:438`) — the fixed checkpoint of #39. A run that meets the frontier stops there, so `shortest` already caps the reading at content end and the band can never be applied past it. Day 90 is outside the band's *numeric range* and is not a band reading.
+
+**Why no constant moves.** Tuning here would fit the economy to a comparison taken fourteen days after one side ran out of content — the same error class #39 was written to prevent. The lever would also be aimed at the wrong layer: the ceiling is an artifact of float64 range, not a designed stopping point, and the big-number work that addresses it is parked for M4 by #34.
+
+**What changed instead — the exploration labels itself.** `RunResult` and `SeedResult` carry `frontierSec` beside `frontierRealm`; `PermanentUplift` carries `contentEndRealm` / `contentEndSec`. The seed report names the realm *and* the day and states the consequence, and P10's detail appends `[capped at content end — realm N at Td]`. The clause labels and never excuses: the band still fails a bad ratio at the checkpoint, asserted directly.
+
+**The ceiling was already pinned, and that is what makes this safe.** `packages/core/test/magnitude.test.ts:136` asserts the first non-finite realm is exactly 301, and `:192` asserts realm 300 opens while 301, 302, 400 and 5000 refuse with `'unwinnable'` and leave the Road untouched. A growth constant that drags the frontier toward reachable realms fails there. This ADR adds the player-time reading those tests do not carry; it does not add a second copy of them.
+

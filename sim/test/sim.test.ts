@@ -10,6 +10,7 @@ import {
   type LootArc,
 } from '@wanderblade/core';
 import { parseArgs } from '../src/args';
+import { formatSeedReport } from '../src/format';
 import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
 import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
 import {
@@ -263,6 +264,7 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     promptVsOverfarm: null,
     abandonProbe: null,
     frontierRealm: main.frontierRealm,
+    frontierSec: main.frontierSec,
     spendDepth: spendDepth(main.shopSamples),
     deadTime: deadTime(main.realms),
     permanentUplift: null,
@@ -522,6 +524,8 @@ describe('P10 bands at a checkpoint, not at the run length', () => {
     rankTarget: 20,
     idleRankSec: 4.5 * 86_400,
     activeRankSec: 3.5 * 86_400,
+    contentEndRealm: null,
+    contentEndSec: null,
     ...over,
   });
 
@@ -553,5 +557,42 @@ describe('P10 bands at a checkpoint, not at the run length', () => {
       activeFirstAscensionSec: 13.9 * 3600, // 1.01x sooner — nowhere near the floor
     });
     expect(p10(stubResult({ permanentUplift: short })).pass).toBe(false);
+  });
+
+  it('names content end beside the ratio, and only when a run reached it', () => {
+    const plain = p10(stubResult({ permanentUplift: uplift() })).detail;
+    expect(plain).not.toContain('content end');
+
+    const ended = p10(
+      stubResult({
+        permanentUplift: uplift({ contentEndRealm: 301, contentEndSec: 76.5 * 86_400 }),
+      }),
+    ).detail;
+    expect(ended).toContain('capped at content end');
+    expect(ended).toContain('realm 301');
+    expect(ended).toContain('76.50d');
+    // The band still applies at the checkpoint — the clause labels, never excuses.
+    expect(p10(stubResult({ permanentUplift: uplift({ ratio: 1.2, contentEndRealm: 301, contentEndSec: 76.5 * 86_400 }) })).pass).toBe(false);
+  });
+});
+
+/**
+ * A frozen numerator over a growing denominator makes a hyperbola that reads
+ * like a pacing collapse. The report has to say the run ran out of ladder, or
+ * every future reader re-derives it (docs/DECISIONS.md #48).
+ */
+describe('the seed report calls content end what it is', () => {
+  it('names the realm, the day, and why no later ratio measures pacing', () => {
+    const quiet = formatSeedReport(stubResult({ frontierRealm: null, frontierSec: null }));
+    expect(quiet).not.toContain('frontier:');
+    expect(quiet).not.toContain('content end');
+
+    const ended = formatSeedReport(
+      stubResult({ frontierRealm: 301, frontierSec: 76.5 * 86_400 }),
+    );
+    expect(ended).toContain('realm 301');
+    expect(ended).toContain('76.50d');
+    expect(ended).toContain('content end, not a stall');
+    expect(ended).toContain('frozen total by a growing one');
   });
 });

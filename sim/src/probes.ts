@@ -414,6 +414,8 @@ export function permanentUplift(
     realms: RealmRecord[];
     rankTrail: { timeSec: number; treeRanks: number }[];
     earnedTrail: { timeSec: number; earned: number }[];
+    frontierRealm: number | null;
+    frontierSec: number | null;
   },
 ): PermanentUplift | null {
   // The active side is the headline run, already computed; only the idle
@@ -433,6 +435,15 @@ export function permanentUplift(
     for (const x of trail) if (x.timeSec <= horizon) out = x.earned;
     return trail.length === 0 || final.timeSec <= horizon ? totalEarned(final) : out;
   };
+  // A run that meets the frontier stops there, so `shortest` already caps the
+  // reading at content end. Naming it keeps a bare ratio from reading as a
+  // pacing verdict when it is really a run that ran out of ladder.
+  const ends = [
+    { realm: idle.frontierRealm, sec: idle.frontierSec },
+    { realm: active.frontierRealm, sec: active.frontierSec },
+  ].filter((e): e is { realm: number; sec: number } => e.realm !== null && e.sec !== null);
+  const firstEnd = ends.sort((a, b) => a.sec - b.sec)[0];
+
   const shortest = Math.min(idle.state.timeSec, active.state.timeSec);
   const reachedHorizon = shortest >= PERMANENT_HORIZON_SEC;
   const measuredAtSec = Math.min(PERMANENT_HORIZON_SEC, shortest);
@@ -447,6 +458,8 @@ export function permanentUplift(
     ratio: idleEarned > 0 ? activeEarned / idleEarned : Infinity,
     idleFirstAscensionSec: firstWin(idle.realms),
     activeFirstAscensionSec: firstWin(active.realms),
+    contentEndRealm: firstEnd?.realm ?? null,
+    contentEndSec: firstEnd?.sec ?? null,
     rankTarget: PERMANENT_RANK_TARGET,
     idleRankSec: secToRanks(idle.rankTrail, PERMANENT_RANK_TARGET),
     activeRankSec: secToRanks(active.rankTrail, PERMANENT_RANK_TARGET),

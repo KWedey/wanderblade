@@ -299,14 +299,20 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
     pu !== null &&
     (!pu.reachedHorizon ||
       (pu.ratio >= PERMANENT_RATIO_MIN && pu.ratio <= PERMANENT_RATIO_MAX));
+  // Content end bounds the comparison: past it one side is frozen, so the
+  // reading is capped there rather than extended (docs/DECISIONS.md #48).
+  const endNote =
+    pu === null || pu.contentEndRealm === null
+      ? ''
+      : ` [capped at content end — realm ${pu.contentEndRealm} at ${fmtTime(pu.contentEndSec)}]`;
   const ratioNote =
     pu === null
       ? ''
       : pu.reachedHorizon
         ? `${pu.ratio.toFixed(2)}x Ascendancy at ${fmtTime(pu.horizonSec)} ` +
-          `(${pu.activeEarned.toFixed(0)} vs ${pu.idleEarned.toFixed(0)})`
+          `(${pu.activeEarned.toFixed(0)} vs ${pu.idleEarned.toFixed(0)})${endNote}`
         : `Ascendancy ratio not banded — run reached ${fmtTime(pu.measuredAtSec)}, ` +
-          `band is stated at ${fmtTime(pu.horizonSec)} (${pu.ratio.toFixed(2)}x so far)`;
+          `band is stated at ${fmtTime(pu.horizonSec)} (${pu.ratio.toFixed(2)}x so far)${endNote}`;
   out.push(
     ok(
       'P10',

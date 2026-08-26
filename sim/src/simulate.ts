@@ -90,6 +90,8 @@ export interface RunResult {
   earnedTrail: { timeSec: number; earned: number }[];
   /** Realm whose guardian is unwinnable, if the run reached the frontier. */
   frontierRealm: number | null;
+  /** When the run stopped there. Every later clock reading is a frozen total. */
+  frontierSec: number | null;
 }
 
 export function clone(s: GameState): GameState {
@@ -281,6 +283,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
   let stop = false;
   let overfarmUntilSec: number | null = null;
   let frontierRealm: number | null = null;
+  let frontierSec: number | null = null;
   let nextSampleAt = 0;
   let nextRoadStateAt = 0;
 
@@ -311,6 +314,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
       // reached the end of the playable ladder rather than stalled in it.
       if (res.reason === 'unwinnable') {
         frontierRealm ??= state.realm;
+        frontierSec ??= state.timeSec;
         stop = true;
       }
       return;
@@ -351,6 +355,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
           // if it were (docs/DECISIONS.md #34).
           if (!Number.isFinite(bossHp(e.toRealm))) {
             frontierRealm = e.toRealm;
+            frontierSec = e.timeSec;
             stop = true;
           }
           if (opts.maxVictories !== undefined && e.victories >= opts.maxVictories) stop = true;
@@ -437,6 +442,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     rankTrail,
     earnedTrail,
     frontierRealm,
+    frontierSec,
   };
 }
 
