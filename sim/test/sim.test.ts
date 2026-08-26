@@ -172,8 +172,12 @@ describe('aimAtOldestArc', () => {
     advance(s, 4.001);
     expect(s.arcs.length).toBeGreaterThanOrEqual(2);
 
-    const aim = aimAtOldestArc(s, 4.05);
-    expect(aim).toEqual(arcPositionAt(s.arcs[0] as LootArc, 4.05));
+    // The head of the list can already have landed: arcs are pruned at the next
+    // kill, not continuously, and one kill's coins are staggered. The oldest
+    // *still in flight* is the first with a live position.
+    const oldestLive = s.arcs.find((a) => arcPositionAt(a, 4.05) !== null);
+    expect(oldestLive).toBeDefined();
+    expect(aimAtOldestArc(s, 4.05)).toEqual(arcPositionAt(oldestLive as LootArc, 4.05));
 
     // Long past every arc's flight time, there is nothing left to aim at.
     expect(aimAtOldestArc(s, 4.05 + ARC_FLIGHT_SEC * 2)).toBeNull();

@@ -111,11 +111,29 @@ export const MOMENTUM_MAX_BONUS = 0.75;
 /** Seconds a kill's loot arc stays catchable. */
 export const ARC_FLIGHT_SEC = 1.5;
 /**
- * A caught arc pays this multiple of its base gold. The kill already credited
- * 1.0x at full value, so a catch pays only the increment and idle loses nothing.
- * Tuned with MOMENTUM_MAX_BONUS so capped Road play lands at 1.75 * 1.15 ~= 2.0x.
+ * A caught coin pays this multiple of *its own* value — a share of the kill,
+ * not the whole kill. The kill already credited 1.0x in full, so a catch pays
+ * only the increment and idle loses nothing.
+ *
+ * It is 1.6 rather than the 1.15 a one-arc-per-kill payout wanted because the
+ * binding constraint is the strike rate, not the number of coins in the air:
+ * the reference player strikes 3.3x/s against 4.2 kills/s, so splitting a
+ * payout across n coins divides each catch by n without buying any more
+ * catches. Measured at 1.91-1.95x Road-active, mid-band.
  */
-export const ARC_CATCH_MULT = 1.15;
+export const ARC_CATCH_MULT = 1.6;
+/**
+ * Coins per kill. A kill's payout is thrown as several arcs rather than one,
+ * so the air carries a stream of loot instead of a single blip, and a catch is
+ * partial — `ARC_CATCH_MULT` applies to each coin, not to the whole kill.
+ * The count is derived from the kill index, so it is deterministic and the
+ * renderer never chooses it.
+ */
+export const ARC_SPLIT_MIN = 2;
+export const ARC_SPLIT_MAX = 4;
+/** Seconds between one kill's coins leaving the hero. */
+export const ARC_STAGGER_SEC = 0.12;
+
 /** Arc space reach: the nearest and furthest an arc lands from the hero. */
 export const ARC_MIN_REACH = 0.5;
 export const ARC_MAX_REACH = 1.5;
