@@ -588,6 +588,8 @@ Across five seeds every run reaches realm 301: active stops at days 74.80 / 74.9
 
 **P10 never read the number.** `PERMANENT_HORIZON_SEC = 14 * SEC_PER_DAY` (`sim/src/probes.ts:287`) and `measuredAtSec = Math.min(PERMANENT_HORIZON_SEC, shortest)` (`:438`) — the fixed checkpoint of #39. A run that meets the frontier stops there, so `shortest` already caps the reading at content end and the band can never be applied past it. Day 90 is outside the band's *numeric range* and is not a band reading.
 
+**What this changes about #39, and what it does not.** #39 already reached the right cause — *"the day-90 collapse is the realm-300 wall of #34 seen from the economy side, not a property of the horizon"* — and this ADR does not overturn that. What it adds is proof and a date, and one correction: **#39's day-90 cell should not sit in a row of pacing ratios.** `1.17` is a true statement about who holds more Ascendancy at day 90; it is not a statement about what active play buys per unit time, which is what every other cell in that row measures and what the band is stated in. Printed beside them it reads as the same kind of number, and that is how it was misread. #39's table stands as history; the sweep is where the live reading now comes from, and it blanks that checkpoint.
+
 **Why no constant moves.** Tuning here would fit the economy to a comparison taken fourteen days after one side ran out of content — the same error class #39 was written to prevent. The lever would also be aimed at the wrong layer: the ceiling is an artifact of float64 range, not a designed stopping point, and the big-number work that addresses it is parked for M4 by #34.
 
 **The sweep ships, so the table above is reproducible rather than quoted.** `npm run sim -- --days 90 --seeds 1` prints the active/idle multiple at every checkpoint inside the run, and blanks the ones it cannot take:
@@ -604,7 +606,14 @@ The guard is the point of it. `earnedAt` carries the last trail value forward, s
 
 Reported and never banded, for the reason #47 gives: a curve that can go red becomes a thing to tune, and this one is evidence.
 
-The shipped seed-1 sweep differs in detail from the curve that prompted this ADR — 1.78x at day 75 against the 1.92x reported — because that curve came from a scratch generator whose seed and aggregation are no longer recoverable. The shape is the same and the conclusion does not depend on the difference, but that gap is the argument for landing the sweep: a table nobody can re-run is a claim.
+**The curve that prompted this ADR is #39's own table**, not a lost generator — three seeds averaged, where the block above is one. `npm run sim -- --days 90 --seeds 3` now prints the live version, and every seed blanks day 90 at its own frontier (76.31d / 78.90d / 74.80d):
+
+| day | 3 | 7 | **14** | 21 | 30 | 45 | 60 | 75 | 90 |
+|---|---|---|---|---|---|---|---|---|---|
+| **live mean** | 2.00 | 1.66 | **1.81** | 1.99 | 2.06 | 1.92 | 1.81 | 1.78 | **—** |
+| #39's mean | 1.99 | 1.73 | 1.79 | 1.97 | 2.07 | 1.92 | — | — | 1.17 |
+
+The hump survives, and day 14 sits in band on both. **This is not a controlled comparison** and must not be read as one: four value-changing constants commits separate the rows (`d3d2c42`, `93c2b6e`, `bdd06ba`, `b5a6885`), which is exactly what #39's own closing paragraph warns about. The rows are printed together because the live one is now reproducible, not because their difference means anything. The zero-residual reconstruction above depends on neither — it is internal to one run.
 
 **What changed alongside it — the label.** `RunResult` and `SeedResult` carry `frontierSec` beside `frontierRealm`; `PermanentUplift` carries `contentEndRealm` / `contentEndSec`. The seed report names the realm *and* the day and states the consequence, and P10's detail appends `[capped at content end — realm N at Td]`. The clause labels and never excuses: the band still fails a bad ratio at the checkpoint, asserted directly.
 

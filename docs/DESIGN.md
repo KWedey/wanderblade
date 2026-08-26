@@ -53,7 +53,13 @@ The road is where the hero builds all temporary realm power.
 
 Active play is a first-class design surface. The intended session is 15–30 minutes, once or twice a day, and playing attentively must provide a noticeable but bounded acceleration over idle progress.
 
-The exact road interactions, reward mix, cadence, and target uplift are intentionally reserved for the next dedicated active-play design. The prior fixed bundle of Rally, Trailside Glints, and Roadside Discoveries is no longer binding. Any replacement must obey these contracts:
+**The mechanic set is decided: Momentum + Loot Arcs, expressed through one input.** `docs/ACTIVE-PLAY.md` is the specification; the numbers live in `docs/ECONOMY.md` and are not duplicated here.
+
+- **Strike** — tap, click, or hold `Space`/`Enter` — is the only verb in v1, and it is the same verb in both phases.
+- **Momentum** rises with each Strike and decays continuously toward zero. It multiplies **attack speed only**, never gold and never damage per swing, because an unbounded per-strike swing has no ceiling and no strike rate could then satisfy a bounded band (`docs/DECISIONS.md` #19).
+- **Loot Arcs** carry each kill's gold as several coins in flight. Uncaught coins still credit full base value, so idle forfeits only the catch increment. Catching pays a multiplier on that coin's own share, and a catch is a position hit test at the strike's timestamp — never a queue (`docs/DECISIONS.md` #25).
+
+The prior fixed bundle of Rally, Trailside Glints, and Roadside Discoveries is superseded. Its replacement, and any future one, obeys these contracts:
 
 1. Active play is enjoyable in its own right, not repeated busywork.
 2. Rewards are materially valuable and visible within one session.
@@ -75,7 +81,9 @@ The portal guardian is an opt-in, persistent DPS encounter and the expression of
 
 - Boss HP decreases from the hero's current sustained DPS and persists across sessions.
 - Base boss damage advances offline using the same deterministic core as live play.
-- Live tapping applies a relevant, bounded attack-speed boost. Exact input cadence, cap, decay, accessibility alternative, and uplift are part of the dedicated active-combat design.
+- Live tapping applies a bounded attack-speed boost through the **same momentum curve as the Road** — same input, same cap, same decay. Momentum multiplies boss DPS only, and the boss phase has no loot arcs because it pays nothing but damage.
+- **Accessibility equivalent: holding the input auto-strikes at the cap-sustaining rate**, reaching the same ceiling as tapping. Rapid repeated input is never required. Cadence, cap, and decay values are in `docs/ACTIVE-PLAY.md`.
+- What a committed fight *feels* like — hit reactions, damage readout, momentum display, victory beat — is client presentation and belongs to M3.
 - The fight has no enrage timer, death, retry cooldown, or automatic failure. A boss may take hours or days.
 - No gold, gear, or Ascendancy is earned while the boss fight is active.
 - Purchases and build changes are locked during boss combat; the fight tests the build committed at entry.
@@ -111,7 +119,8 @@ Boss HP reaching zero triggers one atomic ascension transaction:
 - The Ascendancy tree unlocks combat skills and passives. It is the primary source of persistent combat power.
 - Every boss victory separately grants an automatic, persistent percentage bonus to gold and passive/offline earnings. It does **not** directly grant combat power.
 - This automatic economy bonus ensures moving forward is more productive than farming one completed realm forever.
-- Exact Ascendancy accrual, node costs, node effects, boss payout, and economy-bonus stacking require simulator tuning before implementation is considered balanced.
+- Accrual, boss payout, node costs and effects, and the earnings-bonus rate are tuned and passing across seeds; the constants live in `packages/core/src/constants.ts` and the bands they satisfy in `docs/ECONOMY.md`.
+- The tree is **uncapped with a linear price curve** — a node always has a next rank, and depth is paced by cost rather than by a ceiling (`docs/DECISIONS.md` #27).
 
 ### Persistence matrix
 
@@ -152,6 +161,8 @@ Boss HP reaching zero triggers one atomic ascension transaction:
 
 ### World's Edge — the state at realm 300
 
+**When it happens:** a steady active player reaches realm 300 around **day 76**, an idle player around **day 92** (`docs/DECISIONS.md` #48). This is a real player's third month, not a theoretical horizon, and it is how much time M4's ending has.
+
 **The requirement:** a player who finishes realm 300 must see something that reads as *the end of the current world*, never a portal button that quietly does nothing. `enterPortal` returning `reason: 'unwinnable'` is an engine value, not a design (`docs/DECISIONS.md` #34); this is the design it has to carry. Core work is done — the client work is `builder-visual-3`'s.
 
 **What the player sees, and what it must not be:**
@@ -173,11 +184,10 @@ A future major system may add companions inspired by the familiar fighter, mage,
 
 These are explicit follow-up designs, not implied implementation details:
 
-- The active road-play mechanic set, input cadence, session arc, and measurable active-versus-idle uplift.
-- Portal availability conditions and the information used to estimate boss duration before entry.
-- Boss HP curves, expected attempt durations, tap attack-speed behavior, and accessibility alternative.
-- Pending-Ascendancy accrual, boss payout, tree topology, node costs/effects, and anti-overfarming curve.
-- Per-ascension gold/passive-income bonus and stacking formula.
+- **The session arc.** The mechanic set, its cadence, and its uplift are decided and measured; how a 15–30-minute sitting is *shaped* — what opens it, what marks its middle, what makes it a satisfying place to stop — has never been designed. `P1` measures a flat 20-minute window, which is a rate, not an arc.
+- **Boss-fight feedback.** The input, cap, decay, and accessibility equivalent are specified; what the player sees and hears while committed is not. Client work, M3.
+- **Abandonment UX.** The rules are decided and simulated — abandoning forfeits only boss-damage progress, and `abandonProbe` measures what that costs. The protected flow that keeps it from being a mis-tap is undesigned. Client work, M3.
 - Realm sequence, SRD-verified monster roster, portal guardians, and original setting treatment.
-- **What a gear slot means.** `gearPower(realm, zone, rarity)` has no slot term, and `gearPowerTotal` is a plain sum, so weapon, armor and trinket are three draws from one distribution — the panel showing identical power for all three is the model, not a bug. Differentiating them needs a mechanical role first: there is no defence stat for armor to feed and no utility layer for a trinket, so a per-slot weight added now would be an arbitrary balance decision. Blocked on the M4 gear-set and Bestiary design.
+- **A designed ending, or a defined endless mode.** The realm-300 ceiling is a float64 artifact, not a chosen finale, and an active player meets it around day 76 (`docs/DECISIONS.md` #48). *World's Edge* above is the placeholder that keeps it from reading as a bug; the ending itself is M4's, alongside the big-number work of #34.
+- **What a gear slot means.** Partly answered: `SLOT_POWER` gives each slot a distinct mean-1 weight, so the three no longer read as one distribution (`docs/DECISIONS.md` #40). What is still open is a mechanical *role* — there is no defence stat for armor to feed and no utility layer for a trinket, so slots differ in magnitude but not in kind. Blocked on the M4 gear-set and Bestiary design.
 - **Per-zone monster identity.** Landed in core (ADR #37): a kill carries a species index, pays that species' share of the zone rate, and rolls its drop against that species' weight; `collection.speciesKills` records them. Enemy HP is still uniform, because kill time is the clock. What remains is M4 content — the SRD roster, names and provenance. *Superseded description of the old state:* The engine had none: `enemyHp(realm, zone)` and `enemyGold(realm, zone)` are pure functions of position, `GameState` carries no monster field, and a drop's rarity is rolled from the kill-keyed stream with no reference to what died. A Bestiary and differentiated drops therefore need core work before content: a monster identity on the kill, carried into the drop roll and into `collection`. Nothing about the current model blocks it — the RNG is already keyed per kill — but it is a core change, not a content table.
