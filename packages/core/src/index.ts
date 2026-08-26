@@ -54,6 +54,7 @@ export {
   ASC_NODE_IDS,
   SKILLS,
   SKILL_IDS,
+  SLOT_POWER,
   SPECIES,
   SKILL_MULT_CEILING,
 } from './constants';

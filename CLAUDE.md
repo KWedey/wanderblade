@@ -17,10 +17,10 @@ npm run dev                  # Vite dev server at http://localhost:5173
 npm run dev -- --host        # expose on LAN for phone testing
 npm run build                # production build of app/
 npm run verify               # THE GATE: lint + typecheck + test
-npm test                     # vitest across all workspaces (32 files / 556 tests)
+npm test                     # vitest across all workspaces (35 files / 613 tests)
 npm run typecheck            # tsc --noEmit over core, sim, and app
 npm run lint                 # eslint (type-aware); --fix for the autofixable ones
-npm run sim                  # economy simulator, default 3 seeds × 10 days
+npm run sim                  # economy simulator, default 3 seeds × 14 days
 npm run sim -- --days 30 --seeds 5 --csv   # writes sim/out/run-<seed>.csv
 npm run sim -- --help        # full flag list
 ```

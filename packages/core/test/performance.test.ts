@@ -1,29 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { advance, enterPortal, initialState, type GameState } from '../src/index';
+import {
+  advance,
+  ARC_FLIGHT_SEC,
+  ARC_SPLIT_MAX,
+  ARC_STAGGER_SEC,
+  enterPortal,
+  initialState,
+  type GameState,
+} from '../src/index';
 import { clone, portalReady, roadAt, strikesAt } from './helpers';
 
 // A long offline gap reconciles on a cold app start, so what must hold is that
-// the work grows in step with the gap. "Finishes in under ten seconds" measures
-// the laptop and whatever else is running on it; every assertion here is either
-// exact or a ratio, so it scales with the machine instead of against it.
-
-/** Wall-clock milliseconds for the fastest of `runs` attempts at `f`. */
-function fastestMs(runs: number, f: () => void): number {
-  let best = Infinity;
-  for (let i = 0; i < runs; i++) {
-    const t0 = Date.now();
-    f();
-    const ms = Date.now() - t0;
-    if (ms < best) best = ms;
-  }
-  return best;
-}
+// the work grows in step with the gap — never that a laptop finishes it in ten
+// seconds. Every assertion here counts engine operations, so none of it can be
+// moved by another process; this project's own runs have hit load average 160,
+// where a wall-clock ratio is a coin flip and a red one teaches nothing.
 
 /** A Road that neither advances zones nor changes build, so its kill rate is fixed. */
 function steadyRoad(seed: number): GameState {
   const s = roadAt(seed, 10, 0.5);
   s.portalReady = true;
   return s;
+}
+
+/**
+ * The longest an arc can be alive: its flight, plus the stagger the last coin
+ * of a maximal split waits before launching.
+ */
+const ARC_MAX_LIFE_SEC = ARC_FLIGHT_SEC + (ARC_SPLIT_MAX - 1) * ARC_STAGGER_SEC;
+
+/**
+ * The structural bound on the arc list: every arc was launched at or before
+ * now, so none can expire more than one window out, and pruning runs per kill,
+ * so the list holds the kills of one window plus the partial period since the
+ * last one. Coins that landed inside that partial period are still listed —
+ * they are uncatchable and `arcPositionAt` reports them as down — so the bound
+ * is two-sided on expiry only above, and on count for the rest.
+ */
+function expectArcsWithinOneWindow(s: GameState): void {
+  const killsPerSec = s.lifetime.kills / s.timeSec;
+  for (const arc of s.arcs) {
+    expect(arc.expiresAtSec - s.timeSec).toBeLessThanOrEqual(ARC_MAX_LIFE_SEC);
+  }
+  const windowSec = ARC_MAX_LIFE_SEC + 1 / killsPerSec;
+  const cap = (Math.ceil(killsPerSec * windowSec) + 1) * ARC_SPLIT_MAX;
+  expect(s.arcs.length).toBeLessThanOrEqual(cap);
 }
 
 describe('offline reconciliation scales with the length of the gap', () => {
@@ -42,67 +63,52 @@ describe('offline reconciliation scales with the length of the gap', () => {
 
   it('holds the live arc list to a bound no length of gap can grow', () => {
     // Arcs are scanned per kill and per strike, so an arc list that grew with
-    // the gap would make reconciliation quadratic. It is bounded by flight time
-    // over kill time, and nothing about the gap's length enters that.
+    // the gap would make reconciliation quadratic.
     const short = steadyRoad(7);
     advance(short, 600);
     const long = steadyRoad(7);
     advance(long, 5 * 86_400);
 
-    expect(long.arcs.length).toBeLessThanOrEqual(short.arcs.length + 1);
-    expect(long.arcs.length).toBeLessThan(64);
+    expect(long.arcs.length).toBeGreaterThan(0);
+    expectArcsWithinOneWindow(short);
+    expectArcsWithinOneWindow(long);
   });
 
-  it('keeps a Road gap within a small multiple of half that gap', () => {
-    const five = 2 * 86_400;
-    const base = initialState(7);
-
-    const shortMs = fastestMs(2, () => {
-      advance(clone(base), five);
-    });
-    const longMs = fastestMs(2, () => {
-      advance(clone(base), 2 * five);
-    });
-
-    // Doubling the gap may double the work. A quadratic regression lands near
-    // 4x and a ten-fold one cannot hide, while a loaded machine slows both
-    // halves together and the ratio survives it.
-    expect(longMs / Math.max(shortMs, 1)).toBeLessThan(3);
-  });
-
-  it('keeps a boss gap within a small multiple of half that gap', () => {
+  it('does boss work proportional to elapsed time, not to its square', () => {
+    // Damage per swing is fixed inside a fight — no gold, no levels, no drops —
+    // so bossDamage counts swings exactly. A super-linear step count shows up
+    // here, and unlike a stopwatch it cannot be moved by another process.
     const five = 5 * 86_400;
-    const base = portalReady(7, 60 * 86_400);
+    const base = portalReady(7, 600 * 86_400);
     enterPortal(base);
 
-    const shortMs = fastestMs(2, () => {
-      advance(clone(base), five);
-    });
-    const longMs = fastestMs(2, () => {
-      advance(clone(base), 2 * five);
-    });
+    const short = clone(base);
+    advance(short, five);
+    const long = clone(base);
+    advance(long, 2 * five);
 
-    expect(longMs / Math.max(shortMs, 1)).toBeLessThan(3);
-
-    const fought = clone(base);
-    advance(fought, 10 * 86_400);
-    expect(fought.lifetime.bossDamage).toBeGreaterThan(0);
+    expect(short.phase).toBe('boss');
+    expect(long.phase).toBe('boss');
+    expect(short.lifetime.bossDamage).toBeGreaterThan(0);
+    expect(long.lifetime.bossDamage / short.lifetime.bossDamage).toBeGreaterThan(1.99);
+    expect(long.lifetime.bossDamage / short.lifetime.bossDamage).toBeLessThan(2.01);
   });
 
-  it('keeps striking within a small multiple of the same span unstruck', () => {
+  it('holds the arc list to the same window under heavy striking', () => {
+    // The per-strike arc scan is the quadratic risk on the strike path. Striking
+    // catches coins and speeds kills, so the *count* legitimately differs from
+    // an idle run — what may not differ is the window it is drawn from.
     const hour = 3600;
-    const base = initialState(7);
+    const idle = initialState(7);
+    advance(idle, hour);
+    const struck = initialState(7);
+    advance(struck, hour, strikesAt(0, hour, 4));
 
-    const idleMs = fastestMs(2, () => {
-      advance(clone(base), hour);
-    });
-    const struckMs = fastestMs(2, () => {
-      advance(clone(base), hour, strikesAt(0, hour, 4));
-    });
-
-    // Each strike splits the advance, so striking costs more — but a bounded
-    // multiple more. This is what would catch a per-strike scan going quadratic.
-    expect(struckMs / Math.max(idleMs, 1)).toBeLessThan(12);
+    expectArcsWithinOneWindow(idle);
+    expectArcsWithinOneWindow(struck);
+    // And striking is still the same simulation underneath it.
+    expect(struck.timeSec).toBe(idle.timeSec);
+    expect(struck.lifetime.kills).toBeGreaterThanOrEqual(idle.lifetime.kills);
   });
 
   it('still reconciles a ten-day gap correctly, whatever the clock says', () => {

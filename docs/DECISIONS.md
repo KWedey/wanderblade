@@ -358,4 +358,20 @@ It is a **hump**: a trough near day 10, a peak near day 30, then a slow decline 
 
 **14 sits on the rising limb, which is the conservative side of the hump** — it understates the advantage a committed player eventually holds, and a floor that understates is the right kind of wrong. Day 10 is the one checkpoint to avoid: same spread as 14 with a lower mean, right in the trough.
 
+**The day-90 collapse is the realm-300 wall of #34 seen from the economy side**, not a property of the horizon. Two independent systems hit the same ceiling.
+
+**Numbers taken across a constants change are not comparable.** An earlier draft read the gap between 1.84 and 1.91 as a horizon effect; they were measured before and after #35 and #37. Every figure above comes from one constant set.
+
 `sim/test/sim.test.ts` pins all four cases: in-band passes, out-of-band fails, a short run leaves the ratio unbanded and says so, and a short run still fails on a weak sooner-clause so it cannot pass vacuously.
+
+## 40. A gear slot is worth a different amount — 2026-08-26
+
+**Decision:** `gearPower` takes the slot: `gearPower(realm, z, rarity, slot)`, multiplied by `SLOT_POWER` — **weapon 1.15, armor 1.00, trinket 0.85**. The table sums to exactly `GEAR_SLOTS.length`, so a matched kit is worth precisely what it was unweighted. This is the #37 pattern — a mean-1 multiplier table, no RNG draw, no band moves.
+
+**Why:** a blind reviewer filed a real bug against the shipped frame: *"Weapon `Runed Longsword power 6.84B` and Armor `Runed Plate power 6.84B` are accidentally identical values."* It was not a rendering fault. One formula fed all three slots, so any two drops rolled at the same realm, zone and rarity produced bit-identical numbers. Measured over 542 snapshots: **43.2%** carried at least one identical pair, weapon/armor alone 17.3%, all three 1.1%. At ~9–10 drops per zone across 3 slots, collisions are the normal case, not an edge one.
+
+**The total is unchanged, measured rather than argued.** `gearPowerTotal` at portal entry, after ÷ before, across 67 matched realm milestones on 3 seeds: **mean 1.0053, median 1.0000**, min 0.4046, max 1.6625, with 38/67 (57%) inside ±5%. The wide per-milestone spread is drop RNG once the two trajectories diverge; the median of exactly 1.0000 is the evidence that nothing was added.
+
+**The collision rate is measured after, not asserted.** Re-running the same harness: `BEFORE weights 1/1/1 snaps 542 anyPairIdentical 43.2%` → `AFTER weights 1.15/1/0.85 snaps 545 anyPairIdentical 0.0%`.
+
+**Cost:** `gearPower`'s overflow frontier moves 331 → **330**, because weapon's 1.15× tips one realm earlier. Still well past the realm-300 horizon of #34, so it changes nothing reachable. `packages/core/test/magnitude.test.ts` is repinned; `packages/core/test/slots.test.ts` holds the mean-1 proof, the no-collision proof and split-invariance.

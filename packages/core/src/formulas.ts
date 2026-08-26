@@ -29,12 +29,13 @@ import {
   RARITY_MULTIPLIERS,
   SKILL_IDS,
   SKILLS,
+  SLOT_POWER,
   SPECIES,
   zonesPerRealm,
 } from './constants';
 import type { SpeciesDef } from './constants';
 import { momentumMultiplier } from './momentum';
-import type { AscendancyState, GameState, GearState, Rarity } from './types';
+import type { AscendancyState, GameState, GearSlot, GearState, Rarity } from './types';
 
 export type AscNodeEffect = 'damage' | 'gearPower' | 'attackSpeed';
 
@@ -89,12 +90,18 @@ export function bossHp(realm: number): number {
 }
 
 /** Power of a drop rolled at zone `z` of `realm` at `rarity`. */
-export function gearPower(realm: number, z: number, rarity: Rarity): number {
+export function gearPower(
+  realm: number,
+  z: number,
+  rarity: Rarity,
+  slot: GearSlot,
+): number {
   return (
     gearPowerBase *
     realmScale(realm) *
     Math.pow(gearPowerRate, z) *
-    RARITY_MULTIPLIERS[rarity]
+    RARITY_MULTIPLIERS[rarity] *
+    (SLOT_POWER[slot] ?? 1)
   );
 }
 

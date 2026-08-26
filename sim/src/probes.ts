@@ -42,8 +42,8 @@ const BOSS_PROBE_CAP_SEC = 30 * 86_400;
  */
 function freeze(s: GameState): GameState {
   s.portalReady = true;
-  const power = gearPower(s.realm, s.zone, 'epic');
   for (const slot of GEAR_SLOTS) {
+    const power = gearPower(s.realm, s.zone, 'epic', slot);
     const worn = s.gear[slot];
     if (worn === null || worn.power < power) {
       s.gear[slot] = { power, rarity: 'epic', realm: s.realm, zone: s.zone };

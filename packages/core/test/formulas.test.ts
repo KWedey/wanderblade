@@ -54,7 +54,10 @@ describe('realm scaling', () => {
       expect(enemyGold(r, 4) / enemyGold(0, 4)).toBeCloseTo(realmScale(r), 6);
       expect(levelCost(7, r) / levelCost(7, 0)).toBeCloseTo(realmScale(r), 6);
       expect(skillCost('cleave', 3, r) / skillCost('cleave', 3, 0)).toBeCloseTo(realmScale(r), 6);
-      expect(gearPower(r, 4, 'rare') / gearPower(0, 4, 'rare')).toBeCloseTo(realmScale(r), 6);
+      expect(gearPower(r, 4, 'rare', 'weapon') / gearPower(0, 4, 'rare', 'weapon')).toBeCloseTo(
+        realmScale(r),
+        6,
+      );
     }
   });
 });
