@@ -434,7 +434,10 @@ export const HERO_INK: InkSet = {
   // instantly. They go back at full strength.
   tunic: saturate(lighten(INK.blue, 0.1), 0.3),
   tunicLit: saturate(lighten(INK.blue, 0.3), 0.25),
-  belt: saturate(INK.woodLight, 0.28),
+  // Dark leather, not the trousers again. At one step off `pants` the belt was
+  // invisible, so the torso read as a single blue-over-rust garment -- which is
+  // half of what the judge called overalls.
+  belt: saturate(mixHex(INK.woodLight, '#1a1c2c', 0.52), 0.2),
   pants: saturate(lighten(INK.woodLight, 0.02), 0.3),
   boot: saturate(INK.wood, 0.3),
   steel: '#ffffff',

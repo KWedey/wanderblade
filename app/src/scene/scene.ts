@@ -1185,6 +1185,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const sprite = sprites.trees[prop.variant] ?? sprites.trees[0]!;
       const half = sprite.width / 2;
       if (x + half > band.x0 && x - half < band.x1) continue;
+      drawShadow(x, Math.round(sprite.width * 0.55));
       drawSprite(ctx, sprite, x, y);
     }
   }
@@ -1287,6 +1288,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const px = Math.floor(x - offset);
       ctx.fillRect(px, railY, FENCE_PITCH, 1);
       ctx.fillRect(px, railY + 4, FENCE_PITCH, 1);
+      drawShadow(px, sprites.fence.width + 2);
       drawSprite(ctx, sprites.fence, px, groundY + 1);
     }
   }
@@ -1356,17 +1358,33 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  /** Stepped contact ellipse. A flat 2px bar left creatures hovering. */
+  /**
+   * Hard contact shadow on the ground plane, cast away from the sun.
+   *
+   * This used to be alpha-blended black at 0.34, which on turf is almost
+   * nothing: every figure in the frame was read as floating on the grass. A
+   * shadow in this style is not a soft one turned down, it is a darker flat
+   * colour with an edge (DECISIONS.md #13), so this is the realm's own turf
+   * stepped toward night.
+   */
   function drawShadow(x: number, width: number): void {
-    const rows: readonly (readonly [number, number])[] = [
-      [1, 0.34],
-      [0.72, 0.26],
-      [0.42, 0.17],
+    const skin = realmSkin(model.region);
+    const core = mixHex(skin.turf, '#1a1c2c', 0.52);
+    const edge = mixHex(skin.turf, '#1a1c2c', 0.3);
+    // The sun sits upper right, so the shadow pools to the left of the feet.
+    const cx = x - Math.round(width * 0.16);
+    const rows: readonly (readonly [number, string])[] = [
+      [1.15, core],
+      [1, core],
+      [0.72, edge],
+      [0.4, edge],
     ];
-    rows.forEach(([scale, alpha], i) => {
+    rows.forEach(([scale, color], i) => {
       const w = Math.max(2, Math.round(width * scale));
-      ctx.fillStyle = `rgba(26, 28, 44, ${alpha})`;
-      ctx.fillRect(Math.floor(x - w / 2), groundY + i, w, 1);
+      ctx.fillStyle = color;
+      // +1: the turf's own lip owns the first row under the horizon, and a
+      // shadow drawn on it reads as part of that line rather than as contact.
+      ctx.fillRect(Math.floor(cx - w / 2), groundY + 1 + i, w, 1);
     });
   }
 

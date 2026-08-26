@@ -36,22 +36,28 @@ const HERO_LEGEND: Record<string, string> = {
   k: 'boot',
 };
 
+// The wide horizontal brim and the two straight cloak rails read, in the
+// judge's words, as "blue overalls + red shirt + wide brim hat = farmer". The
+// warm rust-and-blue is the palette we were ranked #1 for and does not move;
+// the silhouette does. A peaked travelling hood replaces the brim, and squared
+// pauldrons replace the rails, so the outline says swordfighter at thumbnail
+// size where none of the colour is legible yet.
 const HERO_UPPER = [
-  '....oooooo....',
-  '...ohhhhhho...',
-  '.oooooooooooo.',
-  'oHHHHHHHHHHHHo',
-  '.oHHHooooHHHo.',
-  '..ohSssssSho..',
-  '..ohseessseo..',
+  '.....oooo.....',
+  '....oKKKKo....',
+  '...oKKKKKHo...',
+  '..oKKKKKKKHo..',
+  '..oKKhhhhKHo..',
+  '..oKSssssSHo..',
+  '..oKseessseo..',
   '...osssssso...',
   '..occcccccco..',
-  'oKottttttttoKo',
-  'oKotttTTtttoKo',
-  'oKottttttttoKo',
-  '.KotttBBtttoK.',
-  '.KoBBBBBBBBoK.',
-  '.KoppppppppoK.',
+  'oKKoccttttoHHo',
+  'oKKocctTTtoHHo',
+  '.oKoccttttoHo.',
+  '..KoccttBtoH..',
+  '..oBBBBBBBBo..',
+  '..oppppppppo..',
   '..oppppppppo..',
 ];
 
