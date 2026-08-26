@@ -234,6 +234,11 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
   const richPct = sd.richFraction * 100;
   const pricedOk = sd.counted > 0 && sd.minPriced >= SPEND_PRICED_FLOOR;
   const richOk = sd.counted > 0 && sd.richFraction >= 0.95;
+  // An all-greyed panel is the one state the shop may never render: the answer
+  // to "what do I spend on next" cannot be "nothing". Staggered skill prices
+  // are what hold this — the cheapest track is affordable long before the
+  // dearest one is (docs/DECISIONS.md #33).
+  const neverGreyOk = sd.counted > 0 && sd.minAffordable >= 1;
   const droughtOk =
     sd.counted > 0 &&
     sd.starvedFraction <= SPEND_MAX_STARVED_FRACTION &&
@@ -241,13 +246,14 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
   out.push(
     ok(
       'P8',
-      `Upgrade panel: ≥${SPEND_PRICED_FLOOR} priced always, ≥${SPEND_TARGET} affordable at 95% of looks`,
-      pricedOk && richOk && droughtOk,
+      `Upgrade panel: ≥${SPEND_PRICED_FLOOR} priced and ≥1 affordable always, ` +
+        `≥${SPEND_TARGET} affordable at 95% of looks`,
+      pricedOk && neverGreyOk && richOk && droughtOk,
       sd.counted === 0
         ? 'no samples'
-        : `${sd.minPriced} priced at the leanest look; ` +
+        : `${sd.minPriced} priced and ${sd.minAffordable} affordable at the leanest look; ` +
           `≥${SPEND_TARGET} affordable at ${richPct.toFixed(1)}% of ${sd.counted} looks ` +
-          `(min ${sd.minAffordable}, worst realm ${sd.worstRealm}); ` +
+          `(worst realm ${sd.worstRealm}); ` +
           `under 2 affordable for ${(sd.starvedFraction * 100).toFixed(2)}% of looks, ` +
           `longest stretch ${fmtTime(sd.longestStarvedSec)}`,
     ),

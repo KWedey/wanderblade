@@ -18,6 +18,7 @@ import {
   type PurchaseOption,
 } from '../src/index';
 import { clone, portalReady } from './helpers';
+import { advance } from '../src/index';
 
 /** Execute `row` through the engine, so the shop's price and the charge agree. */
 function buyFrom(s: GameState, row: PurchaseOption): boolean {
@@ -50,7 +51,7 @@ describe('purchaseOptions', () => {
     s.gold = Infinity;
     for (const row of purchaseOptions(s)) {
       if (row.kind !== 'skill' || row.atMax) continue;
-      expect(row.cost).toBeCloseTo(skillCost(row.rank, s.realm), 9);
+      expect(row.cost).toBeCloseTo(skillCost(row.id, row.rank, s.realm), 9);
     }
   });
 
@@ -89,7 +90,7 @@ describe('purchaseOptions', () => {
   it('never calls a row affordable when its currency is short by a hair', () => {
     const s = initialState(1);
     s.hero.level = 40;
-    s.gold = skillCost(0, s.realm) - 1e-6;
+    s.gold = skillCost('cleave', 0, s.realm) - 1e-6;
     s.ascendancy.banked = 0;
     for (const row of purchaseOptions(s)) {
       if (row.kind === 'node') expect(row.affordable).toBe(false);
@@ -116,7 +117,15 @@ describe('purchaseOptions', () => {
       if (row.kind !== 'skill') continue;
       expect(row.atMax).toBe(false);
       expect(row.maxRank).toBeNull();
+    }
+
+    // Priced, too, at every rank a realm can actually reach. Where each price
+    // curve overflows is pinned in magnitude.test.ts.
+    for (const id of SKILL_IDS) s.hero.skills[id] = 500;
+    for (const row of purchaseOptions(s)) {
+      if (row.kind !== 'skill') continue;
       expect(Number.isFinite(row.cost)).toBe(true);
+      expect(row.cost).toBeGreaterThan(0);
     }
   });
 
@@ -138,5 +147,47 @@ describe('purchaseOptions', () => {
       expect(row.affordable).toBe(false);
       expect(buyFrom(clone(s), row)).toBe(false);
     }
+  });
+
+  /**
+   * A panel with nothing buyable on it is the one state the shop may never
+   * render. Gold is zero the instant an ascension lands, so the guarantee is
+   * about how long that lasts, not that it never happens.
+   */
+  it('puts an affordable row back on the panel within seconds of an ascension', () => {
+    for (const realm of [0, 1, 5, 20, 60]) {
+      const s = initialState(3);
+      s.realm = realm;
+      s.zone = 0;
+      s.gold = 0;
+      expect(affordableCount(s)).toBe(0);
+
+      let elapsed = 0;
+      while (elapsed < 300 && affordableCount(s) === 0) {
+        advance(s, 1);
+        elapsed += 1;
+      }
+      expect(affordableCount(s), `realm ${realm} stayed greyed`).toBeGreaterThan(0);
+      expect(elapsed, `realm ${realm} took ${elapsed}s`).toBeLessThan(60);
+    }
+  });
+
+  it('staggers the skill prices, so the cheap track is buyable long before the dear one', () => {
+    const s = initialState(3);
+    s.hero.level = 20;
+    const costs = new Map(
+      purchaseOptions(s)
+        .filter((r) => r.kind === 'skill')
+        .map((r) => [r.id, r.cost] as const),
+    );
+    const cheapest = Math.min(...costs.values());
+    const dearest = Math.max(...costs.values());
+    expect(cheapest * 5).toBeLessThan(dearest);
+
+    // At the cheapest price exactly, the panel is not greyed but is not a
+    // free-for-all either — which is what makes the row a decision.
+    s.gold = cheapest;
+    expect(affordableCount(s)).toBeGreaterThan(0);
+    expect(affordableCount(s)).toBeLessThan(pricedCount(s));
   });
 });

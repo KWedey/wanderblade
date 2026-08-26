@@ -27,11 +27,8 @@ import {
   rG,
   rH,
   RARITY_MULTIPLIERS,
-  skillCostBase,
-  skillCostRate,
   SKILL_IDS,
-  SKILL_MAX_BONUS,
-  SKILL_RANK_DECAY,
+  SKILLS,
   zonesPerRealm,
 } from './constants';
 import { momentumMultiplier } from './momentum';
@@ -89,8 +86,10 @@ export function levelCost(level: number, realm: number): number {
 }
 
 /** Cost of the next rank of a realm-local skill. */
-export function skillCost(rank: number, realm: number): number {
-  return skillCostBase * Math.pow(skillCostRate, rank) * realmScale(realm);
+export function skillCost(id: string, rank: number, realm: number): number {
+  const def = SKILLS[id];
+  if (!def) return Infinity;
+  return def.costBase * Math.pow(def.costRate, rank) * realmScale(realm);
 }
 
 /** Banked-Ascendancy cost of the next rank of `id`. Uncapped; Infinity if unknown. */
@@ -138,10 +137,12 @@ export function heroBaseDamage(level: number, realm: number): number {
   return d0 * Math.pow(rD, level) * realmScale(realm);
 }
 
-/** One skill's DPS factor at `rank`: rises toward 1 + SKILL_MAX_BONUS, never past. */
-export function skillRankMult(rank: number): number {
+/** One skill's DPS factor at `rank`: rises toward its own 1 + maxBonus, never past. */
+export function skillRankMult(id: string, rank: number): number {
   if (!(rank > 0)) return 1;
-  return 1 + SKILL_MAX_BONUS * (1 - Math.pow(SKILL_RANK_DECAY, rank));
+  const def = SKILLS[id];
+  if (!def) return 1;
+  return 1 + def.maxBonus * (1 - Math.pow(def.decay, rank));
 }
 
 /**
@@ -151,7 +152,7 @@ export function skillRankMult(rank: number): number {
 export function skillMult(skills: Record<string, number>): number {
   let m = 1;
   for (const id of SKILL_IDS) {
-    m *= skillRankMult(skills[id] ?? 0);
+    m *= skillRankMult(id, skills[id] ?? 0);
   }
   return m;
 }

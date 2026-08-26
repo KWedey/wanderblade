@@ -244,3 +244,33 @@ The gap was a **shape** problem, not a level one. It widened ~1.29× per realm, 
 **Result:** longest portal wait **14.74 h → 17.5 m**, waiting share **56% → 0%**, slowest realm **1.01 d → 0.50 d**, realms in 30 days **31 → 95**.
 
 **Also fixed here:** the simulator's `prompt` entry strategy only checked the portal at session boundaries, so a portal opening mid-gap waited up to 11.7 h for the next session while the Road kept building power — which trivialised the fight it then measured (0.1 min by realm 37). `prompt` now means prompt. Separately, `vitest.config.ts` raises `testTimeout` 30 s → 180 s: the many-way split across a ten-day gap is ~40 s of real work and was failing on `main` as a timeout, not an assertion.
+
+## 33. Five skills, five curves — and a panel that is never all grey — 2026-08-25
+
+**Decision:** `SkillDef` carries its own `costBase`, `costRate`, `maxBonus` and `decay`. `skillCost(id, rank, realm)` and `skillRankMult(id, rank)` take the skill they are pricing. The shared `skillCostBase` / `skillCostRate` / `SKILL_MAX_BONUS` / `SKILL_RANK_DECAY` constants are gone; `SKILL_MULT_CEILING` is derived from the roster. Validator **P8** gains a hard clause: at least one row affordable at every look, never merely most of them.
+
+| Skill | Unlock | Rank-0 | Rate | Ceiling | Decay |
+|---|---|---|---|---|---|
+| Cleave | 0 | 35 | 1.12 | +12% | 0.78 |
+| Warcry | 0 | 60 | 1.19 | +23% | 0.93 |
+| Riposte | 2 | 110 | 1.15 | +17% | 0.86 |
+| Sunder | 6 | 190 | 1.13 | +27% | 0.95 |
+| Second Wind | 14 | 300 | 1.21 | +10% | 0.72 |
+
+**Why:** All five cost 50 gold at rank 0, grew at 1.15, and approached the same +17.6%, so they converged on the same rank and were one decision printed five times. Breadth without difference is not breadth. Cheap-and-shallow through dear-and-deep: Cleave is the row a broke hero can always afford and has paid out most of its value by rank 10; Sunder costs six times as much to start but has the slowest price growth and the highest ceiling, so it is the track a rich hero keeps feeding. Second Wind is a burst — dear, small, and 95% paid by rank 10.
+
+**The ceilings still multiply to 2.25×**, the same total the uniform tracks reached, which is why P1–P7 did not move. What did move is P10: first ascension went 1.34× → 1.22× sooner, because a 35-gold opening row helps the idle player too. The band was re-derived from six seeds rather than kept.
+
+**Staggering the prices is the mechanism behind the new P8 clause.** An all-grey panel answers "what do I spend on next" with "nothing". With one shared price every row greys together; with a 35-to-300 spread the cheap track is buyable long before the dear one. `packages/core/test/shop.test.ts` pins it at the engine: from a fresh ascension at realms 0–60, an affordable row is back on the panel in under 60 seconds.
+
+**Also settled here:** a geometric price overflows to Infinity eventually, and an Infinity price is a MAX label wearing a different hat. `magnitude.test.ts` pins each track's frontier — 3,694 (Second Wind) to 6,232 (Cleave) — against realm-local ranks that peak in the low hundreds and reset every ascension.
+
+## 34. The realm ladder ends at 300, and the portal says so — 2026-08-25
+
+**Decision:** `enterPortal` returns `{ entered, reason, events }` where `reason` is `'not-ready'`, `'unwinnable'`, or `null`. It **refuses to open** when `bossHp(realm)` is not finite. Realm 300 is the last winnable realm. The simulator ends a run at the frontier and reports it rather than accumulating wait time against P9.
+
+**Why:** Past realm 300 a guardian's HP is `Infinity`. The old code entered anyway and started a fight no build can ever end — a soft-lock, with the boss ETA reading `Infinity` and the portal panel showing nothing actionable. A closed portal is a state the client can explain; an endless fight is not.
+
+**Why a horizon rather than a representation that survives.** `bossHp` overflows at realm 301, but `enemyHp` follows at 330, `gearPower` at 331, `enemyGold` at 333 and `levelCost` at 341. Carrying `bossHp` in a mantissa/exponent pair buys 30 realms and leaves the wall standing, so a real fix is a big-number representation through the whole economy — an M2+ project with its own determinism contract, not a guard. The guard is what makes the wall a defined edge instead of a hang.
+
+**It is reachable.** A 90-day run at 3 seeds reaches **realm 302**. This is a real endgame boundary at roughly three months of steady play, not a theoretical one. `packages/core/test/magnitude.test.ts` pins entry succeeding at realm 300 and refusing at 301, 302, 400 and 5000, with the Road left untouched by the refusal.

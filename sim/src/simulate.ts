@@ -22,6 +22,7 @@ import {
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
+import { totalEarned } from './probes';
 import { CAP_RATE, runActive, runIdle, SEC_PER_DAY, strikeTimes, type RunHooks } from './policy';
 import type {
   BreachKind,
@@ -85,6 +86,9 @@ export interface RunResult {
   shopSamples: ShopSample[];
   /** Total tree ranks over time — when permanent power actually arrived. */
   rankTrail: { timeSec: number; treeRanks: number }[];
+  earnedTrail: { timeSec: number; earned: number }[];
+  /** Realm whose guardian is unwinnable, if the run reached the frontier. */
+  frontierRealm: number | null;
 }
 
 export function clone(s: GameState): GameState {
@@ -254,6 +258,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
   const roadStates: GameState[] = [];
   const shopSamples: ShopSample[] = [];
   const rankTrail: { timeSec: number; treeRanks: number }[] = [];
+  const earnedTrail: { timeSec: number; earned: number }[] = [];
 
   // Tree depth is a property of the state, not of who bought it: ranks are also
   // bought between sessions, where no purchase hook fires.
@@ -269,6 +274,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
   let totalActiveSec = 0;
   let stop = false;
   let overfarmUntilSec: number | null = null;
+  let frontierRealm: number | null = null;
   let nextSampleAt = 0;
   let nextRoadStateAt = 0;
 
@@ -294,7 +300,15 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
       return; // the preview says this fight is not worth committing to yet
     }
     const res = enterPortal(state);
-    if (!res.entered) return;
+    if (!res.entered) {
+      // Past the overflow frontier no guardian can be felled, so the run has
+      // reached the end of the playable ladder rather than stalled in it.
+      if (res.reason === 'unwinnable') {
+        frontierRealm = state.realm;
+        stop = true;
+      }
+      return;
+    }
     r.portalEnterSec = state.timeSec;
     r.roadSec = state.timeSec - r.startSec;
     r.gearPowerAtEntry = gearPowerTotal(state.gear);
@@ -350,6 +364,9 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
       if (opts.entry === 'prompt') maybeEnter();
       const r = current();
       if (state.gold > r.goldPeak) r.goldPeak = state.gold;
+      if (state.timeSec >= nextSampleAt) {
+        earnedTrail.push({ timeSec: state.timeSec, earned: totalEarned(state) });
+      }
       if (state.timeSec >= nextSampleAt && samples.length < 5000) {
         samples.push(sampleOf(state));
         nextSampleAt = state.timeSec + sampleEvery;
@@ -407,6 +424,8 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     roadStates,
     shopSamples,
     rankTrail,
+    earnedTrail,
+    frontierRealm,
   };
 }
 

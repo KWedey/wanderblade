@@ -170,6 +170,8 @@ export interface SeedResult {
     roadGoldGained: number;
     etaImprovement: number;
   } | null;
+  /** Realm whose guardian is unwinnable, if the headline run reached the frontier. */
+  frontierRealm: number | null;
   /** How much the upgrade panel offered across the run. */
   spendDepth: SpendDepth;
   /** Time parked on an open portal, and how far realm cadence degraded. */

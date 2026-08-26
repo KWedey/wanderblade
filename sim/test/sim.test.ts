@@ -261,6 +261,7 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     portalReachSec: { idle: null, active: null },
     promptVsOverfarm: null,
     abandonProbe: null,
+    frontierRealm: main.frontierRealm,
     spendDepth: spendDepth(main.shopSamples),
     deadTime: deadTime(main.realms),
     permanentUplift: null,

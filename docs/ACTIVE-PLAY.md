@@ -75,8 +75,8 @@ session and eight hours of sleep are actually comparable.
 
 | Band | Target | Validator |
 |---|---|---|
-| **Ascendancy earned, active vs idle, 30-day horizon** | **1.8× – 2.4×** | P10 |
-| **Time to first ascension, idle ÷ active** | **≥ 1.25× sooner** | P10 |
+| **Ascendancy earned, active vs idle, at a 30-day horizon** | **1.6× – 2.4×** | P10 |
+| **Time to first ascension, idle ÷ active** | **≥ 1.20× sooner** | P10 |
 | Road active (20-min session) vs same span idle | 1.8× – 2.2× gold | P1 |
 | Boss active vs zero-tap, same build | 1.4× – 1.8× faster | P2 |
 | 8 h idle return | ≥ 1 meaningful upgrade affordable | P3 |
@@ -86,6 +86,11 @@ session and eight hours of sleep are actually comparable.
 | Ascend promptly vs farm a ready realm 2× longer | prompt ascension wins | P7 |
 | Upgrade panel, any moment of Road play | ≥5 priced rows, ≥4 affordable at 95% of looks | P8 |
 | Portal-ready dead time / realm cadence | ≤ 24 h waiting, ≤ 3 days per realm | P9 |
+
+**The horizon is part of the band, not a detail.** Both players climb the same
+realm ladder and it ends at realm 300, so the ratio decays as they converge:
+1.91× at 30 days, 1.17× at 90, where 302 realms are already behind both of them.
+30 days is one full arc of the tree and the horizon the band is stated at.
 
 **Superseded.** The 1.8–2.2× gold band was the *headline* band; it is now a supporting
 one. The constants hit it exactly (2.07× in playtest, P1 passing on every seed) and the

@@ -17,10 +17,6 @@ export {
   rD,
   levelCostBase,
   rC,
-  skillCostBase,
-  skillCostRate,
-  SKILL_MAX_BONUS,
-  SKILL_RANK_DECAY,
   gearPowerBase,
   gearPowerRate,
   dropChance,
@@ -58,12 +54,15 @@ export {
   ASC_NODE_IDS,
   SKILLS,
   SKILL_IDS,
+  SKILL_MULT_CEILING,
 } from './constants';
 export type { AscNodeDef, SkillDef } from './constants';
 
 // --- Types ---------------------------------------------------------------
 export type {
   ArcPoint,
+  PortalEntry,
+  PortalRefusal,
   Strike,
   Rarity,
   GearSlot,

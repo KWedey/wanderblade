@@ -31,19 +31,6 @@ export const rD = 1.12;
 export const levelCostBase = 10;
 export const rC = 1.15;
 
-/** Skill rank cost: skillCost(rank) = skillCostBase * skillCostRate^rank. */
-export const skillCostBase = 50;
-export const skillCostRate = 1.15;
-
-/**
- * A skill's DPS factor approaches `1 + SKILL_MAX_BONUS` as its rank rises,
- * closing the remaining gap by `1 - SKILL_RANK_DECAY` each rank. Ranks are
- * uncapped: the asymptote is what keeps `skillMult` bounded, so the panel never
- * has to show MAX and the player always has a priced row to buy.
- */
-export const SKILL_MAX_BONUS = 0.176;
-export const SKILL_RANK_DECAY = 0.85;
-
 // --- Gear (the primary realm-local power scaler) -------------------------
 /** Drop power: gearPowerBase * REALM_STEP^realm * gearPowerRate^z * rarityMult. */
 export const gearPowerBase = 2;
@@ -253,19 +240,52 @@ export interface SkillDef {
   name: string;
   /** Hero level at which the skill becomes purchasable. */
   unlockLevel: number;
+  /** Rank-0 price, before the realm scale. */
+  costBase: number;
+  /** Price of rank n is costBase * costRate^n — the skill's own geometry. */
+  costRate: number;
+  /** The DPS factor this skill approaches: 1 + maxBonus, never past it. */
+  maxBonus: number;
+  /** Fraction of the gap left standing per rank. Lower matures faster. */
+  decay: number;
 }
 
 /**
  * Five tracks, two of them live from level 0, the rest arriving inside the
  * first few minutes. Breadth is the point: the panel must answer "what do I
  * spend on next" without a greyed lock being the answer.
+ *
+ * Each track has its own price and its own curve, so they are not five copies
+ * of one decision. Cheap-and-shallow through dear-and-deep: Cleave is the row
+ * a broke hero can always afford and stops paying early; Sunder costs six
+ * times as much at rank 0 but has the slowest price growth and the highest
+ * ceiling, so it is the track a rich hero keeps feeding. Second Wind is a
+ * burst — expensive, small, and almost fully paid out by rank 10.
+ *
+ * The ceilings multiply to 2.25x, the same total the uniform tracks reached,
+ * so differentiating them moved no pacing band.
  */
 export const SKILLS: Record<string, SkillDef> = {
-  cleave: { id: 'cleave', name: 'Cleave', unlockLevel: 0 },
-  warcry: { id: 'warcry', name: 'Warcry', unlockLevel: 0 },
-  riposte: { id: 'riposte', name: 'Riposte', unlockLevel: 2 },
-  sunder: { id: 'sunder', name: 'Sunder', unlockLevel: 6 },
-  secondWind: { id: 'secondWind', name: 'Second Wind', unlockLevel: 14 },
+  cleave: {
+    id: 'cleave', name: 'Cleave', unlockLevel: 0,
+    costBase: 35, costRate: 1.12, maxBonus: 0.12, decay: 0.78,
+  },
+  warcry: {
+    id: 'warcry', name: 'Warcry', unlockLevel: 0,
+    costBase: 60, costRate: 1.19, maxBonus: 0.23, decay: 0.93,
+  },
+  riposte: {
+    id: 'riposte', name: 'Riposte', unlockLevel: 2,
+    costBase: 110, costRate: 1.15, maxBonus: 0.17, decay: 0.86,
+  },
+  sunder: {
+    id: 'sunder', name: 'Sunder', unlockLevel: 6,
+    costBase: 190, costRate: 1.13, maxBonus: 0.27, decay: 0.95,
+  },
+  secondWind: {
+    id: 'secondWind', name: 'Second Wind', unlockLevel: 14,
+    costBase: 300, costRate: 1.21, maxBonus: 0.10, decay: 0.72,
+  },
 };
 
 /** Ordered skill ids (stable order → deterministic skillMult product). */
@@ -276,3 +296,9 @@ export const SKILL_IDS: readonly string[] = [
   'sunder',
   'secondWind',
 ];
+
+/** The ceiling `skillMult` approaches with every track at infinite rank. */
+export const SKILL_MULT_CEILING = SKILL_IDS.reduce(
+  (m, id) => m * (1 + (SKILLS[id]?.maxBonus ?? 0)),
+  1,
+);
