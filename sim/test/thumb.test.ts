@@ -47,16 +47,23 @@ describe('what the thumb costs', () => {
     expect(rates[1]!).toBeGreaterThan(rates[2]!);
   });
 
-  // The finding this harness exists to protect. A coin at its apex has no
-  // vertical speed, so a late strike still lands inside the catch radius; the
-  // same strike aimed at a coin about to touch down misses by the height it
-  // fell. Same mechanic, same latency, two different games.
-  it('is far more forgiving of lag at the apex than near landing', () => {
+  // This harness found the cliff: a fixed catch radius forgave a late strike at
+  // the apex, where vertical speed is zero, and nothing near the ground, where
+  // it is highest. DECISIONS.md #35 made the window constant in time instead,
+  // so the mercy is the same number of milliseconds everywhere on the arc.
+  // Subsumed by packages/core/test/thumb.test.ts, which holds both tables.
+  it('forgives lag near landing as readily as at the apex', () => {
     const warm = warmState(OPTS.seed);
     const at = (pick: 'landing' | 'apex'): number =>
       runThumb(thumb({ latencyMs: 250, pick }), OPTS, warm).catchRate;
-    expect(at('apex')).toBeGreaterThan(0.5);
-    expect(at('landing')).toBeLessThan(0.2);
+    const apex = at('apex');
+    const landing = at('landing');
+    expect(apex).toBeGreaterThan(0.5);
+    expect(landing).toBeGreaterThan(0.5);
+    // Measured 1.65 here. The assertion this replaces required apex > 0.5 and
+    // landing < 0.2, so the fixed radius could not do better than 2.5x. The bar
+    // sits between the two: it cannot pass if the cliff returns.
+    expect(apex / landing).toBeLessThan(2);
   });
 });
 

@@ -7,7 +7,6 @@
 import {
   advance,
   arcPositionAt,
-  ARC_CATCH_RADIUS,
   ARC_FLIGHT_SEC,
   createRng,
   initialState,
@@ -53,7 +52,9 @@ export interface ThumbResult {
   /** Multiple of the same state left alone for the same span. */
   vsIdle: number;
   /** Scatter expressed against the window it has to land in. */
-  scatterRadii: number;
+  /** Aim scatter in arc-space units. The catch radius is no longer a constant
+   * (DECISIONS.md #35), so this cannot be expressed as a multiple of one. */
+  scatterUnits: number;
 }
 
 /**
@@ -182,7 +183,7 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
     catchRate: aimed > 0 ? catches / aimed : 0,
     goldPerSec,
     vsIdle: idle > 0 ? goldPerSec / idle : 0,
-    scatterRadii: scatter / ARC_CATCH_RADIUS,
+    scatterUnits: scatter,
   };
 }
 
@@ -219,7 +220,7 @@ function averaged(thumb: Thumb, opts: SweepOptions, warms: GameState[]): ThumbRe
     catchRate: mean((r) => r.catchRate),
     goldPerSec: mean((r) => r.goldPerSec),
     vsIdle: mean((r) => r.vsIdle),
-    scatterRadii: runs[0]!.scatterRadii,
+    scatterUnits: runs[0]!.scatterUnits,
   };
 }
 

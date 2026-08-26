@@ -2,7 +2,7 @@
 // thumb costs. Re-run this whenever arc flight, catch radius, coins per kill,
 // or tap cadence changes; the answer moves with all four.
 
-import { ARC_CATCH_RADIUS, ARC_FLIGHT_SEC } from '@wanderblade/core';
+import { ARC_CATCH_SEC, ARC_FLIGHT_SEC } from '@wanderblade/core';
 import { DEFAULT_PX_PER_UNIT, sweep, type SweepAxes, type ThumbResult } from './thumb';
 
 const DEFAULTS = {
@@ -33,7 +33,8 @@ const HELP = `Wanderblade thumb harness — catch rate against human reaction an
   --csv              machine-readable rows instead of the table
   --help             this message
 
-Catch radius is ${ARC_CATCH_RADIUS} arc-space units; arcs fly for ${ARC_FLIGHT_SEC}s.
+Catch radius is ${ARC_CATCH_SEC}s of the coin's own travel, so it widens as the
+coin falls; arcs fly for ${ARC_FLIGHT_SEC}s. Scatter is in arc-space units.
 A perfect oracle is --latency 0 --scatter 0, or any latency at --lead 1.`;
 
 function numList(raw: string | undefined, flag: string): number[] {
@@ -69,7 +70,7 @@ function table(rows: ThumbResult[]): string {
     r.thumb.lead.toFixed(2),
     `${r.thumb.latencyMs}ms`,
     `${r.thumb.scatterPx}px`,
-    r.scatterRadii.toFixed(2),
+    r.scatterUnits.toFixed(2),
     pct(r.catchRate),
     gold(r.goldPerSec),
     `${r.vsIdle.toFixed(2)}x`,
@@ -152,7 +153,7 @@ function main(argv: readonly string[]): void {
 
   const rows = sweep(axes, { seed, seconds, pxPerUnit, seeds });
   if (csv) {
-    console.log('tapsPerSec,pick,lead,latencyMs,scatterPx,scatterRadii,catchRate,goldPerSec,vsIdle');
+    console.log('tapsPerSec,pick,lead,latencyMs,scatterPx,scatterUnits,catchRate,goldPerSec,vsIdle');
     for (const r of rows) {
       console.log(
         [
@@ -161,7 +162,7 @@ function main(argv: readonly string[]): void {
           r.thumb.lead,
           r.thumb.latencyMs,
           r.thumb.scatterPx,
-          r.scatterRadii.toFixed(4),
+          r.scatterUnits.toFixed(4),
           r.catchRate.toFixed(4),
           r.goldPerSec.toFixed(0),
           r.vsIdle.toFixed(4),

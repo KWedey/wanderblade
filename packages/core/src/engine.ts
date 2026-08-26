@@ -548,7 +548,9 @@ export function serialize(state: GameState): string {
 /** Parse a state produced by `serialize`. */
 export function deserialize(json: string): GameState {
   const state = JSON.parse(json) as GameState;
-  state.collection.speciesKills ??= [];
+  // A save older than the whole collection block must survive to the app's
+  // backfill; throwing here discards the run instead.
+  if (state.collection) state.collection.speciesKills ??= [];
   return state;
 }
 

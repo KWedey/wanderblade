@@ -87,6 +87,7 @@ function backfill(v: unknown): void {
   }
   if (isObject(v.collection)) {
     for (const key of ['bossTrophies', 'gearFound', 'zonesCleared']) fill(v.collection, key, 0);
+    fill(v.collection, 'speciesKills', []);
   }
   if (isObject(v.lifetime)) {
     for (const key of ['kills', 'goldEarned', 'ascensions']) fill(v.lifetime, key, 0);
