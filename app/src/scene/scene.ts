@@ -32,6 +32,8 @@ import {
   HERO_INK,
   LOOT_INK,
   OUTLINE_INK,
+  backdropSkin,
+  groundBladeOf,
   REALM_SKIN_COUNT,
   lighten,
   mixHex,
@@ -314,15 +316,18 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     if (cached) return cached;
     const skin = realmSkin(key);
     const sInk = sceneryInk(skin);
+    // The treeline stands behind everything that matters; it bakes off the
+    // graded skin so the sprite plane has something to read against.
+    const bInk = sceneryInk(backdropSkin(skin));
     const built: SkinnedSprites = {
       monsters: MONSTER_SHAPES.map((m, i) => bakeSprite(m, monsterInk(skin, i))),
-      trees: [TREE, TREE_TALL, TREE_WIDE].map((t) => bakeSprite(t, sInk)),
+      trees: [TREE, TREE_TALL, TREE_WIDE].map((t) => bakeSprite(t, bInk)),
       rock: bakeSprite(ROCK, sInk),
       fence: bakeSprite(FENCE, sInk),
       tuft: bakeSprite(TUFT, sInk),
       flower: bakeSprite(FLOWER, sInk),
       fern: bakeSprite(FERN, sInk),
-      birds: [BIRD_UP, BIRD_DOWN].map((b) => bakeSprite(b, sInk)),
+      birds: [BIRD_UP, BIRD_DOWN].map((b) => bakeSprite(b, bInk)),
     };
     skinCache.set(key, built);
     return built;
@@ -955,19 +960,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     ctx.fillStyle = skin.soilDark;
     ctx.fillRect(0, groundY + turfH, vw, 2);
 
+    const blade = groundBladeOf(skin);
     // Blade texture over the whole turf band — the single biggest reason a flat
     // fill reads as ground rather than as a colored rectangle. Positions are
     // baked by buildGroundTexture(); only the scroll offset moves per frame.
     for (const b of groundBlades) {
       const x = Math.floor(wrap(b.x0 - scrollGround, PROP_SPAN));
       if (x > vw) continue;
-      ctx.fillStyle = b.toneAlt ? skin.turfLip : skin.grassBlade;
+      ctx.fillStyle = b.toneAlt ? skin.turfLip : blade;
       ctx.fillRect(x, b.y, 1, b.tall ? 3 : 2);
       if (b.dot) ctx.fillRect(x + 1, b.y + 1, 1, 1);
     }
     // Fringe standing proud of the horizon line. Its own fill: the blade loop
     // above leaves fillStyle on whichever tone it happened to end on.
-    ctx.fillStyle = skin.grassBlade;
+    ctx.fillStyle = blade;
     for (const f of groundFringe) {
       const x = Math.floor(wrap(f.x0 - scrollGround, PROP_SPAN));
       if (x > vw) continue;
@@ -1520,14 +1526,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, vw, vh);
 
+    const far = backdropSkin(skin);
     drawSky(skin);
     drawClouds(skin);
     drawBirds(sprites);
-    drawRange(skin);
-    drawHills(skin.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4);
-    drawHills(skin.hillNear, skin.hillLip, scrollHillNear, groundY * 0.11, groundY * 0.18, 1.7, 3);
-    drawGrove(skin);
-    drawDrift(skin);
+    drawRange(far);
+    drawHills(far.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4);
+    drawHills(far.hillNear, far.hillLip, scrollHillNear, groundY * 0.11, groundY * 0.18, 1.7, 3);
+    drawGrove(far);
+    drawDrift(far);
     drawTreeline(sprites);
 
     const jolt = model.reduceMotion ? { x: 0, y: 0 } : shakeOffset(shake, clockSec);

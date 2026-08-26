@@ -444,6 +444,88 @@ export const LOOT_INK: InkSet = {
 };
 
 /** Scenery + monster inks derived from a realm skin. */
+/**
+ * Depth grade. The value floor lifted every band together, so a late realm
+ * read as "one lavender value - no foreground/background separation at all".
+ * Separation is a relationship between layers, so the scenery behind the
+ * sprite plane is pushed back and the sprite plane is left alone.
+ */
+export const DEPTH_RECESSION = {
+  range: 0.46,
+  hillFar: 0.38,
+  hillNear: 0.3,
+  treeline: 0.35,
+} as const;
+
+/** Minimum lightness a monster's body must hold over the treeline behind it. */
+export const MIN_SPRITE_BACKDROP_GAP = 0.16;
+
+/** The colour distance itself is graded toward: the realm's own deep earth. */
+export function depthHaze(skin: RealmSkin): string {
+  return mixHex(skin.soilDark, '#000000', 0.45);
+}
+
+function recede(color: string, skin: RealmSkin, amount: number): string {
+  return mixHex(color, depthHaze(skin), amount);
+}
+
+/**
+ * Extra recession needed on top of DEPTH_RECESSION.treeline before the darkest
+ * monster body clears the canopy behind it. Zero when the gap already holds.
+ */
+export function backdropRecession(skin: RealmSkin): number {
+  // Against the body tone, not the shading tone: the body is what fills the
+  // silhouette, and a shadow facet is meant to be dark.
+  const body = lightnessOf(skin.monBody);
+  let amount = DEPTH_RECESSION.treeline;
+  for (let step = 0; step < 40; step++) {
+    const gap = body - lightnessOf(recede(skin.leaf, skin, amount));
+    if (gap >= MIN_SPRITE_BACKDROP_GAP || amount >= 0.94) break;
+    amount += 0.04;
+  }
+  return amount;
+}
+
+const backdropCache = new WeakMap<RealmSkin, RealmSkin>();
+
+/** Bands the camera never reaches, graded back so the sprite plane reads. */
+export function backdropSkin(skin: RealmSkin): RealmSkin {
+  const hit = backdropCache.get(skin);
+  if (hit) return hit;
+  const treeline = backdropRecession(skin);
+  const graded: RealmSkin = {
+    ...skin,
+    range: recede(skin.range, skin, DEPTH_RECESSION.range),
+    hillFar: recede(skin.hillFar, skin, DEPTH_RECESSION.hillFar),
+    hillNear: recede(skin.hillNear, skin, DEPTH_RECESSION.hillNear),
+    hillLip: recede(skin.hillLip, skin, DEPTH_RECESSION.hillNear),
+    leaf: recede(skin.leaf, skin, treeline),
+    leafDark: recede(skin.leafDark, skin, treeline),
+    bark: recede(skin.bark, skin, treeline),
+  };
+  backdropCache.set(skin, graded);
+  return graded;
+}
+
+/**
+ * Ceiling on how far ground texture may stray from the turf under it. Blade
+ * tones were hand-authored accents, so the road read as "a confetti field that
+ * fights the sprites": texture modulates a surface, it does not compete with
+ * the things standing on it.
+ */
+export const MAX_TEXTURE_CONTRAST = 0.14;
+
+/** The blade tone pulled back toward its turf until it stops shouting. */
+export function groundBladeOf(skin: RealmSkin): string {
+  let blade = skin.grassBlade;
+  const turf = lightnessOf(skin.turf);
+  for (let step = 0; step < 24; step++) {
+    if (Math.abs(lightnessOf(blade) - turf) <= MAX_TEXTURE_CONTRAST) break;
+    blade = mixHex(blade, skin.turf, 0.18);
+  }
+  return blade;
+}
+
 export function sceneryInk(skin: RealmSkin): InkSet {
   return {
     outline: INK.black,
