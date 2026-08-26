@@ -70,14 +70,28 @@ describe('bitmap font', () => {
 });
 
 describe('sculpt', () => {
+  const BODY_LEGEND = { o: 'outline', b: 'body', B: 'bodyDark', h: 'bodyLight', S: 'bodySpec' };
+
   it('bands a body by its distance from the light', () => {
     const lit = sculpt({
-      rows: ['.....', '.bbb.', '.bbb.', '.bbb.', '.....'],
-      legend: { o: 'outline', b: 'body', B: 'bodyDark', h: 'bodyLight', S: 'bodySpec' },
+      rows: ['.......', '.bbbbb.', '.bbbbb.', '.bbbbb.', '.bbbbb.', '.bbbbb.', '.......'],
+      legend: BODY_LEGEND,
     });
     // The upper-left contour catches the light; depth grows away from it.
     expect(lit.rows[1]![1]).toBe('S');
     expect(lit.rows[2]![2]).toBe('h');
+  });
+
+  // Depth banding alone runs a limb at one value front to back. The flank the
+  // form turns away on has to darken, or the creature reads as a flat cutout.
+  it('darkens the away flank without eating the lit contour', () => {
+    const lit = sculpt({
+      rows: ['.......', '.bbbbb.', '.bbbbb.', '.bbbbb.', '.bbbbb.', '.bbbbb.', '.......'],
+      legend: BODY_LEGEND,
+    });
+    expect(lit.rows[5]![5], 'bottom-right of the form').toBe('B');
+    expect(lit.rows[3]![5], 'right flank').toBe('B');
+    expect(lit.rows[1]![1], 'lit corner keeps its specular').toBe('S');
   });
 
   it('keeps the authored silhouette and only adds ink around it', () => {
@@ -157,6 +171,40 @@ describe('creatures read as dangerous', () => {
     for (const [i, map] of MONSTER_SILHOUETTES.entries()) {
       const mirrored = map.rows.map((r) => [...r].reverse().join(''));
       expect(mirrored, `shape ${i} is mirror-symmetric`).not.toEqual(map.rows);
+    }
+  });
+
+  // The judged failure: "a man standing next to a shrub". A creature shorter
+  // than the hero cannot read as his opponent however well it is drawn.
+  it('stands at least as tall as the hero', () => {
+    const heroH = ALL_SPRITE_MAPS.HERO_WALK_A!.rows.length;
+    for (const [i, map] of MONSTER_SILHOUETTES.entries()) {
+      expect(map.rows.length, `shape ${i} is shorter than the hero`).toBeGreaterThanOrEqual(heroH);
+    }
+  });
+
+  it('carries its mass up top rather than pooling at the feet', () => {
+    for (const [i, map] of MONSTER_SILHOUETTES.entries()) {
+      const widths = map.rows.map((row) => [...row].filter((c) => c !== '.').length);
+      const half = Math.floor(widths.length / 2);
+      const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+      expect(mean(widths.slice(0, half)), `shape ${i} is bottom-heavy`).toBeGreaterThan(
+        mean(widths.slice(half)),
+      );
+    }
+  });
+
+  // "Legs with visible separation" - a floor-standing mass with one unbroken
+  // bottom run is a cone that hangs, not a body that stands.
+  it('stands on legs with open air between them', () => {
+    for (const [i, map] of MONSTER_SILHOUETTES.entries()) {
+      const bottom = map.rows.slice(-Math.max(3, Math.round(map.rows.length * 0.2)));
+      const split = bottom.filter((row) => {
+        const first = [...row].findIndex((c) => c !== '.');
+        const last = row.length - 1 - [...row].reverse().findIndex((c) => c !== '.');
+        return first >= 0 && row.slice(first, last + 1).includes('.');
+      });
+      expect(split.length, `shape ${i} has no leg gap`).toBe(bottom.length);
     }
   });
 

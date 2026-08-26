@@ -149,98 +149,130 @@ export const MON_GOLEM: SpriteMap = {
   legend: MONSTER_LEGEND,
 };
 
-/** 14x28 - stilt-legged and folded forward, one shoulder blade standing proud. */
+/** 18x30 - stilt-legged and folded forward, one shoulder blade standing proud. */
 export const MON_STALKER: SpriteMap = {
   rows: [
-    '....b..bbbbb..',
-    '.....b.bbbbb..',
-    '......bbbbbbb.',
-    '.....bbEEbEEb.',
-    '..bb.bbbbbbbb.',
-    '..bbbbbbtttt..',
-    '..bbbbbbbbbb..',
-    '...bbbbb......',
-    '.bbbbbbb.bbb..',
-    '.bbbbbbbbbbb..',
-    '.bbbbbbbbbbb..',
-    '.bbbbbbbb.bbb.',
-    'bbbbbbbbb.bbb.',
-    'bbbbbbbbb.bbb.',
-    'bbb.bbbbb.bbbb',
-    'b.b.bbbbb.bbbb',
-    '....bbbbb.b.b.',
-    '...bbbbbbb....',
-    '...bbbbbbb....',
-    '...bbbbbbb....',
-    '...bbb..bbb...',
-    '...bbb..bbb...',
-    '...bbb..bbb...',
-    '...bbb..bbb...',
-    '...bbb...bbb..',
-    '..bbbb...bbb..',
-    '..bbbb...bbbbb',
-    '..bbbb...bbbbb',
+    '.....bb...........',
+    '....bbbb..bb......',
+    '...bbbbbbbbbb.....',
+    '..bbbbbbbbbbbbb...',
+    '..bbbbbbbbbbbbbb..',
+    '.bbbbbbbbbbbbbbbb.',
+    '.bbbbbbbbEEbEEbbb.',
+    '.bbbbbbbbbbbbbbbb.',
+    'bbbbbbbbbbbtttttb.',
+    'bbbbbbbbbbbbttttb.',
+    'bbbbbbbbbbbbbbbb..',
+    'bbbbbbbbbbbbbbb...',
+    '.bbbbbbbbbbbbbb...',
+    '.bbbbbbbbbbbbbbb..',
+    '..bbbbbbbbbbbbbb..',
+    '..bbbbbbbbbbbbb...',
+    '..bbbbbbbbbbbb....',
+    '...bbbbbbbbbbb....',
+    '...bbbbbbbbbb.....',
+    '...bbbb..bbbbb....',
+    '..bbbb....bbbb....',
+    '..bbbb....bbbb....',
+    '..bbbb....bbbb....',
+    '.bbbb.....bbbb....',
+    '.bbbb.....bbbbb...',
+    '.bbbb......bbbb...',
+    'bbbbb......bbbb...',
+    'bbbbb......bbbbb..',
+    'bbbbbb....bbbbbbb.',
+    'bbbbbb....bbbbbbb.',
   ],
   legend: MONSTER_LEGEND,
 };
 
-/** 30x14 - low and long, head carried down, hackles crested over the shoulders. */
+/** 30x22 - low and long, head carried down, hackles crested over the shoulders. */
 export const MON_HOUND: SpriteMap = {
   rows: [
-    '..........bb..bb..............',
-    '........bbbbbbbb..............',
-    '......bbbbbbbbbbbb....b.......',
-    '......bbbbbbbbbbbb..b.........',
-    '.bb.bbbbbbbbbbbbbbbbbbbbbbbb..',
-    'bbbbbbbbbbbbbbbbbbbbbbbEEbEE..',
-    'bbbbbbbbbbbbbbbbbbbbbbbbbbbb..',
-    '...bbbbbbbbbbbbbbbbbbb.bbbbbbb',
-    '....bbbbbbbbbbbbbbbbb..bbttttt',
-    '....bbbbbb...bbb.bbb....bbbbb.',
-    '....bbbbbb...bbb.bbb..........',
-    '....bbbbbb...bbb.bbb..........',
-    '...bbbbbbb...bbbbbbb..........',
-    '...bbbbbbb...bbbbbbb..........',
+    '..............bb..............',
+    '............bbbbbb............',
+    '.........bbbbbbbbbbb..........',
+    '.......bbbbbbbbbbbbbbb...b....',
+    '.....bbbbbbbbbbbbbbbbbbbbb....',
+    '...bbbbbbbbbbbbbbbbbbbbbbbbb..',
+    '..bbbbbbbbbbbbbbbbbbbbbbbbbbb.',
+    '.bbbbbbbbbbbbbbbbbbbbbbEEbEEb.',
+    '.bbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    'bbbbbbbbbbbbbbbbbbbbbbbbtttttt',
+    '.bbbbbbbbbbbbbbbbbbbbbbbtttt..',
+    '.bbbbbbbbbbbbbbbbbbbbbbbb.....',
+    '..bbbbbbbbbbbbbbbbbbbbbb......',
+    '...bbbbbbbbbbbbbbbbbbbb.......',
+    '...bbbbbb....bbb..bbbbb.......',
+    '..bbbbbb.....bbb..bbbbb.......',
+    '..bbbbb......bbb...bbbb.......',
+    '..bbbbb......bbb...bbbb.......',
+    '.bbbbbb......bbb...bbbbb......',
+    'bbbbbbb.....bbbbb..bbbbbb.....',
+    'bbbbbbb.....bbbbb..bbbbbb.....',
   ],
   legend: MONSTER_LEGEND,
 };
 
-/** 20x14 - a crawler hauling itself forward on one knuckled forelimb. */
+/** 22x26 - a slouching brute that hauls its own weight forward on two thick legs. */
 export const MON_OOZE: SpriteMap = {
   rows: [
-    '.........bb.........',
-    '.....bb..bb..b......',
-    '.....bb..bbbbbbbbb..',
-    '....bbb....bEEbEEb..',
-    '.bbb.bb....bbbbbbb..',
-    '.bbbbbbbbbbbbbbbbbbt',
-    'bbbbbbbbbbbbbbttttt.',
-    '.bbbbbbbbbbbb.bbb...',
-    '..bbbbbbbbbbb.bbb...',
-    '..bbbbbbbbbbb.bbb...',
-    '..bbbbbbbbbb.bbbbb..',
-    '...bbbbbbbbb.bbbbb..',
-    '...bbbbbb....b.b.b..',
-    '...b..bb.......b....',
+    '.......bbbb...........',
+    '......bbbbbb..b.......',
+    '.....bbbbbbbbbbb......',
+    '....bbbbbbbbbbbbbb....',
+    '...bbbbbbbbbbbbbbbb...',
+    '...bbbbbbbbbbbbbbbbb..',
+    '..bbbbbbbbbEEbbEEbbbb.',
+    '..bbbbbbbbbbbbbbbbbbb.',
+    '..bbbbbbbbbbbtttttttb.',
+    '..bbbbbbbbbbbbtttttt..',
+    '.bbbbbbbbbbbbbbbbbb...',
+    '.bbbbbbbbbbbbbbbbb....',
+    'bbbbbbbbbbbbbbbbbb....',
+    'bbbbbbbbbbbbbbbbbbb...',
+    '.bbbbbbbbbbbbbbbbbb...',
+    '..bbbbbbbbbbbbbbbb....',
+    '...bbbbbbbbbbbbbb.....',
+    '...bbbbbb..bbbbbb.....',
+    '..bbbbbb....bbbbbb....',
+    '..bbbbb.....bbbbbb....',
+    '..bbbbb.....bbbbb.....',
+    '..bbbbb.....bbbbb.....',
+    '.bbbbbb.....bbbbbb....',
+    '.bbbbbb.....bbbbbb....',
+    'bbbbbbbb...bbbbbbbb...',
+    'bbbbbbbb...bbbbbbbb...',
   ],
   legend: MONSTER_LEGEND,
 };
 
-/** 12x12 - never alone; the scene spawns these in threes. All jaw and spine. */
+/** 14x22 - never alone; the scene spawns these in threes. All jaw and spine. */
 export const MON_SWARMLING: SpriteMap = {
   rows: [
-    '...b........',
-    '...b..b.....',
-    '..bb..bb.b..',
-    '.....bbbbbb.',
-    '..bbbbEEbEE.',
-    '..bbbbbbbbb.',
-    'bbbbbbbbbbbb',
-    'bbbbbbbttttt',
-    '..bbbb.....t',
-    '.b.bbb.bbb..',
-    '...bbb.bbb..',
-    '...b.b.b.b..',
+    '.....bb.......',
+    '....bbbb..b...',
+    '...bbbbbbbb...',
+    '..bbbbbbbbbb..',
+    '..bbbbbbbbbbb.',
+    '.bbbbbbEEbEEb.',
+    '.bbbbbbbbbbbbb',
+    '.bbbbbbbbtttt.',
+    '..bbbbbbbbtt..',
+    '...bbbbbbbb...',
+    '..bbbbbbbbb...',
+    '.bbbbbbbbbbb..',
+    '.bbbbbbbbbbb..',
+    '..bbbbbbbbb...',
+    '..bbbb.bbbb...',
+    '..bbb...bbb...',
+    '..bbb...bbb...',
+    '..bbb...bbbb..',
+    '.bbbb....bbb..',
+    '.bbb.....bbb..',
+    '.bbbb...bbbb..',
+    '.bbbb...bbbb..',
   ],
   legend: MONSTER_LEGEND,
 };
@@ -278,6 +310,17 @@ export function sculpt(map: SpriteMap): SpriteMap {
       if (grid[y]![x] !== 'b') continue;
       const depth = run(x, y, 0, -1) + run(x, y, -1, 0);
       out[y]![x] = depth === 0 ? 'S' : depth <= 2 ? 'h' : depth <= 6 ? 'b' : 'B';
+    }
+  }
+
+  // A shadow side down the away flank. Depth banding alone leaves a limb the
+  // same value from front to back, which is what read as a flat cutout; the
+  // lit contour keeps its specular, everything else darkens where it turns.
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const cell = out[y]![x];
+      if (cell !== 'b' && cell !== 'h') continue;
+      if (!solid(x + 1, y) || !solid(x, y + 1)) out[y]![x] = 'B';
     }
   }
 
