@@ -180,6 +180,11 @@ const BOSS_ENTRANCE_SEC = 1.1;
 const SWINGS_PER_SEC = 1.7;
 
 /** Seconds one animated swing stands for, at `attackSpeedMult`. */
+/** Device pixels per scene pixel, snapped so the display blit is never fractional. */
+export function blitScaleFor(cssW: number, dpr: number, sceneW: number): number {
+  return Math.max(1, Math.round(Math.floor(cssW * dpr) / Math.max(1, sceneW)));
+}
+
 export function swingInterval(attackSpeedMult: number): number {
   return 1 / (SWINGS_PER_SEC * Math.max(0.01, attackSpeedMult));
 }
@@ -555,8 +560,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     buffer.width = vw;
     buffer.height = vh;
 
-    canvas.width = Math.floor(cssW * dpr);
-    canvas.height = Math.floor(cssH * dpr);
+    // Whole device pixels per scene pixel. Our stretch is nearest-neighbour, so
+    // a fractional one duplicates columns unevenly; the element box is
+    // unchanged, leaving the last fraction to the compositor's real filtering.
+    const blit = blitScaleFor(cssW, dpr, vw);
+    canvas.width = vw * blit;
+    canvas.height = vh * blit;
     displayCtx.imageSmoothingEnabled = false;
     ctx.imageSmoothingEnabled = false;
 

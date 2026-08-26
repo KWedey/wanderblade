@@ -28,7 +28,7 @@ import {
   inPocket,
   nudgeFromPocket,
 } from '../src/scene/fx';
-import { damagePerSwing, swingInterval } from '../src/scene/scene';
+import { blitScaleFor, damagePerSwing, swingInterval } from '../src/scene/scene';
 
 /** A core arc launched at t=0, so `arcPositionAt(arc, t)` reads as flight time. */
 function coreArc(killIndex = 3): LootArc {
@@ -347,5 +347,36 @@ describe('payouts landing on the same spot', () => {
 
   it('leaves labels alone — UPGRADED carries no value to add to', () => {
     expect(mergeTargetIndex([run(100, 0)], 'catch', 100, 26)).toBe(-1);
+  });
+})
+
+describe('the display blit', () => {
+  /** cssW, dpr, and the scene width the scene picks at that size. */
+  const CASES: [string, number, number, number][] = [
+    ['iPhone portrait dpr3', 390, 3, 195],
+    ['iPhone portrait dpr2', 390, 2, 195],
+    ['Android portrait dpr3', 360, 3, 180],
+    ['iPhone landscape dpr3', 844, 3, 282],
+    ['judged desktop', 1920, 1, 320],
+    ['odd desktop width', 1517, 1, 304],
+  ];
+
+  it('is a whole number of device pixels per scene pixel everywhere', () => {
+    for (const [name, cssW, dpr, sceneW] of CASES) {
+      const blit = blitScaleFor(cssW, dpr, sceneW);
+      expect(Number.isInteger(blit), `${name} blits at a fraction`).toBe(true);
+      expect(blit, `${name} blits below 1:1`).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  // The regression: sizing the backing store off cssW * dpr alone gave 8.979
+  // on a landscape phone, and a nearest-neighbour stretch at 8.979 duplicates
+  // some columns nine times and others eight.
+  it('costs less than one scene pixel of width to snap', () => {
+    for (const [name, cssW, dpr, sceneW] of CASES) {
+      const blit = blitScaleFor(cssW, dpr, sceneW);
+      const drift = Math.abs(sceneW * blit - Math.floor(cssW * dpr));
+      expect(drift, `${name} snaps ${drift} device pixels away`).toBeLessThan(blit);
+    }
   });
 })
