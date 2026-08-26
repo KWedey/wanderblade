@@ -48,6 +48,7 @@ import {
   FERN,
   FLOWER,
   GEM,
+  GLYPH_H,
   HERO_WALK_A,
   HERO_WALK_B,
   MONSTER_SHAPES,
@@ -58,6 +59,7 @@ import {
   TREE_TALL,
   TREE_WIDE,
   TUFT,
+  textWidth,
 } from './pixels';
 import {
   bakeSprite,
@@ -67,6 +69,16 @@ import {
   drawText,
   type BakedSprite,
 } from './sprites';
+import {
+  COMBO_LANE,
+  FLOATER_RISE,
+  laneBaseline,
+  LANE_COUNT,
+  LANE_BASE_OFFSET,
+  LANE_STEP,
+  placeRun,
+  type LaneSpan,
+} from './textlane';
 
 /** Everything the scene needs for one frame. All display values; no engine writes. */
 export interface SceneModel {
@@ -164,9 +176,6 @@ const IMPACT_GLOW = '#ffffff';
 
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
-/** How far each tier drifts up over its life. Damage stays close to its
- *  monster; a payout is allowed to travel because nothing owns it. */
-const TIER_RISE: Record<FloaterTier, number> = { payout: 22, catch: 20, damage: 9 };
 const STREAK_SEC = 0.5;
 const CATCH_RADIUS = 26;
 
@@ -405,7 +414,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let heroFlash = 0;
   let dustCooldown = 0;
   let damageTextCooldown = 0;
-  let damageRung = 0;
 
   /**
    * Index 0 is the monster the engine is actually killing; the rest are the
@@ -487,9 +495,31 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     particles.push(p);
   }
 
-  function addFloater(f: Floater): void {
+  const laneY = (lane: number): number => laneBaseline(lane, groundY);
+
+  function floaterSpan(f: Floater): LaneSpan {
+    const w = textWidth(f.text, TIER_SCALE[f.tier]);
+    return { x: f.x - w / 2, w, lane: f.lane };
+  }
+
+  /**
+   * `y` on the incoming floater is a wish, not a position: it picks the lane to
+   * start looking from, and the allocator moves it to the nearest free one.
+   */
+  function addFloater(f: Omit<Floater, 'lane'>): void {
     if (floaters.length >= FLOATER_CAP) floaters.shift();
-    floaters.push(f);
+    const w = textWidth(f.text, TIER_SCALE[f.tier]);
+    const wish = Math.round((groundY - LANE_BASE_OFFSET - f.y) / LANE_STEP);
+    const preferred = Math.max(0, Math.min(LANE_COUNT - 1, wish));
+    const taken = floaters.map(floaterSpan);
+    if (model.momentum > 0.02) taken.push(comboSpan());
+    const { lane, evict } = placeRun(f.x - w / 2, w, taken, LANE_COUNT, 3, preferred);
+    // Descending, so each splice leaves the lower indices valid. The combo
+    // widget rides past the end of `floaters` and is never evictable.
+    for (const index of [...evict].sort((a, b) => b - a)) {
+      if (index < floaters.length) floaters.splice(index, 1);
+    }
+    floaters.push({ ...f, lane });
   }
 
   function burst(x: number, y: number, count: number, colors: string[], speed: number): void {
@@ -579,10 +609,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       // landed. A word floating in open sky belongs to nothing on screen.
       addFloater({
         x: heroX + 6,
-        y: groundY - 26,
+        y: groundY - 30,
         age: 0,
         life: FLOATER_LIFE,
-        text: 'CAUGHT BONUS',
+        text: 'CAUGHT!',
         color: TEXT_CATCH,
         tier: 'catch',
         owned: false,
@@ -634,12 +664,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // Honest: real DPS across the interval this swing represents.
     const damage = model.dps * (1 / (SWINGS_PER_SEC * model.momentumMult));
     if (damage < 0.05) return;
-    // Fixed rungs, not random jitter: two damage numbers never land on the
-    // same pixels, and the eye can follow them upward in order.
-    damageRung = (damageRung + 1) % 3;
     addFloater({
-      x: contactX + 8,
-      y: contactY - damageRung * 5,
+      // Above the monster's head, not beside its ribs: the blade sweeps
+      // through contact height and a number there is inside the arc.
+      x: lead.x + lead.spread,
+      y: groundY - leadHeight - 6,
       age: 0,
       life: 0.5,
       text: formatShort(damage),
@@ -1426,53 +1455,62 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     for (const f of floaters) {
       const life = lifeRemaining(f.age, f.life);
       if (life <= 0) continue;
-      const y = f.y + floaterOffsetY(f.age, f.life, TIER_RISE[f.tier]);
+      const y = laneY(f.lane) + floaterOffsetY(f.age, f.life, FLOATER_RISE);
       drawText(ctx, f.text, f.x, y, TIER_SCALE[f.tier], f.color, OUTLINE_INK, 'center');
     }
+  }
+
+  /** Segments, cells and label on one row: a widget, not a banner. */
+  const COMBO_SEGS = 6;
+  const COMBO_SEG_W = 3;
+  const COMBO_GAP = 1;
+  const COMBO_METER_W = COMBO_SEGS * (COMBO_SEG_W + COMBO_GAP) - COMBO_GAP;
+
+  function comboLabel(): string {
+    return `\u00d7${model.momentumMult.toFixed(1)}`;
+  }
+
+  /** The lane the widget occupies, so floaters route around it. */
+  function comboSpan(): LaneSpan {
+    const w = textWidth(comboLabel(), 1) + 3 + COMBO_METER_W;
+    return { x: Math.floor(heroX + 3 - w / 2), w, lane: COMBO_LANE };
   }
 
   function drawMomentumMeter(skin: RealmSkin): void {
     // Hidden at rest: a full-width empty bar labelled x1.0 is the frame
     // announcing that nothing is happening.
     if (model.momentum <= 0.02) return;
-    const segs = 14;
-    const segW = 4;
-    const segH = 5;
-    const gap = 1;
-    const totalW = segs * (segW + gap) - gap;
-    const cx = Math.floor(heroX + 3);
-    const x = Math.floor(cx - totalW / 2);
-    const y = groundY - 34;
+    const label = comboLabel();
+    const labelW = textWidth(label, 1);
+    const span = comboSpan();
+    const y = laneY(COMBO_LANE);
     const hot = model.momentum > 0.7;
 
+    // Opaque plate: anything that does reach this band reads as behind a
+    // widget rather than as garbled type.
     ctx.fillStyle = OUTLINE_INK;
-    ctx.fillRect(x - 3, y - 3, totalW + 6, segH + 6);
-    const filled = Math.round(model.momentum * segs);
+    ctx.fillRect(span.x - 2, y - 2, span.w + 4, GLYPH_H + 4);
+
+    drawText(ctx, label, span.x, y, 1, hot ? '#ffffff' : skin.accent, null, 'left');
+
+    const meterX = span.x + labelW + 3;
+    const meterY = y + 1;
+    const filled = Math.round(model.momentum * COMBO_SEGS);
     // At rest a row of dark cells reads as broken, not idle. A slow chase
     // light across the empty cells reads as armed and waiting.
-    const chase = model.reduceMotion ? -1 : Math.floor(clockSec * 6) % segs;
-    for (let i = 0; i < segs; i++) {
+    const chase = model.reduceMotion ? -1 : Math.floor(clockSec * 6) % COMBO_SEGS;
+    for (let i = 0; i < COMBO_SEGS; i++) {
       const lit = i < filled;
       const idle = filled === 0 && i === chase;
       ctx.fillStyle = lit
-        ? i >= segs - 3
+        ? i >= COMBO_SEGS - 2
           ? '#ffffff'
           : skin.accent
         : idle
           ? mixHex('#3d3846', skin.accent, 0.55)
           : '#3d3846';
-      ctx.fillRect(x + i * (segW + gap), y, segW, segH);
+      ctx.fillRect(meterX + i * (COMBO_SEG_W + COMBO_GAP), meterY, COMBO_SEG_W, GLYPH_H - 2);
     }
-    drawText(
-      ctx,
-      `COMBO ×${model.momentumMult.toFixed(1)}`,
-      cx,
-      y - 13,
-      1,
-      hot ? '#ffffff' : skin.accent,
-      OUTLINE_INK,
-      'center',
-    );
   }
 
   function draw(): void {

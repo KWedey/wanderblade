@@ -166,6 +166,8 @@ export interface Floater {
   text: string;
   color: string;
   tier: FloaterTier;
+  /** Row index above `y`, so two runs never share pixels. */
+  lane: number;
   /** Belongs to the engaged monster, and dies with it. */
   owned: boolean;
 }
