@@ -233,6 +233,8 @@ const RIM_OFFSETS: readonly (readonly [number, number])[] = [
   [0, -1],
   [0, 1],
 ];
+/** How long a strike keeps the hero's rim flared. */
+const STRIKE_RIM_SEC = 0.06;
 const IMPACT_GLOW = '#ffffff';
 
 /** Floor on the gap between damage numbers, whatever the tap rate. */
@@ -1524,17 +1526,14 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(clockSec * 14) * 0.6);
     // Rim first, sprite over it: a one-pixel halo of the sky's own light so the
     // figure never sinks into whatever value the ground happens to be.
-    ctx.globalAlpha = 0.85;
+    // A strike flares the rim and never touches the body — a white wash over a
+    // figure reads as "this one got hit", and the hero is the one swinging.
+    ctx.globalAlpha = heroFlash > STRIKE_RIM_SEC ? 1 : 0.85;
     for (const [dx, dy] of RIM_OFFSETS) {
       drawSprite(ctx, sprite, heroX + dx, groundY + bob + dy, false, true);
     }
     ctx.globalAlpha = 1;
     drawSprite(ctx, sprite, heroX, groundY + bob, false);
-    if (heroFlash > 0.06) {
-      ctx.globalAlpha = 0.5;
-      drawSprite(ctx, sprite, heroX, groundY + bob, false, true);
-      ctx.globalAlpha = 1;
-    }
 
     // The blade sweeps through a real arc; nearest-neighbour rotation keeps it
     // pixelated rather than feathering into an anti-aliased smear.
