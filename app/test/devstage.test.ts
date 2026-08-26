@@ -1,8 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import { initialState, purchaseOptions } from '@wanderblade/core';
+import { affordableCount, initialState, serialize } from '@wanderblade/core';
 
 import { spendDown, STAGE_PRESETS, stageFromQuery, stageState } from '../src/devstage';
+import { readSave, writeSave } from '../src/save';
+
+// The save layer talks to the global `localStorage`, which Node's test env lacks.
+class MemoryStorage {
+  private readonly map = new Map<string, string>();
+  getItem(key: string): string | null {
+    return this.map.get(key) ?? null;
+  }
+  setItem(key: string, value: string): void {
+    this.map.set(key, String(value));
+  }
+  removeItem(key: string): void {
+    this.map.delete(key);
+  }
+}
+globalThis.localStorage = new MemoryStorage() as unknown as Storage;
 
 describe('spendDown', () => {
   it('buys nothing when nothing is affordable', () => {
@@ -71,11 +87,35 @@ describe('stageFromQuery', () => {
 describe('a staged capture shows a real choice', () => {
   // "Never capture a frame where every upgrade is unaffordable - the panel's
   // answer is 'buy nothing', the one answer a screenshot must never give."
-  // Ending staging on a spend pass froze the shop at zero gold, which is not a
-  // state a player is ever in: income is continuous.
+  // Count with core's own affordableCount: it prices Ascendancy nodes in
+  // Ascendancy, where a gold-only check calls all three of them buyable at
+  // every staged state and so can never fail.
   it.each(Object.keys(STAGE_PRESETS))('leaves %s able to afford something', (stage) => {
     const state = stageState({ ...STAGE_PRESETS[stage]!, seed: 7 });
-    const affordable = purchaseOptions(state).filter((o) => o.unlocked && !o.atMax && state.gold >= o.cost);
-    expect(affordable.length, `${stage} stages to an all-unaffordable shop`).toBeGreaterThan(0);
+    expect(affordableCount(state), `${stage} stages to an all-unaffordable shop`).toBeGreaterThan(
+      0,
+    );
+  });
+});
+
+describe('staging lands on one state wherever it runs', () => {
+  // The browser reaches staged state through stageFromQuery and then hands it
+  // to Game; both hops are pure and seeded, so a page load must land on the
+  // byte-identical state a Node harness reports for the same query.
+  it('stageFromQuery matches stageState for the same preset and seed', () => {
+    const fromQuery = stageFromQuery('?stage=mid&seed=7');
+    const direct = stageState({ ...STAGE_PRESETS['mid']!, seed: 7 });
+    expect(serialize(fromQuery!)).toBe(serialize(direct));
+  });
+
+  // save.ts validates field by field and discards anything malformed, so a
+  // staged run has to survive the round-trip with its purse intact.
+  it('keeps every affordable row across a save round-trip', () => {
+    const staged = stageState({ ...STAGE_PRESETS['mid']!, seed: 7 });
+    writeSave(staged);
+    const loaded = readSave();
+    expect(loaded).not.toBeNull();
+    expect(serialize(loaded!.state)).toBe(serialize(staged));
+    expect(affordableCount(loaded!.state)).toBe(affordableCount(staged));
   });
 });
