@@ -428,9 +428,6 @@ export const MONSTER_SILHOUETTES = [
 
 export const MONSTER_SHAPES = MONSTER_SILHOUETTES.map(sculpt);
 
-/** Index into MONSTER_SHAPES of the shape that spawns as a group of three. */
-export const SWARM_SHAPE = 0;
-
 /** The Portal guardian. Never on a road roster — the boss phase draws it. */
 export const BOSS_SHAPE = MONSTER_SILHOUETTES.length - 1;
 
