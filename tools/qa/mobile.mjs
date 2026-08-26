@@ -150,7 +150,7 @@ function probe(page, dev) {
       // systems in one frame" a critic named three rounds running.
       webfontFallbacks: [...document.querySelectorAll('[data-px]')]
         .filter((el) => !el.querySelector('.px-ink') && el.getBoundingClientRect().width > 0)
-        .map((el) => ({ cls: String(el.className).slice(0, 30), t: (el.textContent || '').trim().slice(0, 20) })),
+        .map((el) => ({ cls: String(el.className).slice(0, 30), t: (el.textContent || '').trim().slice(0, 20), w: px(el.getBoundingClientRect().width), fs: getComputedStyle(el).fontSize })),
       // The HUD floats over the whole window; the docked panel is opaque and
       // prints over anything the HUD puts there.
       hudOverPanel: (() => {

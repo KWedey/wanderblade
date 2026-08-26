@@ -28,7 +28,12 @@ import { panelVars, realmSkin } from './scene/palette';
 import { paintElement, repaintPixelText } from './pixeltext';
 import { createScene, type SceneModel } from './scene/scene';
 
-const LOG_LIMIT = 40;
+/**
+ * Entries kept in the list. This is the whole cap: a pixel max-height cannot
+ * be a whole number of entries when an entry may wrap, so it bisected the last
+ * line instead. The box hugs whatever it holds.
+ */
+const LOG_LIMIT = 5;
 
 export interface GearVM {
   power: number;
@@ -46,6 +51,19 @@ export interface SkillVM {
   atMax: boolean;
   unlockLevel: number;
   canAfford: boolean;
+}
+
+/**
+ * The upgrade core ranks highest per gold right now. The view never computes
+ * this - a second opinion about what is worth buying is a second economy.
+ */
+export interface BestBuyVM {
+  /** `'hero'`, or the skill id, matching the row it marks. */
+  id: string;
+  name: string;
+  cost: number;
+  /** DPS the next rank adds, for the card that explains the pick. */
+  dpsGain: number;
 }
 
 /** The guardian preview shown on the Road when the portal is reachable. */
@@ -119,6 +137,8 @@ export interface ViewModel {
   marchProgress: number;
   purchaseGoal: string;
   purchaseReady: boolean;
+  /** Core's answer to the panel's one job: the row worth buying next. */
+  bestBuy: BestBuyVM | null;
   skills: SkillVM[];
   gear: Record<GearSlot, GearVM | null>;
   ascendancy: AscendancyVM;
@@ -298,6 +318,13 @@ function template(): string {
       <h2 class="panel-title">On the Road</h2>
       <ul class="log-list" data-role="log"></ul>
     </section>
+
+    <button class="best-buy" type="button" data-role="best-buy" hidden>
+      <span class="best-buy-eyebrow">Best value</span>
+      <span class="best-buy-name" data-role="best-buy-name"></span>
+      <span class="best-buy-gain" data-role="best-buy-gain"></span>
+      <span class="best-buy-cost" data-role="best-buy-cost"></span>
+    </button>
   </div>
   </div>
 
@@ -398,6 +425,10 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const toastEl = q(root, '[data-role="toast"]');
 
   const heroBtn = q<HTMLButtonElement>(root, '[data-role="hero-btn"]');
+  const bestBuyBtn = q<HTMLButtonElement>(root, '[data-role="best-buy"]');
+  const bestBuyNameEl = q(root, '[data-role="best-buy-name"]');
+  const bestBuyGainEl = q(root, '[data-role="best-buy-gain"]');
+  const bestBuyCostEl = q(root, '[data-role="best-buy-cost"]');
   const heroLevelEl = q(root, '[data-role="hero-level"]');
   const heroCostEl = q(root, '[data-role="hero-cost"]');
   const heroFillEl = q(root, '[data-role="hero-fill"]');
@@ -432,6 +463,14 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
 
   // Static handlers.
   heroBtn.addEventListener('click', handlers.onBuyLevel);
+  // The card is a shortcut to the row it marks, never a second purchase path:
+  // it dispatches the same two handlers, keyed by the id core named.
+  bestBuyBtn.addEventListener('click', () => {
+    const id = bestBuyBtn.dataset['buy'];
+    if (!id) return;
+    if (id === 'hero') handlers.onBuyLevel();
+    else handlers.onBuySkill(id);
+  });
   enterPortalBtn.addEventListener('click', handlers.onEnterPortal);
 
   // Abandon forfeits the whole attempt's damage, so it is a deliberate hold —
@@ -723,15 +762,17 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     // Hero level — the button names the level being BOUGHT (the reward),
     // matching the goal chip's "Hero Lv N" framing.
     heroLevelEl.textContent = `Hero Lv ${vm.heroLevel + 1}`;
-    heroCostEl.textContent = `${formatNumber(vm.levelCost)} g`;
+    heroCostEl.textContent = `${formatNumber(vm.levelCost)} G`;
     heroBtn.disabled = !vm.canAffordLevel;
     heroBtn.classList.toggle('affordable', vm.canAffordLevel);
+    heroBtn.classList.toggle('best', vm.bestBuy?.id === 'hero');
     showReach(heroFillEl, heroDetailEl, 'Level up your blade', vm.levelCost, vm.canAffordLevel, vm);
 
     // Skills.
     for (const skill of vm.skills) {
       const refs = skillRefs.get(skill.id);
       if (!refs) continue;
+      refs.btn.classList.toggle('best', vm.bestBuy?.id === skill.id);
       if (!skill.unlocked) {
         refs.detail.textContent = `Unlocks at Level ${skill.unlockLevel}`;
         refs.cost.textContent = '';
@@ -748,12 +789,24 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
         refs.btn.classList.add('maxed');
         refs.fill.style.width = '0';
       } else {
-        refs.cost.textContent = `${formatNumber(skill.cost)} g`;
+        refs.cost.textContent = `${formatNumber(skill.cost)} G`;
         refs.btn.disabled = !skill.canAfford;
         refs.btn.classList.toggle('affordable', skill.canAfford);
         refs.btn.classList.remove('locked', 'maxed');
         showReach(refs.fill, refs.detail, `Level ${skill.level}`, skill.cost, skill.canAfford, vm);
       }
+    }
+
+    // The panel's one job, answered in the space it was wasting. Core ranked it;
+    // this only draws the winner and routes the tap to the same handler the
+    // marked row uses.
+    const best = vm.bestBuy;
+    bestBuyBtn.hidden = best === null;
+    if (best) {
+      bestBuyBtn.dataset['buy'] = best.id;
+      bestBuyNameEl.textContent = best.name === 'Hero Level' ? `Hero Lv ${vm.heroLevel + 1}` : best.name;
+      bestBuyGainEl.textContent = `+${formatNumber(best.dpsGain)} DPS`;
+      bestBuyCostEl.textContent = `${formatNumber(best.cost)} G`;
     }
 
     // Gear.
@@ -855,7 +908,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   }
 
   function renderAscendancy(asc: AscendancyVM): void {
-    ascOpenBank.textContent = formatNumber(asc.banked);
+    // Real text, not a ::after. The bitmap layer reads textContent, so a
+    // pseudo-element's mark stayed webfont and printed over the number.
+    ascOpenBank.textContent = `${formatNumber(asc.banked)} A`;
     ascBanked.textContent = formatNumber(asc.banked);
     ascPending.textContent = formatNumber(asc.pending);
     ascVictories.textContent = formatNumber(asc.victories);

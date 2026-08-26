@@ -908,12 +908,9 @@ body {
 /* --- Log (demoted to a thin ticker — the scene is the star, not the prose) */
 
 .panel.log {
-  /* Hugs its three entries. At flex:1 it absorbed the column's whole remainder
-     and rendered as a mostly-empty bordered box under the last line. */
-  flex: 0 1 auto;
-  /* Enough for the title plus three entries. At flex:1 with min-height:0 the
-     column above it simply ate the log whole and left a bare heading. */
-  min-height: 152px;
+  /* Hugs its entries. At flex:1 it absorbed the column's whole remainder and
+     rendered as a mostly-empty bordered box under the last line. */
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
 }
@@ -925,13 +922,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  /* Three whole entries at two lines each - 36px per entry plus the 4px gap -
-     which is the density the judge called the best information design in the
-     set. A cap that is not a whole number of entries cuts the last one
-     mid-word, which is the defect this replaced. */
-  max-height: 116px;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .log-line {
@@ -1313,11 +1303,6 @@ body {
   color: var(--ink-light);
 }
 
-.asc-open-bank::after {
-  content: ' a';
-  color: var(--ink-dim);
-}
-
 .asc-card {
   max-width: 620px;
 }
@@ -1380,6 +1365,7 @@ body {
   .portal-stats {
     flex-direction: column;
   }
+
 }
 
 /* A landscape phone puts 59px of camera housing beside the screen, and the
@@ -1399,10 +1385,93 @@ body {
    which is the "two type systems" a critic found three rounds running. */
 .gold,
 .dps,
+.asc-open-bank,
 .zone,
 .leagues,
 .gold-rate,
 .hud-label,
 .asc-open-label {
   white-space: nowrap;
+}
+
+/* --- Best value ---------------------------------------------------------
+   The panel's whole job is "what do I buy next", and six affordable rows
+   ranked by descending cost answer it with nothing. Core ranks them; this
+   names the winner, in the panel's own dead bottom. margin-top:auto is what
+   claims that space - the card is anchored to the floor, not floated near it. */
+
+.best-buy {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'eyebrow eyebrow'
+    'name cost'
+    'gain cost';
+  gap: 2px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 3px solid #99e550;
+  background: #4b7a1f;
+  color: #fff;
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--drop);
+}
+
+.best-buy-eyebrow {
+  grid-area: eyebrow;
+  font-size: var(--ui-1);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #d3ff9e;
+}
+
+.best-buy-name {
+  grid-area: name;
+  font-size: var(--ui-2);
+}
+
+.best-buy-gain {
+  grid-area: gain;
+  font-size: var(--ui-1);
+  color: #d3ff9e;
+}
+
+.best-buy-cost {
+  grid-area: cost;
+  font-size: var(--num-1);
+  white-space: nowrap;
+  /* The debug gear is fixed to the same corner; without this the price sits
+     under it and the panel's answer reads as a broken widget. */
+  margin-right: 46px;
+}
+
+/* The mark on the row itself, so the card and the list agree at a glance.
+   A brighter border and a lit inner edge - never a colour the affordable/
+   unaffordable split already spends. */
+.upgrade-btn.best {
+  border-color: #d3ff9e;
+  box-shadow:
+    inset 0 0 0 2px #4b7a1f,
+    var(--drop);
+}
+
+/* The cost gives up its column, exactly as the upgrade rows do. Beside it the
+   gain column measured 48px and "+83.0B DPS" needs 118. This block sits after
+   the base rules on purpose: an earlier @media loses to them outright. */
+@media (max-width: 900px) {
+  .best-buy {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'eyebrow'
+      'name'
+      'gain'
+      'cost';
+  }
+
+  .best-buy-cost {
+    margin-right: 0;
+  }
 }
