@@ -528,7 +528,7 @@ Abbreviating buys the desktop and not the phone — stripping the article and th
 
 **One arithmetic trap, recorded because the first draft got it backwards.** Normalising can push a share slightly *outside* the raw `1 ± spread` band, not inside it: a fat coin beside two lean ones divides by a sum below `n`. Measured envelope is **0.5544 … 1.4528** over 500k kills, and the test pins that rather than the constant.
 
-## 46. Flight length cannot move the aim problem, and the sim reports `intended` — 2026-08-26
+## 47. Flight length cannot move the aim problem, and the sim reports `intended` — 2026-08-26
 
 **Decision:** `ARC_FLIGHT_SEC` stays **1.5**. `npm run sim` now prints an **ACTIVE THUMB** block reporting catch rate beside `aimed coin` — the share of catches that took the coin the player went for. Reported, never banded.
 
