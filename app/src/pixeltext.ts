@@ -1,15 +1,19 @@
 // Panel type as bitmap glyphs: the webfaces measured 50-74% soft pixels at
 // every size, against a hard-edged canvas beside them.
 //
-// The DOM text is kept and only made visually silent, never replaced, so the
-// accessibility tree is untouched and the canvas stays decorative.
+// The DOM text is kept and only made transparent, never replaced, so the
+// accessibility tree is untouched and it still drives layout. The canvas is
+// absolutely positioned over it and can never widen its own container, which
+// is what stops a long label from clipping at the panel edge.
 
 import { FONT, GLYPH_H, GLYPH_W, textWidth } from './scene/pixels';
 
-/** Marks the visually-silent span that assistive tech still reads. */
+/** Marks the in-flow, transparent text that assistive tech still reads. */
 export const SR_CLASS = 'px-sr';
 /** Marks the decorative canvas a sighted player actually sees. */
 export const CANVAS_CLASS = 'px-ink';
+/** Blank rows between wrapped lines, in glyph pixels. */
+export const LINE_GAP = 2;
 
 /**
  * Integer scale for a CSS size. The glyph cell is 7px tall, so the scale is
@@ -38,60 +42,142 @@ export function measurePixelText(text: string, scale: number): PixelTextMetrics 
   return { width: textWidth(text, scale), height: GLYPH_H * scale };
 }
 
+/**
+ * Greedy word wrap. A word too wide to fit alone still gets its own line —
+ * `layoutPixelText` is what decides that scale is unusable and steps down.
+ */
+export function wrapPixelText(text: string, scale: number, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter((w) => w.length > 0);
+  if (words.length === 0) return [];
+  const lines: string[] = [];
+  let line = words[0]!;
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i]!;
+    const candidate = `${line} ${word}`;
+    if (textWidth(candidate, scale) <= maxWidth) {
+      line = candidate;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  lines.push(line);
+  return lines;
+}
+
+export interface PixelLayout {
+  scale: number;
+  lines: string[];
+  /** Width of the widest line. Never exceeds the `maxWidth` asked for. */
+  width: number;
+  height: number;
+}
+
+export function lineHeight(scale: number): number {
+  return (GLYPH_H + LINE_GAP) * scale;
+}
+
+/**
+ * Largest scale at or below `preferred` whose every line fits `maxWidth`.
+ * Null when even 1× cannot fit, which is the caller's cue to leave the element
+ * as plain DOM text rather than ship a clipped word.
+ */
+export function layoutPixelText(
+  text: string,
+  preferredScale: number,
+  maxWidth: number,
+): PixelLayout | null {
+  const trimmed = text.trim();
+  if (!trimmed || maxWidth <= 0) return null;
+  for (let scale = Math.max(1, Math.floor(preferredScale)); scale >= 1; scale--) {
+    const lines = wrapPixelText(trimmed, scale, maxWidth);
+    const width = lines.reduce((w, l) => Math.max(w, textWidth(l, scale)), 0);
+    if (width <= maxWidth) {
+      const height = lines.length * lineHeight(scale) - LINE_GAP * scale;
+      return { scale, lines, width, height };
+    }
+  }
+  return null;
+}
+
+export type PixelAlign = 'left' | 'center' | 'right';
+
+/** Left edge of one line inside a box of `boxWidth`. */
+export function alignOffset(lineWidth: number, boxWidth: number, align: PixelAlign): number {
+  if (align === 'center') return Math.floor((boxWidth - lineWidth) / 2);
+  if (align === 'right') return boxWidth - lineWidth;
+  return 0;
+}
+
 function paintInto(
   canvas: HTMLCanvasElement,
-  text: string,
-  scale: number,
+  layout: PixelLayout,
+  boxWidth: number,
+  align: PixelAlign,
   color: string,
   dpr: number,
 ): void {
-  const { width, height } = measurePixelText(text, scale);
-  canvas.width = Math.max(1, Math.round(width * dpr));
+  const { scale, lines, height } = layout;
+  canvas.width = Math.max(1, Math.round(boxWidth * dpr));
   canvas.height = Math.max(1, Math.round(height * dpr));
-  canvas.style.width = `${width}px`;
+  canvas.style.width = `${boxWidth}px`;
   canvas.style.height = `${height}px`;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, width, height);
+  ctx.clearRect(0, 0, boxWidth, height);
   ctx.fillStyle = color;
-  let penX = 0;
-  for (const ch of text) {
-    const glyph = FONT[ch];
-    if (glyph) {
-      for (let row = 0; row < GLYPH_H; row++) {
-        const line = glyph[row] ?? '';
-        for (let col = 0; col < GLYPH_W; col++) {
-          if (line[col] !== '#') continue;
-          ctx.fillRect(penX + col * scale, row * scale, scale, scale);
+
+  lines.forEach((line, index) => {
+    const originX = alignOffset(textWidth(line, scale), boxWidth, align);
+    const originY = index * lineHeight(scale);
+    let penX = originX;
+    for (const ch of line) {
+      const glyph = FONT[ch];
+      if (glyph) {
+        for (let row = 0; row < GLYPH_H; row++) {
+          const bits = glyph[row] ?? '';
+          for (let col = 0; col < GLYPH_W; col++) {
+            if (bits[col] !== '#') continue;
+            ctx.fillRect(penX + col * scale, originY + row * scale, scale, scale);
+          }
         }
       }
+      penX += (GLYPH_W + 1) * scale;
     }
-    penX += (GLYPH_W + 1) * scale;
-  }
+  });
+}
+
+const ALIGNMENTS: Record<string, PixelAlign> = {
+  center: 'center',
+  right: 'right',
+  end: 'right',
+};
+
+/** Strips the bitmap layer, restoring the element to ordinary DOM text. */
+function fallBack(el: HTMLElement, holder: HTMLElement | null): void {
+  el.querySelector(`.${CANVAS_CLASS}`)?.remove();
+  if (holder) holder.classList.remove('px-hidden');
 }
 
 /**
- * False when the font lacks a character: a legible webfont beats a hole where
- * a glyph should be, so the element is left as plain DOM text.
+ * False when the element cannot take bitmap type — an unsupported character,
+ * a container too narrow for even 1× glyphs, or a box with no measurable
+ * width. A legible webfont beats a hole or a clipped word.
  */
 export function paintElement(el: HTMLElement, dpr = window.devicePixelRatio || 1): boolean {
-  const src = el.querySelector<HTMLElement>(`.${SR_CLASS}`);
-  const text = (src ? src.textContent : el.textContent) ?? '';
+  let holder = el.querySelector<HTMLElement>(`.${SR_CLASS}`);
+  const text = (holder ? holder.textContent : el.textContent) ?? '';
   const trimmed = text.trim();
-  if (!trimmed) return false;
+  if (!trimmed) {
+    fallBack(el, holder);
+    return false;
+  }
   if (unsupported(trimmed).length > 0) {
-    if (src) {
-      el.textContent = trimmed;
-    }
+    fallBack(el, holder);
     return false;
   }
 
-  const style = window.getComputedStyle(el);
-  const scale = pixelScaleFor(parseFloat(style.fontSize) || GLYPH_H);
-  const color = style.color;
-
-  let holder = src;
   if (!holder) {
     holder = document.createElement('span');
     holder.className = SR_CLASS;
@@ -102,6 +188,26 @@ export function paintElement(el: HTMLElement, dpr = window.devicePixelRatio || 1
     holder.textContent = trimmed;
   }
 
+  const style = window.getComputedStyle(el);
+  const padLeft = parseFloat(style.paddingLeft) || 0;
+  const padTop = parseFloat(style.paddingTop) || 0;
+  // clientWidth is 0 for an inline box; its rect is the only honest measure.
+  const outer = el.clientWidth || el.getBoundingClientRect().width;
+  const boxWidth = Math.floor(outer - padLeft - (parseFloat(style.paddingRight) || 0));
+  const layout = layoutPixelText(
+    trimmed,
+    pixelScaleFor(parseFloat(style.fontSize) || GLYPH_H),
+    boxWidth,
+  );
+  if (!layout) {
+    fallBack(el, holder);
+    return false;
+  }
+
+  const align = ALIGNMENTS[style.textAlign] ?? 'left';
+  const color = style.color;
+  holder.classList.add('px-hidden');
+
   let canvas = el.querySelector<HTMLCanvasElement>(`.${CANVAS_CLASS}`);
   if (!canvas) {
     canvas = document.createElement('canvas');
@@ -109,15 +215,26 @@ export function paintElement(el: HTMLElement, dpr = window.devicePixelRatio || 1
     canvas.setAttribute('aria-hidden', 'true');
     el.appendChild(canvas);
   }
-  const key = `${trimmed}|${scale}|${color}|${dpr}`;
+  const key = `${trimmed}|${layout.scale}|${boxWidth}|${align}|${color}|${dpr}`;
   if (canvas.dataset['key'] === key) return true;
   canvas.dataset['key'] = key;
-  paintInto(canvas, trimmed, scale, color, dpr);
+  canvas.style.left = `${padLeft}px`;
+  canvas.style.top = `${padTop}px`;
+  paintInto(canvas, layout, boxWidth, align, color, dpr);
+  // The canvas is out of flow, so the element would otherwise collapse to the
+  // transparent text's height and clip a label that wrapped to more lines.
+  el.style.minHeight = `${layout.height + padTop + (parseFloat(style.paddingBottom) || 0)}px`;
   return true;
 }
 
-/** True for an element whose whole content is its own text. */
+/**
+ * True for an element whose whole content is its own text. The two layers this
+ * module owns are never leaves themselves: tagging the accessible span would
+ * nest a second one inside it, and an inline span measures zero wide, so every
+ * label would silently fall back to webfont text.
+ */
 export function isTextLeaf(el: Element): boolean {
+  if (el.classList.contains(SR_CLASS) || el.classList.contains(CANVAS_CLASS)) return false;
   for (const child of el.children) {
     if (!child.classList.contains(SR_CLASS) && !child.classList.contains(CANVAS_CLASS)) {
       return false;

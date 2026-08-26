@@ -576,6 +576,8 @@ export const FONT: Record<string, string[]> = {
   '%': ['##..#', '##.#.', '...#.', '..#..', '.#...', '.#.##', '#..##'],
   "'": ['..#..', '..#..', '.....', '.....', '.....', '.....', '.....'],
   '·': ['.....', '.....', '.....', '.##..', '.##..', '.....', '.....'],
+  '—': ['.....', '.....', '.....', '.....', '#####', '.....', '.....'],
+  '~': ['.....', '.....', '.##.#', '#..#.', '.....', '.....', '.....'],
   A: ['.###.', '#...#', '#...#', '#####', '#...#', '#...#', '#...#'],
   B: ['####.', '#...#', '#...#', '####.', '#...#', '#...#', '####.'],
   C: ['.###.', '#...#', '#....', '#....', '#....', '#...#', '.###.'],
@@ -607,7 +609,7 @@ export const FONT: Record<string, string[]> = {
 /** Every character in-world text is allowed to use. */
 export const FONT_COVERAGE =
   '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ+-.×! ' +
-  "abcdefghijklmnopqrstuvwxyz,:/()%'·";
+  "abcdefghijklmnopqrstuvwxyz,:/()%'·—~";
 
 /**
  * Malformed or missing glyphs. A missing glyph is not a blank — drawText
