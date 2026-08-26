@@ -62,7 +62,7 @@ export function formatSeedReport(r: SeedResult): string {
     lines.push('');
     lines.push(
       `   frontier: the run ended at realm ${r.frontierRealm}, where guardian HP overflows ` +
-        `to Infinity and the portal refuses to open (docs/DECISIONS.md #29)`,
+        `to Infinity and the portal refuses to open (docs/DECISIONS.md #34)`,
     );
   }
 
