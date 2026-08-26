@@ -100,6 +100,8 @@ export interface CollectionState {
   bossTrophies: number;
   gearFound: number;
   zonesCleared: number;
+  /** Lifetime kills per species index — the Bestiary's substrate. */
+  speciesKills: number[];
 }
 
 export interface LifetimeStats {
@@ -189,6 +191,8 @@ export type GameEvent =
       zone: number;
       killIndex: number;
       gold: number;
+      /** Index into `SPECIES` — what the client names and the Bestiary records. */
+      species: number;
     }
   | {
       type: 'drop';

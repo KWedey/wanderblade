@@ -132,6 +132,12 @@ function isValidState(v: unknown): v is GameState {
   ) {
     return false;
   }
+  // A save written before the Bestiary existed carries no counter. Discarding
+  // it over a field that did not exist when it was written would wipe the run.
+  const species = collection.speciesKills;
+  if (species !== undefined) {
+    if (!Array.isArray(species) || !species.every(isFiniteNumber)) return false;
+  }
 
   const lifetime = s.lifetime as Record<string, unknown> | null;
   if (typeof lifetime !== 'object' || lifetime === null) return false;

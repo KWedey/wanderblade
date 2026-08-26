@@ -54,9 +54,10 @@ export {
   ASC_NODE_IDS,
   SKILLS,
   SKILL_IDS,
+  SPECIES,
   SKILL_MULT_CEILING,
 } from './constants';
-export type { AscNodeDef, SkillDef } from './constants';
+export type { AscNodeDef, SkillDef, SpeciesDef } from './constants';
 
 // --- Types ---------------------------------------------------------------
 export type {
@@ -104,6 +105,8 @@ export {
 // --- Formulas ------------------------------------------------------------
 export {
   realmScale,
+  speciesFor,
+  speciesIndex,
   enemyHp,
   enemyGold,
   earningsMultiplier,

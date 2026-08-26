@@ -44,6 +44,31 @@ export const gearPowerRate = rH;
  */
 export const dropChance = 0.008;
 
+// --- Monster variety -----------------------------------------------------
+export interface SpeciesDef {
+  /** Payout multiplier. The roster's mean is exactly 1, so no band moves. */
+  goldMult: number;
+  /** Drop-chance multiplier — what gives a Bestiary something to differentiate. */
+  dropMult: number;
+}
+
+/**
+ * Slots, not creatures: the SRD roster and its naming are M4 content
+ * (docs/SRD-CONTENT.md). What lives here is the shape a zone's monsters vary
+ * along, so three names in the log stop reading as three identical numbers.
+ *
+ * `goldMult` sums to exactly the roster length, so mean payout per kill is
+ * unchanged and the pacing bands cannot move. `dropMult` deliberately does not
+ * track gold — the richest monster is not the most generous one.
+ */
+export const SPECIES: readonly SpeciesDef[] = [
+  { goldMult: 0.7, dropMult: 1.6 },
+  { goldMult: 0.85, dropMult: 0.7 },
+  { goldMult: 1.0, dropMult: 1.0 },
+  { goldMult: 1.15, dropMult: 1.3 },
+  { goldMult: 1.3, dropMult: 0.4 },
+];
+
 /** Rarity roll weights (sum = 100). */
 export const RARITY_WEIGHTS: Record<Rarity, number> = {
   common: 70,

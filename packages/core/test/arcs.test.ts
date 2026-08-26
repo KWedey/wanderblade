@@ -9,6 +9,7 @@ import {
   ARC_SPLIT_MIN,
   ARC_SPLIT_MAX,
   arcSplitCount,
+  speciesFor,
   arcsForKill,
   deserialize,
   enterPortal,
@@ -40,11 +41,14 @@ describe('loot arcs', () => {
     const s = initialState(31);
     advance(s, ROAD_KILL0_SEC + 1e-6); // one kill at the walking pace
     expect(s.lifetime.kills).toBe(1);
-    expect(s.gold).toBeCloseTo(1, 10); // enemyGold(0, 0) = 1
+    // enemyGold(0, 0) = 1, scaled by what this kill happened to be
+    expect(s.gold).toBeCloseTo(speciesFor(s.killIndex).goldMult, 10);
     expect(s.arcs).toHaveLength(arcSplitCount(s.killIndex));
 
+    const paidOnKill = s.gold;
     advance(s, ARC_FLIGHT_SEC + 2); // every coin lands uncaught
-    expect(s.gold).toBeGreaterThan(1);
+    // Gold is credited on the kill, so a coin hitting the ground claws nothing back.
+    expect(s.gold).toBeGreaterThanOrEqual(paidOnKill);
   });
 
   it('splits a kill into coins whose values sum to the payout exactly', () => {

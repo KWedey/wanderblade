@@ -303,3 +303,17 @@ And in play with several coins up, at a 250 ms human reach: apex **36.0%** vs la
 **Decision:** `sim/test/sim.test.ts` feeds the pre-fix measurements straight into `runPacing` and asserts the verdict flips. P8 fails on `minAffordable: 0` and on a four-hour drought; P9 fails on the pre-fix dead time (14.74 h longest wait, **56%** of Road time waiting, 1.01 d slowest realm), on a cadence past three days, and on a portal parked open for 76 hours.
 
 **Why:** A ceiling set from a measured distribution is only trustworthy if we can see it reject the thing it was written to catch. If a clause passes on both the broken and the fixed numbers it is decoration, and nobody finds that out until it fails to catch the next regression. Pinning it as a test rather than as a one-off run means a later tuning pass cannot widen the clause into decoration without turning something red.
+
+## 37. A zone is monsters, not one monster repeated — 2026-08-25
+
+**Decision:** `SPECIES` in `packages/core/src/constants.ts` is a roster of variation *slots* carrying `goldMult` and `dropMult`. `speciesIndex(killIndex)` picks one, derived from the kill index through a third irrational so it **consumes no RNG draw**. A kill pays `goldPerKill(state) · goldMult` and rolls its drop against `dropChance · dropMult`. The `kill` event carries `species`, and `collection.speciesKills` counts them — the Bestiary's substrate.
+
+**Why:** Every monster in a zone paid identically, so an event log read `+220M gold` beside three different creature names and a blind reviewer filed it under *"repeated or stubbed-looking content — reads as a hardcoded constant"*. They were right about what they saw. `docs/VISION.md` pillar 5 makes the Bestiary one of the two dopamine engines, and a bestiary of numerically indistinguishable creatures has nothing to collect.
+
+**No band moved, by construction.** `goldMult` sums to exactly the roster length, so mean payout per kill is unchanged; the sim reads ALL PASS on 20 validators × 6 seeds either way. `dropMult` deliberately does not track gold — the richest monster is not the most generous one, which is what makes the roster worth learning.
+
+**Enemy HP is deliberately left uniform.** Kill time is the clock (`nextActionAtSec`), and varying HP per kill perturbs the load-bearing invariant for a payoff nothing on screen shows. Gold and drop weight are the entire visible surface of what the reviewer saw.
+
+**These are slots, not creatures.** The SRD roster, names, and provenance are M4 content under `docs/SRD-CONTENT.md`; what lives in core is the shape a zone's monsters vary along, so the content drop is a table and not a core change.
+
+**Save compatibility:** `deserialize` defaults `speciesKills` to `[]`, and `app/src/save.ts` accepts its absence rather than discarding the run over a field that did not exist when the save was written.

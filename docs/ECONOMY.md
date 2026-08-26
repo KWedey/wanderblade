@@ -124,7 +124,7 @@ These are the shipped values, each carrying a passing sim run (`docs/DECISIONS.m
 |---|---|
 | Realm scale | `REALM_STEP^realm`, `REALM_STEP` = 8 |
 | Enemy HP | `10 · realmScale · 1.55^z` |
-| Enemy gold | `1 · realmScale · 1.48^z` |
+| Enemy gold | `1 · realmScale · 1.48^z · SPECIES[i].goldMult` — roster mean exactly 1 |
 | Hero base damage | `25 · 1.12^level · realmScale` |
 | Hero level cost | `10 · 1.15^level · realmScale` |
 | Skill rank cost | `def.costBase · def.costRate^rank · realmScale` — **per skill**: 35/1.12, 60/1.19, 110/1.15, 190/1.13, 300/1.21 |
