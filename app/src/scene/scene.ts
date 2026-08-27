@@ -54,12 +54,15 @@ import {
   glowRingRadii,
   momentumLift,
   monsterInk,
+  pillarSpans,
   realmSkin,
   sceneryInk,
   sunHaloBands,
   torchFlicker,
+  torchGlowBands,
   vignetteInsets,
   type FoliageLobe,
+  type PillarSpan,
   type RealmSkin,
 } from './palette';
 import {
@@ -201,8 +204,20 @@ const BOSS_SCALE = 2;
 /** Dungeon room geometry (DECISIONS.md #58): brick course height, wall/ceiling band counts, edge-vignette bands and their width in scene pixels. */
 const BRICK_H = 7;
 const WALL_BANDS = 3;
-const VIGNETTE_BANDS = 4;
-const VIGNETTE_STEP = 3;
+const VIGNETTE_BANDS = 5;
+/** Vignette inset step as a fraction of the shorter viewport side — corners read as dark at any screen size without swallowing the piers the torches are meant to light. */
+const VIGNETTE_STEP_FRAC = 0.012;
+/** Each pier's width as a fraction of the room, and its lit inner edge's width in scene pixels. */
+const PILLAR_FRAC = 0.13;
+const PILLAR_EDGE_W = 3;
+/** The two torches' horizontal position (fraction of room width, kept under the desktop dock's 0.6vw limit per DECISIONS.md #59) and flicker seed. */
+const DUNGEON_TORCHES = [
+  { side: 0.16, seed: 2.1 },
+  { side: 0.58, seed: 5.7 },
+] as const;
+/** Torch light-pool reach as a fraction of room width — a pool, not a spotlight covering half the frame. */
+const WALL_TORCH_REACH_FRAC = 0.075;
+const FLOOR_TORCH_REACH_FRAC = 0.055;
 
 const SWINGS_PER_SEC = 1.7;
 
@@ -482,7 +497,8 @@ export function drawGroundBands(
  */
 export function drawStoneWall(
   ctx: FillCtx,
-  vw: number,
+  x: number,
+  w: number,
   top: number,
   bottom: number,
   tones: readonly string[],
@@ -498,12 +514,74 @@ export function drawStoneWall(
     if (rowH <= 0) break;
     const tone = tones[Math.max(0, Math.min(tones.length - 1, Math.floor((r / rows) * tones.length)))]!;
     ctx.fillStyle = tone;
-    ctx.fillRect(0, y, vw, rowH);
+    ctx.fillRect(x, y, w, rowH);
     ctx.fillStyle = jointTone;
-    for (const x of brickJointXs(vw, r, h * 2)) {
-      ctx.fillRect(x, y, 1, rowH);
+    for (const jx of brickJointXs(w, r, h * 2)) {
+      ctx.fillRect(x + jx, y, 1, rowH);
     }
   }
+}
+
+/**
+ * Two coursed piers flanking the room, each with a lit edge facing the fight
+ * — the same lit-face/shadow-face idiom the tree trunks use (DECISIONS.md #54).
+ */
+export function drawPillars(
+  ctx: FillCtx,
+  spans: readonly PillarSpan[],
+  top: number,
+  bottom: number,
+  tones: readonly string[],
+  jointTone: string,
+  edgeColor: string,
+  edgeW: number,
+  brickH: number,
+): void {
+  spans.forEach((span, i) => {
+    drawStoneWall(ctx, span.x, span.w, top, bottom, tones, jointTone, brickH);
+    const edgeX = i === 0 ? span.x + span.w - edgeW : span.x;
+    ctx.fillStyle = edgeColor;
+    ctx.fillRect(edgeX, top, edgeW, bottom - top);
+  });
+}
+
+/** A filled circle on any `FillCtx` — mass, not an outline (mirrors the closure-local `fillDisc` used by the sun). */
+function fillFlatDisc(ctx: FillCtx, cx: number, cy: number, r: number): void {
+  for (let dy = -r; dy <= r; dy++) {
+    const half = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
+    ctx.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
+  }
+}
+
+/** Where a torch sits and how strongly its flame is currently burning. */
+export interface TorchLight {
+  x: number;
+  y: number;
+  flicker: number;
+}
+
+/** Light pools only — the stone each torch actually illuminates, painted before the flame itself. */
+export function drawTorchGlow(
+  ctx: FillCtx,
+  torches: readonly TorchLight[],
+  baseTone: string,
+  flame: string,
+  reach: number,
+): void {
+  for (const t of torches) {
+    for (const band of torchGlowBands(reach * t.flicker)) {
+      ctx.fillStyle = mixHex(baseTone, flame, band.mix);
+      fillFlatDisc(ctx, t.x, t.y, band.r);
+    }
+  }
+}
+
+/** The flame itself: a filled core, never the hollow ring the sun's halo was once caught drawing (DECISIONS.md #53). */
+export function drawTorchFlame(ctx: FillCtx, x: number, y: number, flicker: number, flame: string): void {
+  ctx.fillStyle = mixHex(flame, '#000000', 0.3);
+  fillFlatDisc(ctx, x, y, Math.max(1, Math.round(6 * flicker)));
+  ctx.fillStyle = mixHex(flame, '#ffffff', 0.35);
+  fillFlatDisc(ctx, x, y, Math.max(1, Math.round(3 * flicker)));
 }
 
 /**
@@ -1787,7 +1865,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const jointTone = mixHex(wallBase, '#1a1c2c', 0.45);
 
     drawGroundBands(ctx, vw, 0, ceilingH, depthBandTones(ceilingBase, WALL_BANDS));
-    drawStoneWall(ctx, vw, ceilingH, groundY, depthBandTones(wallBase, WALL_BANDS), jointTone, BRICK_H);
+    drawStoneWall(ctx, 0, vw, ceilingH, groundY, depthBandTones(wallBase, WALL_BANDS), jointTone, BRICK_H);
 
     // Torches: the fight's own light — the room has no sky to borrow one
     // from (DECISIONS.md #58 — lit from the encounter only).
@@ -1795,19 +1873,38 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // drawSun already respects — a torch past that fraction is never seen.
     const flame = mixHex('#df7126', skin.accent, 0.25);
     const torchY = ceilingH + Math.round((groundY - ceilingH) * 0.32);
-    for (const [side, seed] of [[0.14, 2.1] as const, [0.58, 5.7] as const]) {
-      const tx = Math.round(vw * side);
-      const flick = model.reduceMotion ? 0.92 : torchFlicker(clockSec, seed);
-      glowDisc(tx, torchY, 10 * flick, mixHex(flame, '#000000', 0.35), 0.5 * flick);
-      glowDisc(tx, torchY, 4 * flick, flame, flick);
-    }
+    const torches: TorchLight[] = DUNGEON_TORCHES.map(({ side, seed }) => ({
+      x: Math.round(vw * side),
+      y: torchY,
+      flicker: model.reduceMotion ? 0.92 : torchFlicker(clockSec, seed),
+    }));
+    // The wall itself gets brighter near each flame instead of the flame
+    // being a marker floating in front of unlit stone.
+    drawTorchGlow(ctx, torches, wallBase, flame, vw * WALL_TORCH_REACH_FRAC);
+    for (const t of torches) drawTorchFlame(ctx, t.x, t.y, t.flicker, flame);
+
+    // Piers narrow the open floor either side of the fight, and carry the
+    // realm's own highlight ink so a dungeon skins per-realm, not just grey.
+    // Spanned off worldRightX, not vw — the canvas paints under the docked
+    // panel, and a pier placed at the true right edge is a pier nobody sees.
+    drawPillars(
+      ctx,
+      pillarSpans(worldRightX, PILLAR_FRAC),
+      ceilingH,
+      groundY,
+      depthBandTones(mixHex(skin.rock, '#0a0a12', 0.4), WALL_BANDS),
+      jointTone,
+      mixHex(skin.rockLight, flame, 0.2),
+      PILLAR_EDGE_W,
+      BRICK_H,
+    );
 
     drawVignette(
       ctx,
       vw,
       sceneBottomY,
-      depthBandTones(mixHex(ceilingBase, '#000000', 0.3), VIGNETTE_BANDS),
-      VIGNETTE_STEP,
+      depthBandTones(mixHex(ceilingBase, '#000000', 0.42), VIGNETTE_BANDS),
+      Math.round(Math.min(vw, sceneBottomY) * VIGNETTE_STEP_FRAC),
     );
   }
 
@@ -1820,6 +1917,16 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawGroundBands(ctx, vw, groundY, floorH, depthBandTones(lighten(floorBase, lift), GROUND_BANDS));
     ctx.fillStyle = mixHex(floorBase, '#000000', 0.5);
     ctx.fillRect(0, groundY + floorH, vw, sceneBottomY - groundY - floorH);
+
+    // Same torches, spilling a smaller pool onto the stone at their base —
+    // one light source lighting the whole room, not just the wall behind it.
+    const flame = mixHex('#df7126', skin.accent, 0.25);
+    const torches: TorchLight[] = DUNGEON_TORCHES.map(({ side, seed }) => ({
+      x: Math.round(vw * side),
+      y: groundY + Math.round(floorH * 0.3),
+      flicker: model.reduceMotion ? 0.92 : torchFlicker(clockSec, seed),
+    }));
+    drawTorchGlow(ctx, torches, floorBase, flame, vw * FLOOR_TORCH_REACH_FRAC);
   }
 
   /** Lanes the engaged monster's health bar is sitting across this frame. */
@@ -1861,12 +1968,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
       // Only the engaged monster carries a bar, and only while it is alive:
       // a bar over a corpse is the clearest possible "this UI is broken".
-      if (i !== 0) continue;
-      // The guardian's bar is engine state that persists offline, not a display
-      // estimate of the next kill.
-      const remaining = model.boss
-        ? Math.min(1, Math.max(0, model.boss.hpFrac))
-        : Math.max(0, 1 - model.killProgress);
+      // The guardian's HP already lives in the side panel (name, bar, ETA,
+      // remaining) — a second bar floating over its sprite is the same
+      // number twice, not a second signal.
+      if (i !== 0 || model.boss) continue;
+      const remaining = Math.max(0, 1 - model.killProgress);
       if (remaining >= 1 || remaining <= 0.02) continue;
       // Anchored to the creature's mass, not its box: a stalker's antenna
       // put its bar on a shelf of empty air well above the thing being fought.

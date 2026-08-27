@@ -932,3 +932,43 @@ export function brickJointXs(vw: number, row: number, brickW: number): number[] 
 export function torchFlicker(clockSec: number, seed: number): number {
   return 0.85 + 0.15 * Math.sin(clockSec * 6.3 + seed) * Math.sin(clockSec * 2.1 + seed * 1.7);
 }
+
+/** Foreground stone pier: where it sits and how wide it is. */
+export interface PillarSpan {
+  x: number;
+  w: number;
+}
+
+/**
+ * Two flanking piers that narrow the open floor either side of the fight —
+ * the room crowding in rather than leaving dead stone at the frame's edges
+ * (DECISIONS.md #58: "locked in" reads as tight, not an empty hall).
+ */
+export function pillarSpans(vw: number, widthFrac = 0.12): PillarSpan[] {
+  const w = Math.max(1, Math.round(vw * widthFrac));
+  return [
+    { x: 0, w },
+    { x: Math.max(w, vw - w), w },
+  ];
+}
+
+/** One step of a torch's light pool: how far it reaches and how far toward the flame colour it mixes the stone underneath. */
+export interface GlowBand {
+  r: number;
+  mix: number;
+}
+
+/**
+ * A torch's light pool: bands step inward from a wide, barely-tinted ring to
+ * a small band mixed hard toward the flame colour (DECISIONS.md #13: no
+ * gradient — flat bands stand in for the falloff).
+ */
+export function torchGlowBands(reach: number): GlowBand[] {
+  if (reach <= 0) return [];
+  return [
+    { r: Math.round(reach * 1.0), mix: 0.14 },
+    { r: Math.round(reach * 0.72), mix: 0.3 },
+    { r: Math.round(reach * 0.46), mix: 0.52 },
+    { r: Math.round(reach * 0.24), mix: 0.8 },
+  ];
+}

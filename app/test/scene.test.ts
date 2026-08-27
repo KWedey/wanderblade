@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { lightnessOf, MIN_HILL_SHADOW_GAP } from '../src/scene/palette';
-import { drawGroundBands, drawHills, drawStoneWall, drawVignette, type FillCtx } from '../src/scene/scene';
+import { lightnessOf, mixHex, MIN_HILL_SHADOW_GAP, torchGlowBands } from '../src/scene/palette';
+import {
+  drawGroundBands,
+  drawHills,
+  drawPillars,
+  drawStoneWall,
+  drawTorchFlame,
+  drawTorchGlow,
+  drawVignette,
+  type FillCtx,
+  type TorchLight,
+} from '../src/scene/scene';
 
 /** Records what drawHills actually paints — a pure-geometry test alone can pass while the loop that draws it stays broken. */
 function fakeCtx(): { ctx: FillCtx; calls: Array<{ style: string; x: number; y: number; w: number; h: number }> } {
@@ -88,7 +98,7 @@ describe('drawStoneWall paints coursed masonry, not a single flat panel', () => 
 
   function run() {
     const { ctx, calls } = fakeCtx();
-    drawStoneWall(ctx, vw, top, bottom, tones, jointTone, brickH);
+    drawStoneWall(ctx, 0, vw, top, bottom, tones, jointTone, brickH);
     return calls;
   }
 
@@ -149,5 +159,96 @@ describe('drawVignette darkens the frame in discrete, non-overlapping rings', ()
     for (let i = 1; i < topStrips.length; i++) {
       expect(topStrips[i]!.y).toBeGreaterThan(topStrips[i - 1]!.y);
     }
+  });
+});
+
+describe('drawPillars paints two coursed piers with a lit inner edge facing the fight', () => {
+  const top = 20;
+  const bottom = 100;
+  const tones = ['#111111', '#222222', '#3a3a3a'];
+  const jointTone = '#0a0a0a';
+  const edgeColor = '#ffdd88';
+  const edgeW = 3;
+  const brickH = 7;
+  const spans = [
+    { x: 0, w: 40 },
+    { x: 360, w: 40 },
+  ];
+
+  function run() {
+    const { ctx, calls } = fakeCtx();
+    drawPillars(ctx, spans, top, bottom, tones, jointTone, edgeColor, edgeW, brickH);
+    return calls;
+  }
+
+  it('courses each pier independently, confined to its own span', () => {
+    const calls = run();
+    const courses = calls.filter((c) => tones.includes(c.style));
+    for (const c of courses) {
+      const inLeft = c.x >= spans[0]!.x && c.x + c.w <= spans[0]!.x + spans[0]!.w;
+      const inRight = c.x >= spans[1]!.x && c.x + c.w <= spans[1]!.x + spans[1]!.w;
+      expect(inLeft || inRight, `course rect at x=${c.x} w=${c.w} stays inside one pier`).toBe(true);
+    }
+  });
+
+  it('puts the lit edge on the side facing the open floor between the piers', () => {
+    const calls = run();
+    const edges = calls.filter((c) => c.style === edgeColor);
+    expect(edges).toHaveLength(2);
+    expect(edges[0]!.x).toBe(spans[0]!.x + spans[0]!.w - edgeW);
+    expect(edges[1]!.x).toBe(spans[1]!.x);
+  });
+});
+
+describe('drawTorchGlow lights the stone under a torch in discrete bands, not a hollow ring', () => {
+  const baseTone = '#202020';
+  const flame = '#df7126';
+  const reach = 40;
+  const torch: TorchLight = { x: 100, y: 50, flicker: 1 };
+
+  function run() {
+    const { ctx, calls } = fakeCtx();
+    drawTorchGlow(ctx, [torch], baseTone, flame, reach);
+    return calls;
+  }
+
+  it('paints a filled center row per band, spanning the full band width', () => {
+    const calls = run();
+    const bands = torchGlowBands(reach);
+    const centerRows = calls.filter((c) => c.y === torch.y);
+    expect(centerRows).toHaveLength(bands.length);
+    bands.forEach((band, i) => {
+      expect(centerRows[i]!.w, `band ${i} center width`).toBe(band.r * 2 + 1);
+      expect(centerRows[i]!.style).toBe(mixHex(baseTone, flame, band.mix));
+    });
+  });
+
+  it('leaves stone directly under the torch measurably warmer than stone at the edge of its reach', () => {
+    const calls = run();
+    const centerRows = calls.filter((c) => c.y === torch.y);
+    const outermost = centerRows[0]!; // widest band, drawn first, least mixed toward flame
+    const innermost = centerRows.at(-1)!; // narrowest band, drawn last, wins at the torch itself
+    expect(lightnessOf(innermost.style)).toBeGreaterThan(lightnessOf(outermost.style));
+  });
+
+  it('never spreads light past the widest band radius', () => {
+    const calls = run();
+    const maxR = torchGlowBands(reach)[0]!.r;
+    for (const c of calls) {
+      expect(c.x).toBeGreaterThanOrEqual(torch.x - maxR);
+      expect(c.x + c.w).toBeLessThanOrEqual(torch.x + maxR + 1);
+    }
+  });
+});
+
+describe('drawTorchFlame paints a filled core, not the hollow ring the sun halo once shipped (DECISIONS.md #53)', () => {
+  it('fills every row of both the outer and inner disc, not just their circumference', () => {
+    const { ctx, calls } = fakeCtx();
+    drawTorchFlame(ctx, 50, 50, 1, '#df7126');
+    const outer = calls.filter((c) => c.style === mixHex('#df7126', '#000000', 0.3));
+    const inner = calls.filter((c) => c.style === mixHex('#df7126', '#ffffff', 0.35));
+    expect(outer).toHaveLength(2 * 6 + 1);
+    expect(inner).toHaveLength(2 * 3 + 1);
+    for (const row of [...outer, ...inner]) expect(row.w).toBeGreaterThan(0);
   });
 });

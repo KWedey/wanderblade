@@ -24,10 +24,12 @@ import {
   lightnessOf,
   glowRingRadii,
   momentumLift,
+  pillarSpans,
   realmSkin,
   skinValueSpread,
   sunHaloBands,
   torchFlicker,
+  torchGlowBands,
   vignetteInsets,
 } from '../src/scene/palette';
 
@@ -404,5 +406,40 @@ describe('torchFlicker', () => {
     const a = [0, 1, 2, 3].map((t) => torchFlicker(t, 1));
     const b = [0, 1, 2, 3].map((t) => torchFlicker(t, 2));
     expect(a).not.toEqual(b);
+  });
+});
+
+describe('pillarSpans', () => {
+  it('places one pier at each edge, mirrored, at the requested width', () => {
+    const spans = pillarSpans(400, 0.1);
+    expect(spans).toHaveLength(2);
+    expect(spans[0]).toEqual({ x: 0, w: 40 });
+    expect(spans[1]).toEqual({ x: 360, w: 40 });
+  });
+
+  it('never lets the two piers overlap on a narrow viewport', () => {
+    const spans = pillarSpans(50, 0.4);
+    const [left, right] = spans as [{ x: number; w: number }, { x: number; w: number }];
+    expect(left.x + left.w).toBeLessThanOrEqual(right.x);
+  });
+});
+
+describe('torchGlowBands', () => {
+  it('returns nothing for a torch with no reach', () => {
+    expect(torchGlowBands(0)).toEqual([]);
+  });
+
+  it('steps radius inward and mix outward, widest and faintest first', () => {
+    const bands = torchGlowBands(50);
+    for (let i = 1; i < bands.length; i++) {
+      expect(bands[i]!.r, `band ${i} radius`).toBeLessThan(bands[i - 1]!.r);
+      expect(bands[i]!.mix, `band ${i} mix`).toBeGreaterThan(bands[i - 1]!.mix);
+    }
+  });
+
+  it('scales every band with reach, so a guttering flame shrinks its whole pool', () => {
+    const full = torchGlowBands(50);
+    const dim = torchGlowBands(25);
+    for (let i = 0; i < full.length; i++) expect(dim[i]!.r).toBeLessThan(full[i]!.r);
   });
 });
