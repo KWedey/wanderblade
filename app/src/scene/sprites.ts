@@ -72,8 +72,8 @@ export function bakeSprite(map: SpriteMap, ink: InkSet): BakedSprite {
  * Draw a baked sprite with its *feet* at (x, y) and optional horizontal flip.
  * Positions are floored so sprites always land on the scene's pixel grid — a
  * half-pixel offset is what makes procedural pixel art look mushy. `scale`
- * grows the sprite from that same feet anchor (a dungeon guardian filling the
- * room, DECISIONS.md #58) without moving any combat position derived from it.
+ * grows the sprite from that same feet anchor (DECISIONS.md #58) without
+ * moving any combat position derived from it.
  */
 export function drawSprite(
   ctx: CanvasRenderingContext2D,

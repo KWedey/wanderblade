@@ -386,11 +386,18 @@ describe('brickJointXs', () => {
 
 describe('torchFlicker', () => {
   it('stays within [0.7, 1] across a full swing of the clock', () => {
+    let lo = Infinity;
+    let hi = -Infinity;
     for (let t = 0; t < 20; t += 0.05) {
       const v = torchFlicker(t, 1);
       expect(v).toBeGreaterThanOrEqual(0.7);
       expect(v).toBeLessThanOrEqual(1);
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
     }
+    // The loose [0.7, 1] bounds above pass even for a nearly-flat torch; an
+    // actual flicker has to swing, or the light reads as dead rather than lit.
+    expect(hi - lo).toBeGreaterThan(0.2);
   });
 
   it('gives different torches different phase from their seed alone', () => {

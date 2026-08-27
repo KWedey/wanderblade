@@ -489,13 +489,14 @@ export function drawStoneWall(
   jointTone: string,
   brickH: number,
 ): void {
+  if (tones.length === 0) return;
   const h = Math.max(1, brickH);
   const rows = Math.max(1, Math.ceil((bottom - top) / h));
   for (let r = 0; r < rows; r++) {
     const y = top + r * h;
     const rowH = Math.min(h, bottom - y);
     if (rowH <= 0) break;
-    const tone = tones[Math.min(tones.length - 1, Math.floor((r / rows) * tones.length))]!;
+    const tone = tones[Math.max(0, Math.min(tones.length - 1, Math.floor((r / rows) * tones.length)))]!;
     ctx.fillStyle = tone;
     ctx.fillRect(0, y, vw, rowH);
     ctx.fillStyle = jointTone;
@@ -881,12 +882,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     });
   }
 
+  /** The guardian renders at BOSS_SCALE (DECISIONS.md #58); every place that reasons about its on-screen size shares this. */
+  function leadScale(): number {
+    return model.boss ? BOSS_SCALE : 1;
+  }
+
   /** Half the lead's sprite, plus whatever its group spread pulls forward. */
   function engageInset(): number {
     const lead = queue[0];
     if (!lead) return 12;
     const sprite = skinnedFor(model.region).monsters[lead.sprite];
-    return Math.round((sprite ? sprite.width : 20) / 2) - lead.spread;
+    return Math.round((sprite ? sprite.width * leadScale() : 20) / 2) - lead.spread;
   }
 
   function killMonster(skin: RealmSkin): void {
@@ -917,9 +923,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     if (!lead || lead.x - engageInset() > heroX + BLADE_REACH + 16) return;
 
     const leadSprite = skinnedFor(model.region).monsters[lead.sprite];
-    // The guardian renders at BOSS_SCALE; contact and damage-number placement
-    // have to land on the scaled silhouette, not the sprite's raw box.
-    const scale = model.boss ? BOSS_SCALE : 1;
+    // Contact and damage-number placement have to land on the scaled silhouette, not the sprite's raw box.
+    const scale = leadScale();
     const leadHeight = leadSprite ? leadSprite.height * scale : 16;
     // On the creature's body, past its near edge. Six pixels back toward the
     // swinger put the brightest thing in the frame in the hero's neighbourhood,
@@ -1716,7 +1721,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const lead = queue[0];
     const sprite = lead ? skinnedFor(model.region).monsters[lead.sprite] : null;
     if (lead && sprite) {
-      const scale = model.boss ? BOSS_SCALE : 1;
+      const scale = leadScale();
       out.push(bodyPocket(lead.x + lead.spread, groundY, sprite.width * scale, sprite.height * scale));
     }
     return out;
@@ -1784,8 +1789,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawGroundBands(ctx, vw, 0, ceilingH, depthBandTones(ceilingBase, WALL_BANDS));
     drawStoneWall(ctx, vw, ceilingH, groundY, depthBandTones(wallBase, WALL_BANDS), jointTone, BRICK_H);
 
-    // Torches: the fight's own light, nothing borrowed from a sky that no
-    // longer exists here (DECISIONS.md #58 — lit from the encounter only).
+    // Torches: the fight's own light — the room has no sky to borrow one
+    // from (DECISIONS.md #58 — lit from the encounter only).
     // The right dock covers up to 34% of vw (styles.css --dock-w), same limit
     // drawSun already respects — a torch past that fraction is never seen.
     const flame = mixHex('#df7126', skin.accent, 0.25);
@@ -1800,7 +1805,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawVignette(
       ctx,
       vw,
-      vh,
+      sceneBottomY,
       depthBandTones(mixHex(ceilingBase, '#000000', 0.3), VIGNETTE_BANDS),
       VIGNETTE_STEP,
     );
@@ -1814,7 +1819,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const floorBase = mixHex(skin.rock, '#1a1c2c', 0.28);
     drawGroundBands(ctx, vw, groundY, floorH, depthBandTones(lighten(floorBase, lift), GROUND_BANDS));
     ctx.fillStyle = mixHex(floorBase, '#000000', 0.5);
-    ctx.fillRect(0, groundY + floorH, vw, vh - groundY - floorH);
+    ctx.fillRect(0, groundY + floorH, vw, sceneBottomY - groundY - floorH);
   }
 
   /** Lanes the engaged monster's health bar is sitting across this frame. */
@@ -1841,9 +1846,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
               Math.round(Math.sin(clockSec * 1.6 + m.bob * 2.3) * 2);
       const x = m.x + m.spread - lunge;
       if (x < -40 || x > worldRightX + 60) continue;
-      // The guardian fills the dungeon at BOSS_SCALE (DECISIONS.md #58); its
-      // shadow, sprite and health bar all have to scale with it together.
-      const scale = i === 0 && model.boss ? BOSS_SCALE : 1;
+      // Its shadow, sprite and health bar all have to scale with it together.
+      const scale = i === 0 ? leadScale() : 1;
       drawShadow(x, (sprite.width - 2) * scale, i === 0 ? ACTOR_SHADOW : undefined);
       drawSprite(ctx, sprite, x, groundY + bob, true, false, scale);
       // The flash lights the creature rather than replacing it. Swapping in the
