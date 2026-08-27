@@ -38,6 +38,7 @@ import {
   OUTLINE_INK,
   REALM_SKIN_COUNT,
   backdropSkin,
+  brickJointXs,
   clampHillStep,
   depthBandTones,
   depthHaze,
@@ -56,6 +57,8 @@ import {
   realmSkin,
   sceneryInk,
   sunHaloBands,
+  torchFlicker,
+  vignetteInsets,
   type FoliageLobe,
   type RealmSkin,
 } from './palette';
@@ -124,8 +127,8 @@ export interface SceneModel {
   reduceMotion: boolean;
   /**
    * Set only in the Portal (DECISIONS.md #15). `hpFrac` is the guardian's
-   * remaining health [0,1]; the scene swaps the road queue for one guardian
-   * standing in a drawn portal rather than dressing the boss as an encounter.
+   * remaining health [0,1]; the scene swaps the road diorama for an enclosed
+   * stone dungeon holding the guardian alone (DECISIONS.md #58).
    */
   boss: { hpFrac: number } | null;
   /** Loot arcs in flight, straight off GameState — the scene never owns these. */
@@ -193,6 +196,13 @@ const APPROACH_FRAC = 0.3;
  * health is a ten-minute fight, and marching it in over that reads as a road
  * approach rather than a duel. */
 const BOSS_ENTRANCE_SEC = 1.1;
+/** Guardian render scale in the dungeon — scale contrast against the hero is the point (DECISIONS.md #58). */
+const BOSS_SCALE = 2;
+/** Dungeon room geometry (DECISIONS.md #58): brick course height, wall/ceiling band counts, edge-vignette bands and their width in scene pixels. */
+const BRICK_H = 7;
+const WALL_BANDS = 3;
+const VIGNETTE_BANDS = 4;
+const VIGNETTE_STEP = 3;
 
 const SWINGS_PER_SEC = 1.7;
 
@@ -462,6 +472,55 @@ export function drawGroundBands(
     ctx.fillStyle = tones[i]!;
     ctx.fillRect(0, y, vw, h);
     y += h;
+  }
+}
+
+/**
+ * Brick courses from `top` to `bottom`: each row a flat tone (depth-banded
+ * the same way the turf is) with 1px mortar joints staggered per row via
+ * `brickJointXs`, so the wall reads as coursed masonry rather than tile.
+ */
+export function drawStoneWall(
+  ctx: FillCtx,
+  vw: number,
+  top: number,
+  bottom: number,
+  tones: readonly string[],
+  jointTone: string,
+  brickH: number,
+): void {
+  const h = Math.max(1, brickH);
+  const rows = Math.max(1, Math.ceil((bottom - top) / h));
+  for (let r = 0; r < rows; r++) {
+    const y = top + r * h;
+    const rowH = Math.min(h, bottom - y);
+    if (rowH <= 0) break;
+    const tone = tones[Math.min(tones.length - 1, Math.floor((r / rows) * tones.length))]!;
+    ctx.fillStyle = tone;
+    ctx.fillRect(0, y, vw, rowH);
+    ctx.fillStyle = jointTone;
+    for (const x of brickJointXs(vw, r, h * 2)) {
+      ctx.fillRect(x, y, 1, rowH);
+    }
+  }
+}
+
+/**
+ * Frame the room darkens toward at its very edges: concentric non-overlapping
+ * border rings, outermost first, each a flat tone — discrete bands standing in
+ * for a vignette gradient (DECISIONS.md #13).
+ */
+export function drawVignette(ctx: FillCtx, vw: number, vh: number, tones: readonly string[], step: number): void {
+  const insets = vignetteInsets(tones.length, step);
+  for (let i = 0; i < tones.length; i++) {
+    const inset = insets[i]!;
+    const innerW = Math.max(0, vw - inset * 2);
+    const innerH = Math.max(0, vh - inset * 2 - step * 2);
+    ctx.fillStyle = tones[i]!;
+    ctx.fillRect(inset, inset, innerW, step);
+    ctx.fillRect(inset, vh - inset - step, innerW, step);
+    ctx.fillRect(inset, inset + step, step, innerH);
+    ctx.fillRect(vw - inset - step, inset + step, step, innerH);
   }
 }
 
@@ -858,12 +917,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     if (!lead || lead.x - engageInset() > heroX + BLADE_REACH + 16) return;
 
     const leadSprite = skinnedFor(model.region).monsters[lead.sprite];
-    const leadHeight = leadSprite ? leadSprite.height : 16;
+    // The guardian renders at BOSS_SCALE; contact and damage-number placement
+    // have to land on the scaled silhouette, not the sprite's raw box.
+    const scale = model.boss ? BOSS_SCALE : 1;
+    const leadHeight = leadSprite ? leadSprite.height * scale : 16;
     // On the creature's body, past its near edge. Six pixels back toward the
     // swinger put the brightest thing in the frame in the hero's neighbourhood,
     // and a burst beside him beats his silhouette even when it paints behind
     // him: draw order fixes occlusion, not adjacency.
-    const contactX = lead.x + lead.spread + Math.round(leadSprite ? leadSprite.width * 0.2 : 3);
+    const contactX = lead.x + lead.spread + Math.round(leadSprite ? leadSprite.width * scale * 0.2 : 3);
     const contactY = groundY - Math.round(leadHeight * 0.55);
     lead.flash = 0.05;
     lead.recoil = fromStrike ? 5 : 3;
@@ -1063,7 +1125,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         age: 0,
         life: 0.4 + hash01(clockSec * 3) * 0.3,
         size: 1 + (hash01(clockSec * 21) > 0.6 ? 1 : 0),
-        color: skin.turfLip,
+        color: model.boss ? skin.rock : skin.turfLip,
         gravity: 0.35,
       });
     }
@@ -1597,8 +1659,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
    */
   function drawShadow(x: number, width: number, depth = 0.52): void {
     const skin = realmSkin(model.region);
-    const core = mixHex(skin.turf, '#1a1c2c', depth);
-    const edge = mixHex(skin.turf, '#1a1c2c', depth * 0.58);
+    // Stone, not turf, once the fight is enclosed — a green cast shadow on a
+    // dungeon floor is the road's ground pretending it followed the hero in.
+    const ground = model.boss ? skin.rock : skin.turf;
+    const core = mixHex(ground, '#1a1c2c', depth);
+    const edge = mixHex(ground, '#1a1c2c', depth * 0.58);
     // The sun sits upper right, so the shadow pools to the left of the feet.
     const cx = x - Math.round(width * 0.16);
     const rows: readonly (readonly [number, string])[] = [
@@ -1619,12 +1684,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   /** The hero's own light and contact shadow. Ground decals, so they stay under everything. */
   function drawHeroGround(): void {
     // The hero stands in his own light. White read as salt scattered on the
-    // grass, so the pool is a lit tone of the turf itself.
+    // grass, so the pool is a lit tone of the ground he is actually on.
     const lit = realmSkin(model.region);
     litPool(
       heroX,
       20,
-      lighten(lit.turf, 0.42),
+      lighten(model.boss ? lit.rock : lit.turf, 0.42),
       Math.min(0.6, 0.16 + momentumLift(model.momentum) * 1.5),
     );
     // From the sprite, the way every other caller does it. A literal 12 was
@@ -1651,7 +1716,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     const lead = queue[0];
     const sprite = lead ? skinnedFor(model.region).monsters[lead.sprite] : null;
     if (lead && sprite) {
-      out.push(bodyPocket(lead.x + lead.spread, groundY, sprite.width, sprite.height));
+      const scale = model.boss ? BOSS_SCALE : 1;
+      out.push(bodyPocket(lead.x + lead.spread, groundY, sprite.width * scale, sprite.height * scale));
     }
     return out;
   }
@@ -1706,59 +1772,47 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /**
-   * The rift the guardian stepped out of. Taller and wider than the thing in
-   * front of it, because the frame has to read as the end of a realm before
-   * anyone gets to the panel: the boss used to be a road encounter in the same
-   * forest with nothing drawn behind it.
+   * The dungeon's walls, ceiling and edge vignette (DECISIONS.md #58) — the
+   * unshaken backdrop layer, not part of the ground plane the camera jolts.
    */
-  function drawPortal(skin: RealmSkin, cx: number, guardianH: number): void {
-    const h = Math.round(guardianH * 1.42);
-    const halfW = Math.round(guardianH * 0.5);
-    const top = groundY - h;
-    // Lit from the inside out. A dark mouth put a dark creature inside a dark
-    // hole and lost the whole silhouette; against a bright rift the guardian
-    // reads as a shape before it reads as a colour.
-    //
-    // Violet, not the realm accent: on the accent the Greenwood's rift came out
-    // gold and read as a lamplit archway. A tint of the realm keeps ten portals
-    // from being one portal, but the otherworld owns the hue.
-    const rim = mixHex('#76428a', skin.accent, 0.22);
-    const mid = mixHex('#b04ea6', skin.accent, 0.18);
-    const core = mixHex('#d77bba', skin.accent, 0.14);
-    const CROWN = 0.44;
-    for (let y = Math.max(0, top); y < groundY; y++) {
-      const t = (y - top) / h;
-      // A true dome, not a chamfer: the boxy version read as a barn door.
-      const k = t < CROWN ? 1 - t / CROWN : 0;
-      const half = Math.max(1, Math.round(halfW * Math.sqrt(Math.max(0, 1 - k * k))));
-      // Three flat bands, no gradient and no blur (DECISIONS.md #13).
-      ctx.fillStyle = rim;
-      ctx.fillRect(cx - half, y, half * 2, 1);
-      const b2 = Math.round(half * 0.78);
-      ctx.fillStyle = mid;
-      ctx.fillRect(cx - b2, y, b2 * 2, 1);
-      const b3 = Math.round(half * 0.44);
-      ctx.fillStyle = core;
-      ctx.fillRect(cx - b3, y, b3 * 2, 1);
-      // The mouth's own hard edge, one pixel, darker than anything inside it.
-      ctx.fillStyle = OUTLINE_INK;
-      ctx.fillRect(cx - half - 1, y, 1, 1);
-      ctx.fillRect(cx + half, y, 1, 1);
-    }
-    ctx.fillStyle = OUTLINE_INK;
-    ctx.fillRect(cx - halfW - 1, groundY - 1, halfW * 2 + 2, 2);
+  function drawDungeonBackdrop(skin: RealmSkin): void {
+    const ceilingH = Math.max(8, Math.round(groundY * 0.22));
+    const wallBase = mixHex(skin.rock, '#1a1c2c', 0.12);
+    const ceilingBase = mixHex(skin.rock, '#1a1c2c', 0.55);
+    const jointTone = mixHex(wallBase, '#1a1c2c', 0.45);
 
-    if (model.reduceMotion) return;
-    // Embers climbing the throat, so the rift is open rather than painted on.
-    ctx.fillStyle = core;
-    for (let i = 0; i < 16; i++) {
-      const life = (clockSec * 0.32 + hash01(i * 3.7)) % 1;
-      const y = Math.round(groundY - 3 - life * (h - 10));
-      if (y < top + 2) continue;
-      const spread = halfW * 0.9 * (1 - life * 0.5);
-      const x = Math.round(cx + (hash01(i * 8.1) - 0.5) * 2 * spread);
-      ctx.fillRect(x, y, 1, life > 0.6 ? 1 : 2);
+    drawGroundBands(ctx, vw, 0, ceilingH, depthBandTones(ceilingBase, WALL_BANDS));
+    drawStoneWall(ctx, vw, ceilingH, groundY, depthBandTones(wallBase, WALL_BANDS), jointTone, BRICK_H);
+
+    // Torches: the fight's own light, nothing borrowed from a sky that no
+    // longer exists here (DECISIONS.md #58 — lit from the encounter only).
+    const flame = mixHex('#df7126', skin.accent, 0.25);
+    const torchY = ceilingH + Math.round((groundY - ceilingH) * 0.32);
+    for (const [side, seed] of [[0.16, 2.1] as const, [0.84, 5.7] as const]) {
+      const tx = Math.round(vw * side);
+      const flick = model.reduceMotion ? 0.92 : torchFlicker(clockSec, seed);
+      glowDisc(tx, torchY, 10 * flick, mixHex(flame, '#000000', 0.35), 0.5 * flick);
+      glowDisc(tx, torchY, 4 * flick, flame, flick);
     }
+
+    drawVignette(
+      ctx,
+      vw,
+      vh,
+      depthBandTones(mixHex(ceilingBase, '#000000', 0.3), VIGNETTE_BANDS),
+      VIGNETTE_STEP,
+    );
+  }
+
+  /** The dungeon's stone floor — same banded-turf idiom as the road, stone tones instead of grass. */
+  function drawDungeonFloor(skin: RealmSkin): void {
+    const belowH = Math.max(8, sceneBottomY - groundY);
+    const floorH = Math.max(6, Math.floor(belowH * 0.9));
+    const lift = momentumLift(model.momentum);
+    const floorBase = mixHex(skin.rock, '#1a1c2c', 0.28);
+    drawGroundBands(ctx, vw, groundY, floorH, depthBandTones(lighten(floorBase, lift), GROUND_BANDS));
+    ctx.fillStyle = mixHex(floorBase, '#000000', 0.5);
+    ctx.fillRect(0, groundY + floorH, vw, vh - groundY - floorH);
   }
 
   /** Lanes the engaged monster's health bar is sitting across this frame. */
@@ -1785,14 +1839,17 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
               Math.round(Math.sin(clockSec * 1.6 + m.bob * 2.3) * 2);
       const x = m.x + m.spread - lunge;
       if (x < -40 || x > worldRightX + 60) continue;
-      drawShadow(x, sprite.width - 2, i === 0 ? ACTOR_SHADOW : undefined);
-      drawSprite(ctx, sprite, x, groundY + bob, true);
+      // The guardian fills the dungeon at BOSS_SCALE (DECISIONS.md #58); its
+      // shadow, sprite and health bar all have to scale with it together.
+      const scale = i === 0 && model.boss ? BOSS_SCALE : 1;
+      drawShadow(x, (sprite.width - 2) * scale, i === 0 ? ACTOR_SHADOW : undefined);
+      drawSprite(ctx, sprite, x, groundY + bob, true, false, scale);
       // The flash lights the creature rather than replacing it. Swapping in the
       // silhouette outright turned a 24x30 golem into a white mass for a third
       // of all frames, which is what read as a missing sprite.
       if (m.flash > 0) {
         ctx.globalAlpha = 0.55;
-        drawSprite(ctx, sprite, x, groundY + bob, true, true);
+        drawSprite(ctx, sprite, x, groundY + bob, true, true, scale);
         ctx.globalAlpha = 1;
       }
 
@@ -1807,9 +1864,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       if (remaining >= 1 || remaining <= 0.02) continue;
       // Anchored to the creature's mass, not its box: a stalker's antenna
       // put its bar on a shelf of empty air well above the thing being fought.
-      const w = sprite.mass.width;
+      const w = sprite.mass.width * scale;
       const bx = Math.floor(x - w / 2);
-      const by = groundY - sprite.height + sprite.mass.top - 3 + bob;
+      const by = groundY - sprite.height * scale + sprite.mass.top * scale - 3 + bob;
       barSpans = lanesTouching(by - 1, by + 3, groundY, LANE_COUNT).map((lane) => ({
         x: bx - 1,
         w: w + 2,
@@ -2043,42 +2100,45 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, vw, vh);
 
-    const far = backdropSkin(skin);
-    const haze = depthHaze(skin);
-    drawSky(skin);
-    drawClouds(skin);
-    drawBirds(sprites);
-    drawRange(far);
-    drawHills(ctx, vw, groundY, far.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4, haze);
-    drawHills(
-      ctx,
-      vw,
-      groundY,
-      far.hillNear,
-      far.hillLip,
-      scrollHillNear,
-      groundY * 0.11,
-      groundY * 0.18,
-      1.7,
-      3,
-      haze,
-    );
-    drawGrove(far);
-    drawDrift(far);
-    drawTreeline(sprites);
-    drawSun(skin);
+    if (model.boss) {
+      drawDungeonBackdrop(skin);
+    } else {
+      const far = backdropSkin(skin);
+      const haze = depthHaze(skin);
+      drawSky(skin);
+      drawClouds(skin);
+      drawBirds(sprites);
+      drawRange(far);
+      drawHills(ctx, vw, groundY, far.hillFar, null, scrollHillFar, groundY * 0.14, groundY * 0.34, 1, 4, haze);
+      drawHills(
+        ctx,
+        vw,
+        groundY,
+        far.hillNear,
+        far.hillLip,
+        scrollHillNear,
+        groundY * 0.11,
+        groundY * 0.18,
+        1.7,
+        3,
+        haze,
+      );
+      drawGrove(far);
+      drawDrift(far);
+      drawTreeline(sprites);
+      drawSun(skin);
+    }
 
     const jolt = model.reduceMotion ? { x: 0, y: 0 } : shakeOffset(shake, clockSec);
     ctx.save();
     ctx.translate(Math.round(jolt.x), Math.round(jolt.y));
 
-    drawGround(skin);
-    drawFence(sprites, skin);
-    drawProps(sprites);
     if (model.boss) {
-      const lead = queue[0];
-      const guardian = sprites.monsters[bossSlot(model.region)];
-      if (lead && guardian) drawPortal(skin, Math.round(lead.x), guardian.height);
+      drawDungeonFloor(skin);
+    } else {
+      drawGround(skin);
+      drawFence(sprites, skin);
+      drawProps(sprites);
     }
     drawMonsters(sprites);
     drawHeroGround();
@@ -2086,13 +2146,13 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawParticles();
     drawRests();
     drawStreaks();
-    drawMotes(skin);
+    if (!model.boss) drawMotes(skin);
     // Last of the world layers, so nothing bright can ever be painted over the
     // one figure that must always read. The pocket test below is the second
     // line: it keeps effects from crowding the silhouette even from behind.
     drawHero();
     drawFloaters();
-    drawForeground(sprites);
+    if (!model.boss) drawForeground(sprites);
     drawMomentumMeter(skin);
 
     ctx.restore();
