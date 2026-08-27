@@ -1786,9 +1786,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     // Torches: the fight's own light, nothing borrowed from a sky that no
     // longer exists here (DECISIONS.md #58 — lit from the encounter only).
+    // The right dock covers up to 34% of vw (styles.css --dock-w), same limit
+    // drawSun already respects — a torch past that fraction is never seen.
     const flame = mixHex('#df7126', skin.accent, 0.25);
     const torchY = ceilingH + Math.round((groundY - ceilingH) * 0.32);
-    for (const [side, seed] of [[0.16, 2.1] as const, [0.84, 5.7] as const]) {
+    for (const [side, seed] of [[0.14, 2.1] as const, [0.58, 5.7] as const]) {
       const tx = Math.round(vw * side);
       const flick = model.reduceMotion ? 0.92 : torchFlicker(clockSec, seed);
       glowDisc(tx, torchY, 10 * flick, mixHex(flame, '#000000', 0.35), 0.5 * flick);
