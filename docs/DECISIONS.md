@@ -834,3 +834,18 @@ So "active gameplay trigger" carries a consequence this ADR names rather than bu
 **What does not change.** Manual entry, no enrage timer, no death, no retry cooldown, no income during the fight, build locked at entry, abandonment resetting only that attempt's HP (#14-#18, guardrail 6). One input, one momentum curve, hold-to-autostrike (#19).
 
 **Supersedes** `DESIGN.md` §Presentation's one-line description of the Portal Boss screen, which is replaced by the section this ADR adds.
+
+## 59. The dungeon room is built — walls, ceiling, torches, guardian at scale — 2026-08-26
+
+**Decision:** `scene.ts:1778`'s `drawDungeonBackdrop`/`drawDungeonFloor` replace `drawPortal`'s rift-in-the-road with an enclosed stone room per #58's spec: a banded ceiling and coursed brick walls (`drawStoneWall`, new pure geometry `brickJointXs`/`vignetteInsets` in `palette.ts`), two torches as the only light source, a 4-band edge vignette (`drawVignette`) standing in for a gradient (#13), and a stone-toned floor. The guardian sprite scales 2x from its feet anchor (`drawSprite`'s new `scale` param) to fill the room; shadow, ground-lit pool, and boot-dust particles switch from `skin.turf` to `skin.rock` while `model.boss` is set, so nothing on the ground still reads as grass.
+
+**Why the guardian, and only the guardian, scales:** the hero's own animation, hitbox, and combat feel are untouched — DECISIONS.md #58 asked for scale contrast, not a hero redesign, and the brief's scope explicitly excluded touching the hero sprite.
+
+**Evidence:**
+- Deterministic: `palette.test.ts` covers `vignetteInsets`, `brickJointXs`, `torchFlicker` (48 tests total, was 41). `scene.test.ts` adds `drawStoneWall`/`drawVignette` fake-`FillCtx` tests asserting actual `fillRect` calls — full-width courses stacking with no gap, staggered mortar joints, four non-overlapping rings per vignette band — not just the geometry underneath, per ADR #57's sun-halo lesson (10 tests total, was 5).
+- Qualitative: `.gauntlet/ours/boss-fixed.png` (staged `?stage=late&seed=7`, boss entered via a one-off Playwright driver, `.gauntlet/boss-capture.mjs`) shows the enclosed room — stone walls and ceiling, no sky, guardian filling the frame, hero alone beneath it — against `.gauntlet/ours/road-before.png`'s open sky/hills/sun for the same run.
+- Measured, with a 3-capture spread first: three repeat captures of the same commit (`boss1`/`boss2`/`boss3.png`) gave byte-identical pixel readings in a static wall/vignette corner (`mean saturation 0.324, mean brightness 0.365`, top colour `rgb(26,28,44)` at 35.8%, all three runs) — the corner is stable evidence; the combat area isn't (three different SHA-256s overall, expected from live swing/particle animation).
+- Bug found by that same measurement, not by eye: the right torch (`0.84 * vw`) painted zero warm pixels across all three captures — `styles.css`'s `--dock-w` (`min(480px, 34vw)`) covers up to 34% of the canvas on desktop, and `drawSun` already keeps its own light source under `0.6 * vw` for exactly this reason. Moved both torches inside that boundary (`0.14`/`0.58`); re-measured warm-pixel clusters on both sides after the fix.
+- Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 716 passed (716)**.
+
+**Not touched:** road scene, hero sprite/animation, economy constants, core rules. `bossSlot`/queue mechanics unchanged — the guardian is still the sole queue entry `model.boss` gates on.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { lightnessOf, MIN_HILL_SHADOW_GAP } from '../src/scene/palette';
-import { drawGroundBands, drawHills, type FillCtx } from '../src/scene/scene';
+import { drawGroundBands, drawHills, drawStoneWall, drawVignette, type FillCtx } from '../src/scene/scene';
 
 /** Records what drawHills actually paints — a pure-geometry test alone can pass while the loop that draws it stays broken. */
 function fakeCtx(): { ctx: FillCtx; calls: Array<{ style: string; x: number; y: number; w: number; h: number }> } {
@@ -75,5 +75,79 @@ describe('drawGroundBands paints the turf as stacked flat strips, not one solid 
     const { ctx, calls } = fakeCtx();
     drawGroundBands(ctx, 400, 500, 20, ['#111111', '#222222']);
     for (const call of calls) expect(call.w).toBe(400);
+  });
+});
+
+describe('drawStoneWall paints coursed masonry, not a single flat panel', () => {
+  const vw = 300;
+  const top = 20;
+  const bottom = 100;
+  const brickH = 7;
+  const tones = ['#111111', '#222222', '#3a3a3a'];
+  const jointTone = '#0a0a0a';
+
+  function run() {
+    const { ctx, calls } = fakeCtx();
+    drawStoneWall(ctx, vw, top, bottom, tones, jointTone, brickH);
+    return calls;
+  }
+
+  it('fills every course full-width, stacked top to bottom with no gap or overlap', () => {
+    const calls = run();
+    const courses = calls.filter((c) => c.w === vw);
+    expect(courses.length).toBeGreaterThan(1);
+    expect(courses[0]!.y).toBe(top);
+    for (let i = 1; i < courses.length; i++) {
+      expect(courses[i]!.y, `course ${i} start`).toBe(courses[i - 1]!.y + courses[i - 1]!.h);
+    }
+    const last = courses[courses.length - 1]!;
+    expect(last.y + last.h).toBe(bottom);
+  });
+
+  it('stamps mortar joints as narrow rects that stagger between adjacent courses', () => {
+    const calls = run();
+    const joints = calls.filter((c) => c.w === 1);
+    expect(joints.length).toBeGreaterThan(0);
+    for (const j of joints) expect(j.style).toBe(jointTone);
+    const rowsOfJoints = new Map<number, number[]>();
+    for (const j of joints) rowsOfJoints.set(j.y, [...(rowsOfJoints.get(j.y) ?? []), j.x]);
+    const rowYs = [...rowsOfJoints.keys()].sort((a, b) => a - b);
+    expect(rowsOfJoints.get(rowYs[0]!)).not.toEqual(rowsOfJoints.get(rowYs[1]!));
+  });
+});
+
+describe('drawVignette darkens the frame in discrete, non-overlapping rings', () => {
+  const vw = 300;
+  const vh = 200;
+  const step = 3;
+  const tones = ['#000000', '#222222', '#444444', '#666666'];
+
+  function run() {
+    const { ctx, calls } = fakeCtx();
+    drawVignette(ctx, vw, vh, tones, step);
+    return calls;
+  }
+
+  it('paints four border strips per ring — top, bottom, left, right — never a filled gradient', () => {
+    const calls = run();
+    expect(calls.length).toBe(tones.length * 4);
+  });
+
+  it('nests each ring one step further in, darkest tone at the true screen edge', () => {
+    const calls = run();
+    for (let i = 0; i < tones.length; i++) {
+      const top = calls[i * 4]!;
+      expect(top.style).toBe(tones[i]);
+      expect(top.x).toBe(i * step);
+      expect(top.y).toBe(i * step);
+    }
+  });
+
+  it('never lets two rings claim the same row of the top strip', () => {
+    const calls = run();
+    const topStrips = calls.filter((_, idx) => idx % 4 === 0);
+    for (let i = 1; i < topStrips.length; i++) {
+      expect(topStrips[i]!.y).toBeGreaterThan(topStrips[i - 1]!.y);
+    }
   });
 });

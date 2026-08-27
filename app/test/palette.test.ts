@@ -9,6 +9,7 @@ import {
   MIN_VALUE_SPREAD,
   REALM_SKIN_COUNT,
   backdropSkin,
+  brickJointXs,
   clampHillStep,
   coherentRange,
   depthBandTones,
@@ -25,6 +26,8 @@ import {
   realmSkin,
   skinValueSpread,
   sunHaloBands,
+  torchFlicker,
+  vignetteInsets,
 } from '../src/scene/palette';
 
 describe('realm value floor', () => {
@@ -347,5 +350,51 @@ describe('grassClumpBlades', () => {
         expect(Math.abs(b.dy)).toBeLessThanOrEqual(3);
       }
     }
+  });
+});
+
+describe('vignetteInsets', () => {
+  it('starts at zero and steps outward by a fixed amount, darkest first', () => {
+    const insets = vignetteInsets(4, 6);
+    expect(insets).toEqual([0, 6, 12, 18]);
+  });
+
+  it('never returns fewer than one band even if asked for zero', () => {
+    expect(vignetteInsets(0, 6)).toHaveLength(1);
+  });
+});
+
+describe('brickJointXs', () => {
+  it('covers the full width at a fixed spacing', () => {
+    const xs = brickJointXs(100, 0, 20);
+    expect(xs).toEqual([0, 20, 40, 60, 80]);
+  });
+
+  it('staggers odd rows by half a brick so joints do not line up into a grid', () => {
+    const even = brickJointXs(100, 0, 20);
+    const odd = brickJointXs(100, 1, 20);
+    expect(odd[0]).toBe(10);
+    expect(odd).not.toEqual(even);
+  });
+
+  it('is stable for the same row parity regardless of row number', () => {
+    expect(brickJointXs(100, 2, 20)).toEqual(brickJointXs(100, 0, 20));
+    expect(brickJointXs(100, 3, 20)).toEqual(brickJointXs(100, 1, 20));
+  });
+});
+
+describe('torchFlicker', () => {
+  it('stays within [0.7, 1] across a full swing of the clock', () => {
+    for (let t = 0; t < 20; t += 0.05) {
+      const v = torchFlicker(t, 1);
+      expect(v).toBeGreaterThanOrEqual(0.7);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('gives different torches different phase from their seed alone', () => {
+    const a = [0, 1, 2, 3].map((t) => torchFlicker(t, 1));
+    const b = [0, 1, 2, 3].map((t) => torchFlicker(t, 2));
+    expect(a).not.toEqual(b);
   });
 });

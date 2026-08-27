@@ -902,3 +902,35 @@ export function grassClumpBlades(r1: number, r2: number, r3: number): GrassBlade
   if (r3 > 0.35) blades.push({ dx: Math.round((r3 - 0.5) * 9), dy: -Math.round(r1 * 2) });
   return blades;
 }
+
+// --- Portal Boss dungeon (DECISIONS.md #58) --------------------------------
+
+/**
+ * Nested vignette insets, outermost (darkest) band first. The frame darkens
+ * toward its edges in discrete steps rather than resolving into distance
+ * (DECISIONS.md #13: no gradient — more bands of flat colour, never a ramp).
+ */
+export function vignetteInsets(bands: number, step: number): number[] {
+  return Array.from({ length: Math.max(1, bands) }, (_, i) => i * step);
+}
+
+/**
+ * Vertical mortar-joint columns for one brick course, running bond: odd rows
+ * shift by half a brick so joints stagger like real stonework instead of
+ * lining up into a grid.
+ */
+export function brickJointXs(vw: number, row: number, brickW: number): number[] {
+  const w = Math.max(1, brickW);
+  const offset = row % 2 === 0 ? 0 : Math.floor(w / 2);
+  const out: number[] = [];
+  for (let x = offset; x < vw; x += w) out.push(x);
+  return out;
+}
+
+/**
+ * Torch flicker in [0.7, 1], seeded per torch so two flames never pulse in
+ * lockstep — the dungeon's one light source has to read as alive.
+ */
+export function torchFlicker(clockSec: number, seed: number): number {
+  return 0.85 + 0.15 * Math.sin(clockSec * 6.3 + seed) * Math.sin(clockSec * 2.1 + seed * 1.7);
+}

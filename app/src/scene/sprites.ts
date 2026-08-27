@@ -71,7 +71,9 @@ export function bakeSprite(map: SpriteMap, ink: InkSet): BakedSprite {
 /**
  * Draw a baked sprite with its *feet* at (x, y) and optional horizontal flip.
  * Positions are floored so sprites always land on the scene's pixel grid — a
- * half-pixel offset is what makes procedural pixel art look mushy.
+ * half-pixel offset is what makes procedural pixel art look mushy. `scale`
+ * grows the sprite from that same feet anchor (a dungeon guardian filling the
+ * room, DECISIONS.md #58) without moving any combat position derived from it.
  */
 export function drawSprite(
   ctx: CanvasRenderingContext2D,
@@ -80,18 +82,21 @@ export function drawSprite(
   y: number,
   flip = false,
   useFlash = false,
+  scale = 1,
 ): void {
   const img = useFlash ? sprite.flash : sprite.image;
-  const px = Math.floor(x - sprite.width / 2);
-  const py = Math.floor(y - sprite.height);
+  const w = sprite.width * scale;
+  const h = sprite.height * scale;
+  const px = Math.floor(x - w / 2);
+  const py = Math.floor(y - h);
   if (!flip) {
-    ctx.drawImage(img, px, py);
+    ctx.drawImage(img, px, py, w, h);
     return;
   }
   ctx.save();
-  ctx.translate(px + sprite.width, py);
+  ctx.translate(px + w, py);
   ctx.scale(-1, 1);
-  ctx.drawImage(img, 0, 0);
+  ctx.drawImage(img, 0, 0, w, h);
   ctx.restore();
 }
 
