@@ -12,6 +12,7 @@ import {
   brickJointXs,
   clampHillStep,
   coherentRange,
+  mixHex,
   depthBandTones,
   depthHaze,
   foliageNotchAt,
@@ -215,23 +216,23 @@ describe('a glow carries intensity as ring count, not as dither', () => {
   });
 });
 
-describe('coherentRange keeps the horizon in the hill own hue family', () => {
-  it('leans toward hillFar rather than reproducing the authored colour untouched', () => {
-    expect(coherentRange('#000000', '#ffffff')).toBe('#595959');
+describe('coherentRange recedes the horizon toward the sky, not toward the hill', () => {
+  it('carries the sky 30% of the way into the authored colour', () => {
+    expect(coherentRange('#ffffff', '#000000')).toBe('#4d4d4d');
   });
 
-  it('is a no-op when the authored range already matches the hill', () => {
-    expect(coherentRange('#37946e', '#37946e')).toBe('#37946e');
+  it('is a no-op when the authored range already matches the sky', () => {
+    expect(coherentRange('#639bff', '#639bff')).toBe('#639bff');
   });
 
-  it('never lands on the raw authored colour when hillFar differs from it', () => {
+  it('never pulls the horizon toward the hill in front of it', () => {
+    // Distance is air between you and the rock. A far band mixed toward the
+    // near hill collapses the separation that reads as depth.
     for (let region = 0; region < REALM_SKIN_COUNT; region++) {
       const skin = realmSkin(region);
-      if (skin.hillFar === skin.range) continue;
-      // realmSkin() already ran the raw authored range through coherentRange,
-      // so re-deriving it here and comparing catches a regression back to a
-      // plain assignment of the authored colour.
-      expect(coherentRange(skin.hillFar, skin.range)).not.toBe(skin.range);
+      if (skin.hillFar === skin.skyTop) continue;
+      const toHill = mixHex(skin.range, skin.hillFar, 0.3);
+      expect(coherentRange(skin.skyTop, skin.range)).not.toBe(toHill);
     }
   });
 });

@@ -849,3 +849,15 @@ So "active gameplay trigger" carries a consequence this ADR names rather than bu
 - Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 716 passed (716)**.
 
 **Not touched:** road scene, hero sprite/animation, economy constants, core rules. `bossSlot`/queue mechanics unchanged — the guardian is still the sole queue entry `model.boss` gates on.
+
+## 60. Distance recedes toward the sky, never toward the layer in front of it — 2026-08-26
+
+**Decision:** `coherentRange` mixes the authored far-range colour **30% toward `skyTop`**, not 65% toward `hillFar`. Supersedes that half of #53.
+
+**Why, found by comparing a frame that won against a frame that lost.** Round 34 placed **#1 of 4** blind; rounds 35–37 did not. Same realm, same seed, same moment, so the frames are directly comparable. Greenwood's mountains are **grey-blue with snow** in the winning frame and **green** in the losing ones — `INK.grey` authored, then dragged 65% toward `INK.teal` by #53's version of this function.
+
+Judges named the result twice without naming the cause: *"flat stepped colour cards stacked arbitrarily"* and *"the background hill is a single flat silhouette with no depth."* A far band mixed toward the hill in front of it stops being far.
+
+**#53's problem was real; its direction was backwards.** Three realms did share the same neutral grey `range` regardless of their hill colour, and that seam was worth closing. Mixing toward `skyTop` closes it — every realm has its own sky — while keeping the separation that reads as distance. Aerial perspective is air between you and the rock; the rock does not take on the colour of the hill in front of it.
+
+**The wider lesson, recorded because it cost three rounds.** Each blind verdict was treated as a bug list and patched item by item. Two of those patches *caused* the next round's complaints — a ring sun called a glitch, and this. The frame that won was already good, and the comparison that found this was *"what did the winning frame have that this one does not"*, which is a different question from *"what is wrong now"*.

@@ -290,18 +290,16 @@ const RAW_REALM_SKINS: RealmSkin[] = [
 ];
 
 /**
- * The furthest hill layer takes hillFar's hue rather than an independently
- * authored one — three realms shared the same neutral grey `range` regardless
- * of their hill colour, and a judge read the resulting seam as one band bolted
- * onto the stack, not one more step of the same recession (DECISIONS.md #53).
+ * The furthest layer recedes toward the sky, never toward the hill in front of
+ * it: distance is read as air between you and the rock (DECISIONS.md #60).
  */
-export function coherentRange(hillFar: string, authoredRange: string): string {
-  return mixHex(hillFar, authoredRange, 0.35);
+export function coherentRange(skyTop: string, authoredRange: string): string {
+  return mixHex(authoredRange, skyTop, 0.3);
 }
 
 const REALM_SKINS: RealmSkin[] = RAW_REALM_SKINS.map((skin) => ({
   ...skin,
-  range: coherentRange(skin.hillFar, skin.range),
+  range: coherentRange(skin.skyTop, skin.range),
 }));
 
 /** Number of named realm skins the endless tail cycles through. */
