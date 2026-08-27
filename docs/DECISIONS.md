@@ -818,3 +818,19 @@ Fewer, larger islands at higher coverage is the "isolated blades → continuous 
 - Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 704 passed (704)**.
 
 **Not touched:** `glowDisc`/`glowRingRadii` (loot-pickup glow, deliberately left alone per ADR #53). All four surfaces named in round 36's verdict — trees (#54), background hill (#55), turf (#56), sun (#57) — are now addressed.
+
+## 58. The portal boss is a dungeon, not a road with a big monster on it — 2026-08-26
+
+**Decision (Kyle, directly):** the portal boss becomes **an active gameplay trigger with its own view** — *"adventurer locked in a dungeon with a single monster."* The road diorama is not reused with a guardian standing in it.
+
+**What is there today.** `scene.ts:1015` swaps the encounter queue for one large sprite at the road's right edge and `view.ts:271` overlays an HP bar. Its own comment concedes the gap: the guardian is *"standing in a drawn portal rather than dressing the boss as an encounter."* `DESIGN.md` §Presentation has promised *"a distinct locked-combat presentation"* since M1R.1; it was never built.
+
+**The feel, as given.** Enclosed and claustrophobic. Stone, not sky — no horizon, no parallax, no scrolling road. One monster, large enough to dominate the space, and the hero confronting it alone. The road's whole visual argument is *travel*; this one's is *nowhere left to go*.
+
+**Why this is not only presentation.** `witnessedBeats` (#48's sibling probe) measured the guardian felled **in the player's presence in 3 of 99 realms** — against 2.8% by chance. The fight the entire realm build exists for currently resolves while the app is closed. A dungeon view nobody is present for is set dressing for an empty room.
+
+So "active gameplay trigger" carries a consequence this ADR names rather than buries: **the kill has to be reachable inside a session.** Guardrail 4 keeps idle-only play productive and guardrail 6 keeps offline boss progress, so the lever is not removing offline damage — it is that active fighting must close a fight a sitting can contain. The pacing bands for that are M1R.2 work and are not settled here.
+
+**What does not change.** Manual entry, no enrage timer, no death, no retry cooldown, no income during the fight, build locked at entry, abandonment resetting only that attempt's HP (#14-#18, guardrail 6). One input, one momentum curve, hold-to-autostrike (#19).
+
+**Supersedes** `DESIGN.md` §Presentation's one-line description of the Portal Boss screen, which is replaced by the section this ADR adds.

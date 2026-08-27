@@ -145,7 +145,11 @@ Boss HP reaching zero triggers one atomic ascension transaction:
 ## Presentation
 
 - The Road screen remains a side-scrolling pixel diorama with a visible hero, enemies, drops, goals, and upgrades.
-- The Portal Boss screen is a distinct locked-combat presentation centered on boss HP, hero DPS, estimated time remaining, and active attack-speed input.
+- The Portal Boss screen is **a dungeon**, not the road with a guardian standing in it (DECISIONS.md #58).
+  - **Enclosed.** Stone walls and a visible ceiling close the frame. No sky, no horizon, no parallax, no scrolling. The road's visual argument is travel; this one's is that there is nowhere left to go.
+  - **One monster, filling the space.** The guardian is drawn large enough to dominate, with the hero confronting it alone — the scale contrast is the point.
+  - **Lit from the fight.** The only light sources belong to the encounter, so the frame darkens toward its edges instead of resolving into distance.
+  - Centered on boss HP, hero DPS, estimated time remaining, and the active attack-speed input.
 - The art register remains vibrant 16-bit **Pixel & Parchment**: DB32 palette, hard edges, wood/parchment chrome, Pixelify Sans UI, and VT323 numerals (DECISIONS.md #13).
 - Display interpolation never feeds back into the engine. Affordability, rewards, boss HP, and ascension use authoritative core state.
 
