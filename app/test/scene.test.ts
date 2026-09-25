@@ -239,9 +239,22 @@ describe('drawTorchGlow lights the stone under a torch in discrete bands, not a 
       expect(c.x + c.w).toBeLessThanOrEqual(torch.x + maxR + 1);
     }
   });
+
+  it('still brightens toward the torch when a pale realm out-values the flame colour itself', () => {
+    const paleBase = '#b6c4e3';
+    const dimFlame = '#e38643';
+    expect(lightnessOf(dimFlame)).toBeLessThan(lightnessOf(paleBase));
+    const { ctx, calls } = fakeCtx();
+    drawTorchGlow(ctx, [torch], paleBase, dimFlame, reach);
+    const centerRows = calls.filter((c) => c.y === torch.y);
+    const outermost = centerRows[0]!;
+    const innermost = centerRows.at(-1)!;
+    expect(lightnessOf(innermost.style)).toBeGreaterThan(lightnessOf(outermost.style));
+    expect(lightnessOf(outermost.style)).toBeGreaterThanOrEqual(lightnessOf(paleBase));
+  });
 });
 
-describe('drawTorchFlame paints a filled core, not the hollow ring the sun halo once shipped (DECISIONS.md #53)', () => {
+describe('drawTorchFlame paints a filled core, not a hollow ring (DECISIONS.md #53)', () => {
   it('fills every row of both the outer and inner disc, not just their circumference', () => {
     const { ctx, calls } = fakeCtx();
     drawTorchFlame(ctx, 50, 50, 1, '#df7126');

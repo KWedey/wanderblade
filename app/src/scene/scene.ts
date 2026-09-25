@@ -50,6 +50,7 @@ import {
   inFoliageLobe,
   inRun,
   lighten,
+  lightnessOf,
   mixHex,
   glowRingRadii,
   momentumLift,
@@ -129,11 +130,11 @@ export interface SceneModel {
   paused: boolean;
   reduceMotion: boolean;
   /**
-   * Set only in the Portal (DECISIONS.md #15). `hpFrac` is the guardian's
-   * remaining health [0,1]; the scene swaps the road diorama for an enclosed
-   * stone dungeon holding the guardian alone (DECISIONS.md #58).
+   * True only in the Portal (DECISIONS.md #15): the scene swaps the road
+   * diorama for an enclosed stone dungeon holding the guardian alone
+   * (DECISIONS.md #58).
    */
-  boss: { hpFrac: number } | null;
+  boss: boolean;
   /** Loot arcs in flight, straight off GameState — the scene never owns these. */
   arcs: readonly LootArc[];
   /** Engine clock the arcs are evaluated against. */
@@ -537,12 +538,12 @@ export function drawPillars(
   edgeW: number,
   brickH: number,
 ): void {
-  spans.forEach((span, i) => {
+  for (const span of spans) {
     drawStoneWall(ctx, span.x, span.w, top, bottom, tones, jointTone, brickH);
-    const edgeX = i === 0 ? span.x + span.w - edgeW : span.x;
+    const edgeX = span.x === 0 ? span.x + span.w - edgeW : span.x;
     ctx.fillStyle = edgeColor;
     ctx.fillRect(edgeX, top, edgeW, bottom - top);
-  });
+  }
 }
 
 /** A filled circle on any `FillCtx` — mass, not an outline (mirrors the closure-local `fillDisc` used by the sun). */
@@ -568,15 +569,25 @@ export function drawTorchGlow(
   flame: string,
   reach: number,
 ): void {
+  // A pale realm's rock can out-value the flame colour, which would mix the
+  // wall darker as the bands step in — lift the mix target above the base.
+  const baseLightness = lightnessOf(baseTone);
+  const flameLightness = lightnessOf(flame);
+  // lighten(hex, t) raises lightness by t * (1 - L), not by t — invert that
+  // to solve for the push that clears the base tone by a fixed margin.
+  const tint =
+    flameLightness > baseLightness
+      ? flame
+      : lighten(flame, Math.min(1, (baseLightness + 0.12 - flameLightness) / (1 - flameLightness)));
   for (const t of torches) {
     for (const band of torchGlowBands(reach * t.flicker)) {
-      ctx.fillStyle = mixHex(baseTone, flame, band.mix);
+      ctx.fillStyle = mixHex(baseTone, tint, band.mix);
       fillFlatDisc(ctx, t.x, t.y, band.r);
     }
   }
 }
 
-/** The flame itself: a filled core, never the hollow ring the sun's halo was once caught drawing (DECISIONS.md #53). */
+/** The flame itself: a filled core — a hollow ring reads as a marker, not fire (DECISIONS.md #53). */
 export function drawTorchFlame(ctx: FillCtx, x: number, y: number, flicker: number, flame: string): void {
   ctx.fillStyle = mixHex(flame, '#000000', 0.3);
   fillFlatDisc(ctx, x, y, Math.max(1, Math.round(6 * flicker)));
@@ -773,7 +784,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     attackSpeedMult: 1,
     paused: false,
     reduceMotion: false,
-    boss: null,
+    boss: false,
     arcs: [],
     timeSec: 0,
   };
@@ -1854,6 +1865,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
+  /** The dungeon's one light source, tinted per realm (DECISIONS.md #58). */
+  function torchFlame(skin: RealmSkin): string {
+    return mixHex('#df7126', skin.accent, 0.25);
+  }
+
+  /** Both dungeon torches at a given height — same x/flicker everywhere they're drawn, only y varies. */
+  function dungeonTorchesAt(y: number): TorchLight[] {
+    return DUNGEON_TORCHES.map(({ side, seed }) => ({
+      x: Math.round(vw * side),
+      y,
+      flicker: model.reduceMotion ? 0.92 : torchFlicker(clockSec, seed),
+    }));
+  }
+
   /**
    * The dungeon's walls, ceiling and edge vignette (DECISIONS.md #58) — the
    * unshaken backdrop layer, not part of the ground plane the camera jolts.
@@ -1867,26 +1892,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     drawGroundBands(ctx, vw, 0, ceilingH, depthBandTones(ceilingBase, WALL_BANDS));
     drawStoneWall(ctx, 0, vw, ceilingH, groundY, depthBandTones(wallBase, WALL_BANDS), jointTone, BRICK_H);
 
-    // Torches: the fight's own light — the room has no sky to borrow one
-    // from (DECISIONS.md #58 — lit from the encounter only).
-    // The right dock covers up to 34% of vw (styles.css --dock-w), same limit
-    // drawSun already respects — a torch past that fraction is never seen.
-    const flame = mixHex('#df7126', skin.accent, 0.25);
-    const torchY = ceilingH + Math.round((groundY - ceilingH) * 0.32);
-    const torches: TorchLight[] = DUNGEON_TORCHES.map(({ side, seed }) => ({
-      x: Math.round(vw * side),
-      y: torchY,
-      flicker: model.reduceMotion ? 0.92 : torchFlicker(clockSec, seed),
-    }));
-    // The wall itself gets brighter near each flame instead of the flame
-    // being a marker floating in front of unlit stone.
-    drawTorchGlow(ctx, torches, wallBase, flame, vw * WALL_TORCH_REACH_FRAC);
-    for (const t of torches) drawTorchFlame(ctx, t.x, t.y, t.flicker, flame);
+    const flame = torchFlame(skin);
 
     // Piers narrow the open floor either side of the fight, and carry the
     // realm's own highlight ink so a dungeon skins per-realm, not just grey.
     // Spanned off worldRightX, not vw — the canvas paints under the docked
     // panel, and a pier placed at the true right edge is a pier nobody sees.
+    // Drawn before the torches: the right torch's side fraction sits inside
+    // the right pier's span at common dock widths, and a torch is mounted on
+    // the stone it lights, not painted over by it.
     drawPillars(
       ctx,
       pillarSpans(worldRightX, PILLAR_FRAC),
@@ -1899,12 +1913,22 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       BRICK_H,
     );
 
+    // Torches: the fight's own light — the room has no sky to borrow one
+    // from (DECISIONS.md #58 — lit from the encounter only).
+    // The right dock covers up to 34% of vw (styles.css --dock-w), same limit
+    // drawSun already respects — a torch past that fraction is never seen.
+    const torches = dungeonTorchesAt(ceilingH + Math.round((groundY - ceilingH) * 0.32));
+    // The wall itself gets brighter near each flame instead of the flame
+    // being a marker floating in front of unlit stone.
+    drawTorchGlow(ctx, torches, wallBase, flame, vw * WALL_TORCH_REACH_FRAC);
+    for (const t of torches) drawTorchFlame(ctx, t.x, t.y, t.flicker, flame);
+
     drawVignette(
       ctx,
       vw,
       sceneBottomY,
       depthBandTones(mixHex(ceilingBase, '#000000', 0.42), VIGNETTE_BANDS),
-      Math.round(Math.min(vw, sceneBottomY) * VIGNETTE_STEP_FRAC),
+      Math.max(1, Math.round(Math.min(vw, sceneBottomY) * VIGNETTE_STEP_FRAC)),
     );
   }
 
@@ -1920,13 +1944,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     // Same torches, spilling a smaller pool onto the stone at their base —
     // one light source lighting the whole room, not just the wall behind it.
-    const flame = mixHex('#df7126', skin.accent, 0.25);
-    const torches: TorchLight[] = DUNGEON_TORCHES.map(({ side, seed }) => ({
-      x: Math.round(vw * side),
-      y: groundY + Math.round(floorH * 0.3),
-      flicker: model.reduceMotion ? 0.92 : torchFlicker(clockSec, seed),
-    }));
-    drawTorchGlow(ctx, torches, floorBase, flame, vw * FLOOR_TORCH_REACH_FRAC);
+    const torches = dungeonTorchesAt(groundY + Math.round(floorH * 0.3));
+    drawTorchGlow(ctx, torches, floorBase, torchFlame(skin), vw * FLOOR_TORCH_REACH_FRAC);
   }
 
   /** Lanes the engaged monster's health bar is sitting across this frame. */
