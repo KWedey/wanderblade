@@ -36,7 +36,7 @@ const MIGRATIONS: Record<number, Migration> = {};
  * older one no step reaches.
  */
 export function migrate(envelope: unknown): SaveEnvelope | null {
-  if (!isObject(envelope) || !isFiniteNumber(envelope.version)) return null;
+  if (!isObject(envelope)) return null;
   let current = envelope;
   while (current.version !== SAVE_VERSION) {
     const version = current.version;

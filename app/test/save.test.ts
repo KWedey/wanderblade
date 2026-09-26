@@ -8,26 +8,12 @@ import {
   summarizeEvents,
 } from '@wanderblade/core';
 import { clearSave, migrate, readSave, SAVE_VERSION, writeSave } from '../src/save';
-
-// The save layer talks to the global `localStorage`, which Node's test env lacks.
-// Back it with a tiny in-memory Map so writeSave/readSave round-trip for real.
-class MemoryStorage {
-  private readonly map = new Map<string, string>();
-  getItem(key: string): string | null {
-    return this.map.has(key) ? this.map.get(key)! : null;
-  }
-  setItem(key: string, value: string): void {
-    this.map.set(key, String(value));
-  }
-  removeItem(key: string): void {
-    this.map.delete(key);
-  }
-}
+import { installMemoryStorage } from './helpers/memory-storage';
 
 // Must mirror the private key inside save.ts to plant raw payloads.
 const SAVE_KEY = 'wanderblade-save-v1';
 
-globalThis.localStorage = new MemoryStorage() as unknown as Storage;
+installMemoryStorage();
 const realDateNow = Date.now;
 
 /** Wrap a value in a well-formed envelope carrying the given inner state string. */

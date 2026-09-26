@@ -357,7 +357,7 @@ export class Game {
   }
 
   reset(): void {
-    clearSave();
+    if (!this.staged) clearSave();
     this.state = initialState(randomSeed());
     this.displayGold = 0;
     // Everything stamped against the old run's clock goes with it: a strike

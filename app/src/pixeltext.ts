@@ -317,8 +317,8 @@ export function paintElement(
   }
   const padLeft = parseFloat(style.paddingLeft) || 0;
   const padTop = parseFloat(style.paddingTop) || 0;
-  // clientWidth is 0 for an inline box; its rect is the only honest measure.
-  const outer = el.clientWidth || el.getBoundingClientRect().width;
+  const outer = outerWidth(el);
+  MEASURED_WIDTH.set(el, outer);
   const boxWidth = Math.floor(outer - padLeft - (parseFloat(style.paddingRight) || 0));
   // Honour the author's own white-space: a HUD stat marked nowrap wants the
   // largest type that fits on one line, not the largest that fits at all.
@@ -400,6 +400,13 @@ function mountPixelText(root: ParentNode): void {
 }
 
 const DIRTY = 'pxDirty';
+/** The box each leaf was last measured in; a leaf whose box moved is repainted. */
+const MEASURED_WIDTH = new WeakMap<HTMLElement, number>();
+
+/** clientWidth is 0 for an inline box; its rect is the only honest measure. */
+function outerWidth(el: HTMLElement): number {
+  return el.clientWidth || el.getBoundingClientRect().width;
+}
 
 /**
  * Flags every leaf under `root` for the next changed-only repaint. The view
@@ -413,23 +420,30 @@ export function markPixelDirty(root: Element): void {
 
 /**
  * A painted leaf keeps its accessible span; assigning textContent removes it.
- * So a leaf still carrying one, and not flagged, has nothing new to draw.
+ * So a leaf still carrying one, unflagged and still in the box it was measured
+ * for, has nothing new to draw. A leaf with no span and no text has nothing to
+ * draw at all.
  */
 function isClean(el: HTMLElement): boolean {
-  return el.dataset[DIRTY] === undefined && el.querySelector(`.${SR_CLASS}`) !== null;
+  if (el.dataset[DIRTY] !== undefined) return false;
+  if (!el.querySelector(`.${SR_CLASS}`)) return (el.textContent ?? '').trim() === '';
+  return MEASURED_WIDTH.get(el) === outerWidth(el);
 }
 
 /**
  * Repaints every marked element under a root, tagging any that appeared. With
- * `changedOnly`, leaves whose text and flags are unchanged are skipped before
- * any style is read: measuring forty-five leaves at 10Hz was the panel's whole
- * layout cost.
+ * `changedOnly`, a leaf whose text, flags and box are unchanged is skipped
+ * before any style is read, and every skip check runs before the first paint so
+ * the reads never interleave with the writes.
  */
 export function repaintPixelText(root: ParentNode, changedOnly = false): void {
   const dpr = window.devicePixelRatio || 1;
   mountPixelText(root);
+  const due: HTMLElement[] = [];
   for (const el of root.querySelectorAll<HTMLElement>('[data-px]')) {
-    if (changedOnly && isClean(el)) continue;
+    if (!changedOnly || !isClean(el)) due.push(el);
+  }
+  for (const el of due) {
     delete el.dataset[DIRTY];
     paintElement(el, dpr);
   }

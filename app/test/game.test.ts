@@ -15,22 +15,12 @@ import {
 } from '@wanderblade/core';
 import { clearSave, writeSave } from '../src/save';
 import type { View, ViewModel } from '../src/view';
+import { installMemoryStorage } from './helpers/memory-storage';
 
-// The save layer talks to `localStorage`, which Node lacks; back it with a Map
-// so a cold load can be staged for real.
-class MemoryStorage {
-  private readonly map = new Map<string, string>();
-  getItem(key: string): string | null {
-    return this.map.get(key) ?? null;
-  }
-  setItem(key: string, value: string): void {
-    this.map.set(key, String(value));
-  }
-  removeItem(key: string): void {
-    this.map.delete(key);
-  }
-}
-globalThis.localStorage = new MemoryStorage() as unknown as Storage;
+installMemoryStorage();
+// The controller autosaves as it ticks, so every test starts from an empty save
+// or a cold load inherits the run the previous test left behind.
+beforeEach(() => clearSave());
 
 // Game reads two browser globals at construction (`window.matchMedia`) and one
 // clock (`performance.now`). Both are stubbed here so the controller can be
@@ -313,8 +303,8 @@ describe('the portal pays nothing, and says so', () => {
   });
 });
 
-// A tap while the recap is up used to stamp the display clock's overshoot onto
-// the strike; the same guard the sweep and momentum use now covers it.
+// A tap while the recap is up is stamped on the paused engine clock, behind the
+// same guard the sweep and momentum read.
 describe('a strike made while the recap is open', () => {
   beforeEach(() => {
     nowMs = 1000;
@@ -466,7 +456,6 @@ describe('a cold load after time away', () => {
 
   beforeEach(() => {
     nowMs = 1000;
-    clearSave();
   });
 
   function loadAfter(gapSec: number): { recap: Recap | null; elapsed: number; state: GameState } {

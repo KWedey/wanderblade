@@ -598,11 +598,16 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   }
   syncSceneBand();
   // Layout moves the band, so layout drives it: a viewport change, or the
-  // chrome growing when a panel appears. Never the paint loop, which read two
-  // rects ten times a second to learn nothing had moved.
+  // chrome growing when a panel appears. A resize drag fires many times per
+  // frame, so the pass is coalesced to one per frame.
+  let layoutFrame = 0;
   function onLayout(): void {
-    syncSceneBand();
-    repaintAll();
+    if (layoutFrame !== 0) return;
+    layoutFrame = requestAnimationFrame(() => {
+      layoutFrame = 0;
+      syncSceneBand();
+      repaintAll();
+    });
   }
   window.addEventListener('resize', onLayout);
   window.addEventListener('orientationchange', onLayout);
@@ -718,6 +723,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   // The zone bar is driven per-frame by renderFrame (not renderPanels), so the
   // sweep stays smooth; DPS is tracked across paints to punch on increases.
   let lastDps = -1;
+  // The punch keyframe tints the number, so a repaint mid-flight bakes that
+  // tint into the bitmap; the settled colour is measured once the punch ends.
+  dpsEl.addEventListener('animationend', () => markPixelDirty(dpsEl));
 
   const panelRoot = q(root, '.screen');
   // The HUD sits outside .screen but wears the same type. Leaving it on the
