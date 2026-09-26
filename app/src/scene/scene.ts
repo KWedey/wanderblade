@@ -5,17 +5,13 @@
 
 import { GUARDIAN_BODY, rosterAt } from '../species';
 import {
-  floaterOffsetY,
-  lifeRemaining,
   shakeOffset,
   wrap,
-  inAnyPocket,
 } from './fx';
 import { type ArcPoint } from '@wanderblade/core';
 import {
   HERO_INK,
   LOOT_INK,
-  OUTLINE_INK,
   REALM_SKIN_COUNT,
   backdropSkin,
   depthBandTones,
@@ -28,7 +24,6 @@ import {
   inRun,
   lighten,
   mixHex,
-  glowRingRadii,
   momentumLift,
   monsterInk,
   realmSkin,
@@ -45,7 +40,6 @@ import {
   FERN,
   FLOWER,
   GEM,
-  NUMERAL_FONT,
   HERO_WALK_A,
   HERO_WALK_B,
   BOSS_SHAPE,
@@ -58,10 +52,7 @@ import {
   TUFT,
 } from './pixels';
 import {
-  ACTOR_SHADOW,
-  LOOT_GLOW,
   PROP_SPAN,
-  SWING_ANIM_SEC,
   hash01,
   type Frame,
   type SceneModel,
@@ -70,32 +61,23 @@ import {
 } from './frame';
 import { drawDungeonBackdrop, drawDungeonFloor } from './dungeon';
 import { createViewport, layoutViewport, toScene as toSceneAt, type Chrome } from './geometry';
-import { TIER_SCALE, drawMomentumMeter } from './overlay';
+import { drawFloaters, drawMomentumMeter, drawParticles, drawRests, drawStreaks } from './overlay';
+import { drawArcs, drawHero, drawHeroGround, drawMonsters, drawShadow } from './actors';
 import { GROUND_BANDS, drawGroundBands, drawHills } from './road';
 import {
-  arcScreenPoints,
   catchArc,
   createWorld,
   fightBand,
-  leadScale,
-  pockets,
   step,
   strike,
-  STREAK_SEC,
   type WorldInput,
 } from './world';
 import {
   bakeSprite,
   context,
   drawSprite,
-  drawSpriteRotated,
-  drawText,
 } from './sprites';
 import {
-  FLOATER_RISE,
-  laneBaseline,
-  LANE_COUNT,
-  lanesTouching,
 } from './textlane';
 
 export type { SceneModel } from './frame';
@@ -355,8 +337,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     return strike(world, input, at);
   }
 
-  const laneY = (lane: number): number => laneBaseline(lane, view.groundY);
-
   // --- Drawing -----------------------------------------------------------
 
   function band(y: number, h: number, color: string): void {
@@ -605,7 +585,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  function drawTreeline(sprites: SkinnedSprites): void {
+  function drawTreeline(f: Frame, sprites: SkinnedSprites): void {
     const y = view.groundY + 1;
     const band = fightBand(world, input);
     for (const prop of props) {
@@ -615,7 +595,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const sprite = sprites.trees[prop.variant] ?? sprites.trees[0]!;
       const half = sprite.width / 2;
       if (x + half > band.x0 && x - half < band.x1) continue;
-      drawShadow(x, Math.round(sprite.width * 0.55));
+      drawShadow(f, x, Math.round(sprite.width * 0.55));
       drawSprite(ctx, sprite, x, y);
     }
   }
@@ -716,7 +696,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /** A continuous post-and-rail fence, the way the reference art marks distance. */
-  function drawFence(sprites: SkinnedSprites, skin: RealmSkin): void {
+  function drawFence(f: Frame, sprites: SkinnedSprites, skin: RealmSkin): void {
     const offset = wrap(world.scrollGround, FENCE_PITCH);
     const railY = view.groundY - 8;
     ctx.fillStyle = skin.bark;
@@ -724,12 +704,12 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       const px = Math.floor(x - offset);
       ctx.fillRect(px, railY, FENCE_PITCH, 1);
       ctx.fillRect(px, railY + 4, FENCE_PITCH, 1);
-      drawShadow(px, sprites.fence.width + 2);
+      drawShadow(f, px, sprites.fence.width + 2);
       drawSprite(ctx, sprites.fence, px, view.groundY + 1);
     }
   }
 
-  function drawProps(sprites: SkinnedSprites): void {
+  function drawProps(f: Frame, sprites: SkinnedSprites): void {
     const band = fightBand(world, input);
     for (const prop of props) {
       if (prop.kind === 'tree') continue;
@@ -739,7 +719,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       if (prop.kind === 'rock' && x > band.x0 - 8 && x < band.x1 + 8) continue;
       switch (prop.kind) {
         case 'rock':
-          drawShadow(x, sprites.rock.width);
+          drawShadow(f, x, sprites.rock.width);
           drawSprite(ctx, sprites.rock, x, view.groundY + 1);
           break;
         case 'tuft': {
@@ -761,306 +741,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         default:
           break;
       }
-    }
-  }
-
-  /**
-   * Concentric hard rings, not a dither: one world pixel is a 36px block at
-   * desktop scale, so a 34% dither is a scatter of loose dots. At this scale
-   * intensity has to be shape.
-   */
-  function glowDisc(cx: number, cy: number, r: number, color: string, gain = 1): void {
-    if (r <= 0 || gain <= 0) return;
-    ctx.fillStyle = color;
-    for (const rr of glowRingRadii(r, gain)) {
-      for (let dy = -rr; dy <= rr; dy++) {
-        const y = cy + dy;
-        if (y < 0 || y >= view.sceneBottomY) continue;
-        const half = Math.round(Math.sqrt(Math.max(0, rr * rr - dy * dy)));
-        for (const x of [cx - half, cx + half]) {
-          if (x >= 0 && x < view.vw) ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
-        }
-      }
-    }
-  }
-
-
-
-  /**
-   * A lit pool on the turf: flattened, so it sits on the ground plane. Solid,
-   * and sized by the gain rather than dithered at a fixed size - see glowDisc.
-   * A 16% dither on grass is four lit pixels scattered through a hundred, which
-   * is the note "white read as salt scattered on the grass" without the white.
-   */
-  function litPool(cx: number, r: number, color: string, gain: number): void {
-    if (gain <= 0) return;
-    const cy = view.groundY + 1;
-    const rx = Math.round(r * (0.4 + Math.min(1, gain) * 0.6));
-    const ry = Math.max(1, Math.round(rx * 0.42));
-    ctx.fillStyle = color;
-    for (let dy = 0; dy <= ry; dy++) {
-      const y = cy + dy;
-      if (y >= view.sceneBottomY) break;
-      const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / ry) ** 2)));
-      const x0 = Math.max(0, cx - half);
-      ctx.fillRect(x0, y, Math.min(view.vw - x0, half * 2 + 1), 1);
-    }
-  }
-
-  /**
-   * Hard contact shadow: the realm's own ground stepped toward night, with an
-   * edge (DECISIONS.md #13); alpha-blended black is invisible on turf. `depth`
-   * separates actors from props: at one shared value every cast tiled into a
-   * stripe that read as terrain.
-   */
-  function drawShadow(x: number, width: number, depth = 0.52): void {
-    const skin = realmSkin(model.region);
-    // Stone, not turf, once the fight is enclosed — a green cast shadow on a
-    // dungeon floor is the road's ground pretending it followed the hero in.
-    const ground = model.boss ? skin.rock : skin.turf;
-    const core = mixHex(ground, '#1a1c2c', depth);
-    const edge = mixHex(ground, '#1a1c2c', depth * 0.58);
-    // The sun sits upper right, so the shadow pools to the left of the feet.
-    const cx = x - Math.round(width * 0.16);
-    const rows: readonly (readonly [number, string])[] = [
-      [1.15, core],
-      [1, core],
-      [0.72, edge],
-      [0.4, edge],
-    ];
-    rows.forEach(([scale, color], i) => {
-      const w = Math.max(2, Math.round(width * scale));
-      ctx.fillStyle = color;
-      // +1: the turf's own lip owns the first row under the horizon, and a
-      // shadow drawn on it reads as part of that line rather than as contact.
-      ctx.fillRect(Math.floor(cx - w / 2), view.groundY + 1 + i, w, 1);
-    });
-  }
-
-  /** The hero's own light and contact shadow. Ground decals, so they stay under everything. */
-  function drawHeroGround(): void {
-    // The hero stands in his own light. White read as salt scattered on the
-    // grass, so the pool is a lit tone of the ground he is actually on.
-    const lit = realmSkin(model.region);
-    litPool(
-      view.heroX,
-      20,
-      lighten(model.boss ? lit.rock : lit.turf, 0.42),
-      Math.min(0.6, 0.16 + momentumLift(model.momentum) * 1.5),
-    );
-    // Sized from the sprite, deeper than the props, so his contact reads as his.
-    drawShadow(view.heroX, heroA.width - 2, ACTOR_SHADOW);
-  }
-
-  function drawHero(): void {
-    const stride = model.reduceMotion ? 0 : Math.floor(world.clockSec * 7 * model.momentumMult) % 2;
-    const sprite = stride === 0 ? heroA : heroB;
-    const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(world.clockSec * 14) * 0.6);
-    // No rim pass. It drew the sprite's own black outline offset four ways, so
-    // the "halo of the sky's own light" its comment promised was a second ring
-    // of the darkest ink in the frame - the hero read as a blob at thumbnail
-    // size, which is the opposite of the job.
-    drawSprite(ctx, sprite, view.heroX, view.groundY + bob, false);
-
-    // The blade sweeps a real arc; nearest-neighbour rotation keeps it pixelated.
-    // Winds up to -72 deg and finishes level at +10, contact height on the
-    // creature: a wider sweep ended in the dirt past the monster.
-    const t = world.swingAnim / SWING_ANIM_SEC;
-    const angle = world.swingAnim > 0 ? -1.25 + (1 - t) * 1.42 : -0.3;
-    const handX = view.heroX + 5;
-    // The grip rides just above the belt, so it follows the sprite instead of a
-    // constant: at a fixed -9 the hand stayed at the old 20px hero's hip and
-    // ended up at the taller one's thigh, with the blade swinging from his knee.
-    const handY = view.groundY + bob - Math.round(heroA.height * 0.42);
-    drawSpriteRotated(ctx, sword, handX, handY, angle, 2, 2);
-
-    if (world.swingAnim > 0) {
-      // A crescent that tapers along the sweep and thins as the swing ends.
-      // The old version was a ring of equal blobs, which read as a broken
-      // sprite rather than as a blade trail.
-      const steps = 10;
-      for (let i = 0; i < steps; i++) {
-        const f = i / (steps - 1);
-        const a = angle + f * 1.15;
-        const r = 13 + f * 5;
-        // Thick at the blade, one pixel at the tail; brightest at the leading
-        // edge and dimmer behind it.
-        const thick = Math.max(1, Math.round((1 - f) * 3 * t));
-        if (thick <= 0) continue;
-        ctx.fillStyle = f < 0.35 ? '#ffffff' : f < 0.7 ? '#cbdbfc' : '#9badb7';
-        ctx.fillRect(
-          Math.floor(handX + Math.cos(a) * r),
-          Math.floor(handY + Math.sin(a) * r),
-          thick,
-          thick,
-        );
-      }
-    }
-  }
-
-  function drawMonsters(sprites: SkinnedSprites): void {
-    world.barSpans = [];
-    // Back to front, so the one being fought overlaps the line behind it.
-    for (let i = world.queue.length - 1; i >= 0; i--) {
-      const m = world.queue[i]!;
-      const sprite = sprites.monsters[m.sprite] ?? sprites.monsters[0]!;
-      const bob = model.reduceMotion ? 0 : Math.round(Math.sin(m.bob) * 1.2);
-      // The engaged creature lunges at the hero rather than standing and
-      // waiting to be hit; a struck one is kicked back. Both come off the
-      // transform, so no extra sprite frames are needed to stop it reading
-      // as a statue. Recoil already rides on m.x; only the lunge is added here.
-      const lunge =
-        i === 0 && !model.reduceMotion
-          ? Math.round(Math.max(0, Math.sin(world.clockSec * 3.4 + m.bob)) ** 2 * 6)
-          : model.reduceMotion
-            ? 0
-            : // Queued creatures sway on their own phase. Two of a kind
-              // standing in identical poses was called out by name.
-              Math.round(Math.sin(world.clockSec * 1.6 + m.bob * 2.3) * 2);
-      const x = m.x + m.spread - lunge;
-      if (x < -40 || x > view.worldRightX + 60) continue;
-      // Its shadow, sprite and health bar all have to scale with it together.
-      const scale = i === 0 ? leadScale(model) : 1;
-      drawShadow(x, (sprite.width - 2) * scale, i === 0 ? ACTOR_SHADOW : undefined);
-      drawSprite(ctx, sprite, x, view.groundY + bob, true, false, scale);
-      // The flash lights the creature rather than replacing it. Swapping in the
-      // silhouette outright turned a 24x30 golem into a white mass for a third
-      // of all frames, which is what read as a missing sprite.
-      if (m.flash > 0) {
-        ctx.globalAlpha = 0.55;
-        drawSprite(ctx, sprite, x, view.groundY + bob, true, true, scale);
-        ctx.globalAlpha = 1;
-      }
-
-      // Only the live engaged monster carries a bar: one over a corpse reads as
-      // broken UI, and the guardian's HP already lives in the side panel.
-      if (i !== 0 || model.boss) continue;
-      const remaining = Math.max(0, 1 - model.killProgress);
-      if (remaining >= 1 || remaining <= 0.02) continue;
-      // Anchored to the creature's mass, not its box: a stalker's antenna
-      // put its bar on a shelf of empty air well above the thing being fought.
-      const w = sprite.mass.width * scale;
-      const bx = Math.floor(x - w / 2);
-      const by = view.groundY - sprite.height * scale + sprite.mass.top * scale - 3 + bob;
-      world.barSpans = lanesTouching(by - 1, by + 3, view.groundY, LANE_COUNT).map((lane) => ({
-        x: bx - 1,
-        w: w + 2,
-        lane,
-      }));
-      ctx.fillStyle = OUTLINE_INK;
-      ctx.fillRect(bx - 1, by - 1, w + 2, 4);
-      // A mid value, not another near-black. Ring and trough were both darker
-      // than the turf, so a nearly-dead creature - which is every frame a
-      // capture lands on - wore a solid black slab across its shoulders with
-      // no internal contrast at all.
-      ctx.fillStyle = '#847e87';
-      ctx.fillRect(bx, by, w, 2);
-      // Never the accent: a yellow bar over a creature read as a wind-up
-      // telegraph rather than as its health.
-      ctx.fillStyle = remaining < 0.3 ? '#d95763' : '#6abe30';
-      ctx.fillRect(bx, by, Math.max(0, Math.round(w * remaining)), 2);
-    }
-  }
-
-  function drawArcs(): void {
-    const points = arcScreenPoints(input);
-    // The coin itself is core's - it is catchable, so it is never hidden. Its
-    // halo and ring are ours, and a dozen of them overlapping turned the kill
-    // into a 180px wall of yellow with the creature somewhere inside it.
-    const guard = pockets(world, input);
-    // Loot in flight is the brightest thing in the scene; it should light the
-    // air around it, not sit on the backdrop as a flat disc.
-    for (const p of points) {
-      if (inAnyPocket(guard, p.x, p.y)) continue;
-      glowDisc(p.x, p.y, 7, LOOT_GLOW, 0.5);
-    }
-
-    for (const p of points) {
-      const sprite = coin;
-      // Squash the coin on its spin so it reads as tumbling metal.
-      const squash = Math.abs(Math.cos(p.spin + world.clockSec * 9));
-      const w = Math.max(2, Math.round(sprite.width * (0.35 + squash * 0.65)));
-      ctx.drawImage(
-        sprite.image,
-        Math.floor(p.x - w / 2),
-        Math.floor(p.y - sprite.height / 2),
-        w,
-        sprite.height,
-      );
-      // Catch affordance: a bright ring pulse. Core only keeps an arc in
-      // `state.arcs` while it is catchable, so anything drawn here is live.
-      const pulse = (Math.sin(world.clockSec * 12 + p.spin) + 1) / 2;
-      ctx.fillStyle = pulse > 0.5 ? '#ffffff' : '#fbf236';
-      const r = 7;
-      for (let a = 0; a < 8; a++) {
-        const ang = (a / 8) * Math.PI * 2 + world.clockSec * 3;
-        const rx = Math.floor(p.x + Math.cos(ang) * r);
-        const ry = Math.floor(p.y + Math.sin(ang) * r);
-        if (inAnyPocket(guard, rx, ry)) continue;
-        ctx.fillRect(rx, ry, 1, 1);
-      }
-    }
-  }
-
-
-  function drawRests(): void {
-    for (const r of world.rests) {
-      const sprite = r.gold ? coin : gem;
-      // A short settling bounce, then it sits and glints.
-      const t = Math.min(1, r.age / 0.22);
-      const bounce = Math.round(Math.abs(Math.sin(t * Math.PI)) * -5 * (1 - t));
-      drawSprite(ctx, sprite, r.x, r.y + bounce + sprite.height / 2);
-      if (Math.sin(world.clockSec * 9 + r.spin) > 0.7) {
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(Math.floor(r.x + 3), Math.floor(r.y - 6), 1, 1);
-      }
-    }
-  }
-
-  function drawStreaks(): void {
-    for (const s of world.streaks) {
-      const t = Math.min(1, s.age / STREAK_SEC);
-      const eased = t * t;
-      const x = s.x0 + (world.collectAnchor.x - s.x0) * eased;
-      // Lift out of the ground before homing, so it reads as a throw not a slide.
-      const y = s.y0 + (world.collectAnchor.y - s.y0) * eased - Math.sin(t * Math.PI) * 18;
-      const sprite = s.gold ? coin : gem;
-      const w = Math.max(2, Math.round(sprite.width * (1 - t * 0.35)));
-      ctx.drawImage(
-        sprite.image,
-        Math.floor(x - w / 2),
-        Math.floor(y - sprite.height / 2),
-        w,
-        sprite.height,
-      );
-    }
-  }
-
-  function drawParticles(): void {
-    const guard = pockets(world, input);
-    for (const p of world.particles) {
-      const life = lifeRemaining(p.age, p.life);
-      if (life <= 0) continue;
-      if (inAnyPocket(guard, p.x, p.y)) continue;
-      // Shrink instead of fading: alpha ramps are the one thing that reads as
-      // "not pixel art" in a hard-edged scene.
-      const size = life > 0.4 ? p.size : Math.max(1, p.size - 1);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), size, size);
-    }
-  }
-
-  function drawFloaters(): void {
-    for (const f of world.floaters) {
-      const life = lifeRemaining(f.age, f.life);
-      if (life <= 0) continue;
-      const y = laneY(f.lane) + floaterOffsetY(f.age, f.life, FLOATER_RISE);
-      drawText(ctx, f.text, f.x, y, {
-        scale: TIER_SCALE[f.tier],
-        fill: f.color,
-        outline: OUTLINE_INK,
-        font: NUMERAL_FONT,
-      });
     }
   }
 
@@ -1098,7 +778,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       );
       drawGrove(far);
       drawDrift(far);
-      drawTreeline(skinned);
+      drawTreeline(f, skinned);
       drawSun(skin);
     }
 
@@ -1110,21 +790,21 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       drawDungeonFloor(f);
     } else {
       drawGround(skin);
-      drawFence(skinned, skin);
-      drawProps(skinned);
+      drawFence(f, skinned, skin);
+      drawProps(f, skinned);
     }
-    drawMonsters(skinned);
-    drawHeroGround();
-    drawArcs();
-    drawParticles();
-    drawRests();
-    drawStreaks();
+    world.barSpans = drawMonsters(f);
+    drawHeroGround(f);
+    drawArcs(f);
+    drawParticles(f);
+    drawRests(f);
+    drawStreaks(f);
     if (!model.boss) drawMotes(skin);
     // Last of the world layers, so nothing bright can ever be painted over the
     // one figure that must always read. The pocket test below is the second
     // line: it keeps effects from crowding the silhouette even from behind.
-    drawHero();
-    drawFloaters();
+    drawHero(f);
+    drawFloaters(f);
     if (!model.boss) drawForeground(skinned);
     drawMomentumMeter(f);
 
