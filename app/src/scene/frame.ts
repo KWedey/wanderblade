@@ -6,6 +6,7 @@ import { formatNumber } from '../format';
 import type { Viewport } from './geometry';
 import type { RealmSkin } from './palette';
 import type { BakedSprite } from './sprites';
+import type { World } from './world';
 
 /** Everything the scene needs for one frame. All display values; no engine writes. */
 export interface SceneModel {
@@ -77,7 +78,8 @@ export interface Frame {
   view: Viewport;
   model: SceneModel;
   skin: RealmSkin;
-  clockSec: number;
+  sprites: SceneSprites;
+  world: World;
 }
 
 // --- Tuning shared across modules --------------------------------------

@@ -169,7 +169,7 @@ export function dungeonTorchesAt(f: Frame, y: number): TorchLight[] {
   return DUNGEON_TORCHES.map(({ side, seed }) => ({
     x: Math.round(f.view.vw * side),
     y,
-    flicker: f.model.reduceMotion ? 0.92 : torchFlicker(f.clockSec, seed),
+    flicker: f.model.reduceMotion ? 0.92 : torchFlicker(f.world.clockSec, seed),
   }));
 }
 
