@@ -1,5 +1,10 @@
 # Active-Forward Gameplay Prototype Implementation Roadmap
 
+> **Superseded.** This plan was not executed checkpoint by checkpoint. The work it
+> describes landed as ADRs #19–#61 in `docs/DECISIONS.md`, and `docs/ROADMAP.md`
+> records what is done. The evidence ledger below is left as written; "Not started"
+> means the checkpoint was never run as a checkpoint, not that the work is missing.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans`. Complete one numbered checkpoint per session unless its stop condition explicitly says otherwise. Update only that checkpoint and the evidence ledger.
 
 **Goal:** Deliver a playable, deterministic Road → persistent Portal Boss → Ascension prototype in which 15–30 minutes of active play is fun and materially faster, idle play remains worthwhile, and every product/economy claim has automated and human evidence.

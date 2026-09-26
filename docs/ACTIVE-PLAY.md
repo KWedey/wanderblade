@@ -60,11 +60,16 @@ simulated and against a single un-split arc; stacked on momentum's ×1.75 it rea
 and broke the band it was meant to satisfy.
 
 **A catch is a hit test, not a queue.** A Strike carries where it landed. Core computes
-every live arc's position at the strike's timestamp and catches the nearest one inside
-`ARC_CATCH_RADIUS`; a Strike aimed at empty sky catches nothing, and one aimed at the third
-coin catches the third. A miss is still a valid Strike — it lands its swing and adds
-momentum as normal. The client renders arcs from `state.arcs` and reacts to the `arcCatch`
-event; it never decides a catch (`docs/DECISIONS.md` #25).
+every live arc's position at the strike's timestamp and catches the nearest coin inside an
+**ellipse**, not a circle (`docs/DECISIONS.md` #50):
+
+- along the coin's path: `ARC_CATCH_SEC` **0.30** s of its own travel, so lateness is forgiven the same at every speed (#35)
+- across the path: `ARC_CATCH_PERP` **0.10** arc units, so a stray tap is not forgiven as lateness
+
+A Strike aimed at empty sky catches nothing, and one aimed at the third coin catches the
+third. A miss is still a valid Strike — it lands its swing and adds momentum as normal.
+The client renders arcs from `state.arcs` and reacts to the `arcCatch` event; it never
+decides a catch (`docs/DECISIONS.md` #25).
 
 This is the contract that keeps idle honest: active play multiplies, it never gates.
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A mobile active-forward idle RPG: a lone wandering swordfighter builds power on monster-filled Roads and commits that build to persistent portal bosses—designed for 15–30-minute active sessions with meaningful offline progress.
 
-**Stack:** TypeScript + web UI (canvas diorama), wrapped with Capacitor for iOS/Android. npm workspaces, Node ≥ 20.
+**Stack:** TypeScript + web UI (canvas diorama). Capacitor wrapping for iOS/Android is planned (`docs/DECISIONS.md` #1), not yet added — there is no `@capacitor` dependency or config. npm workspaces, Node ≥ 20.
 **Current milestone:** M1R — active-forward realm rebaseline. The M0/M1a deterministic foundation and M1b HUD exist; active-play design, simulator rebaselining, and Road → Portal Boss → Ascension implementation are next. See `docs/ROADMAP.md`.
 
 ## Commands
@@ -17,13 +17,16 @@ npm run dev                  # Vite dev server at http://localhost:5173
 npm run dev -- --host        # expose on LAN for phone testing
 npm run build                # production build of app/
 npm run verify               # THE GATE: lint + typecheck + test
-npm test                     # vitest across all workspaces (37 files / 643 tests)
+npm test                     # vitest across all workspaces (38 files / 732 tests)
 npm run typecheck            # tsc --noEmit over core, sim, and app
 npm run lint                 # eslint (type-aware); --fix for the autofixable ones
 npm run sim                  # economy simulator, default 3 seeds × 14 days
 npm run sim -- --days 30 --seeds 5 --csv   # writes sim/out/run-<seed>.csv
 npm run sim -- --help        # full flag list
+npm run thumb                # headless thumb model: catch rate vs latency and aim (ADR #43, #47)
 ```
+
+CI (`.github/workflows/ci.yml`) runs `npm run verify`, `npm run build`, and a 3-day sim that must print ALL PASS.
 
 QA tools (`tools/qa/`, each takes `--help`; all need a dev server and print the
 port they used, defaulting to 5173 or `$WB_QA_PORT`):
@@ -31,6 +34,8 @@ port they used, defaulting to 5173 or `$WB_QA_PORT`):
 ```bash
 npm run qa:capture -- --label round17   # a judged desktop frame, mid-swing
 npm run qa:mobile                       # six phone/desktop viewports: layout, type grid, safe areas
+npm run qa:wiring                       # does the live page register the listeners a held strike needs
+npm run qa:loop                         # plays Road -> Portal -> Boss through the DOM, checks the fight band
 npm run qa:pixels -- <png> <x> <y> <w> <h>   # colour of a crop, in numbers
 npm run qa:speckle -- <png> --right 1456     # which colour is speckling the world
 ```
@@ -106,12 +111,17 @@ packages/core  ──►  app   (Vite client, DOM)
 **`app` — controller/view split, no game math in either.**
 
 - `main.ts` mounts `#app`, wires `ViewHandlers`, starts the loop. Only module touching the DOM entry point.
-- `game.ts` (`Game`) owns `GameState`, drives `advance` on a 250 ms tick, eases the gold count-up, saves every 5 s, and translates state into a `ViewModel`. Detects tab suspension (`SUSPEND_TICK_SEC`) and treats it as offline.
+- `game.ts` (`Game`) owns `GameState`, drives `advance` on a 100 ms tick, eases the gold count-up, saves every 5 s, and translates state into a `ViewModel`. Detects tab suspension (`SUSPEND_TICK_SEC`) and treats it as offline.
 - `view.ts` builds DOM once, then paints from the plain `ViewModel`. Owns no state.
 - `save.ts` wraps the core's serialized string in a versioned envelope with a wall-clock `savedAt`; a cold load computes the offline gap from it. Loads are validated field-by-field — a malformed save is discarded, not trusted.
+- `active.ts` turns taps and holds into `{ atSec, aim }` strikes for the engine; `hold.ts` is the rule for where a held strike lands (a thumb that slides onto a coin has aimed at it).
+- `scene/` is the canvas diorama: `scene.ts` composes the Road and the dungeon, `sprites.ts` / `pixels.ts` / `palette.ts` draw, `fx.ts` is hit and catch effects, `textlane.ts` is the scrolling log.
+- `species.ts` names the road creatures per realm (35 plus a fallback) and binds each to a silhouette the scene can draw. Provenance lives in `docs/SRD-CONTENT.md`.
+- `feel.ts` is synthesized audio and haptics, fed only by engine events. `pixeltext.ts` paints panel type as bitmap glyphs over the real DOM text (`docs/DECISIONS.md` #42).
+- `devstage.ts` is dev-only staging (`?stage=mid&seed=7`): it advances real engine time and makes real purchases so QA captures show a deep run.
 - `flavor.ts` / `format.ts` / `anim.ts` are display-only. Naming, number formatting, and interpolation never feed back into the economy (`docs/DECISIONS.md` #12).
 
-**`sim` — the economy evidence, consuming the same core.** `run.ts` → `simulate.ts` runs a deterministic bot (`bot.ts`) per seed, `collector.ts` records milestones, `validators.ts` holds the numbered PASS/FAIL pacing validators from `docs/ECONOMY.md`, `format.ts` prints the report and CSV. The simulator reports honest results; it never tunes constants.
+**`sim` — the economy evidence, consuming the same core.** `run.ts` → `simulate.ts` runs a deterministic bot (`bot.ts`) per seed, `ContractWatch` inside `simulate.ts` records milestones and phase-contract breaches, `validators.ts` holds the numbered PASS/FAIL pacing validators from `docs/ECONOMY.md`, `format.ts` prints the report and CSV. The simulator reports honest results; it never tunes constants.
 
 **The readiness-gate prototype is gone.** `GateState`, `readiness`, `challengeBoss`, and `autoChallengeReadiness` were deleted in M1R.3; the core is Road → Portal Boss → Ascension per Decisions #14–#18, with the active layer in #19–#25. `packages/core/test/phase.test.ts` is what replaced the old gate/boss/auto-challenge tests.
 
