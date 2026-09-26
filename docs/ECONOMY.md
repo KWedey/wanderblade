@@ -102,6 +102,7 @@ Required correctness validators:
 - Victory banks, rewards, resets, and unlocks exactly once, including across save/reload boundaries.
 - Remaining offline time after victory advances the next realm Road.
 - Persistent earnings bonuses affect the documented income paths and never DPS.
+- Guardian HP never regenerates: it is monotonic across every attempt, online and offline, until abandonment resets it to full (**C10**).
 - The four player policies meet the approved pacing bands across multiple seeds and multi-realm runs.
 - The upgrade panel offers at least five priced rows at every look and four affordable at 95% of them (**P8**), so "the number and value of decisions within a 15–30 minute active session" is a measured quantity rather than an intention. Measured on the minimum for priced rows, which gold cannot move, and at 95% for affordable ones, because the greedy purchase policy empties the wallet the instant it can (`docs/DECISIONS.md` #26).
 - The portal never sits open on a finished Road for longer than 24 hours, no realm takes longer than 3 days, and the share of Road time spent waiting rather than progressing is reported (**P9**). This is what catches a guardian curve the Road cannot reach: before `docs/DECISIONS.md` #32 the bot farmed a cleared realm for 14.7 hours — 56% of its Road time — because the guardian was ~34× beyond the build the Road delivered.
