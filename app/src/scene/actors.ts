@@ -3,7 +3,8 @@
 
 import { ACTOR_SHADOW, LOOT_GLOW, SWING_ANIM_SEC, type Frame } from './frame';
 import { inAnyPocket } from './fx';
-import { OUTLINE_INK, glowRingRadii, lighten, mixHex, momentumLift } from './palette';
+import { OUTLINE_INK, glowRingRadii, lighten, momentumLift } from './palette';
+import { drawShadow } from './road';
 import { drawSprite, drawSpriteRotated } from './sprites';
 import { LANE_COUNT, lanesTouching, type LaneSpan } from './textlane';
 import { arcScreenPoints, leadScale, pockets } from './world';
@@ -51,36 +52,6 @@ function litPool(f: Frame, cx: number, r: number, color: string, gain: number): 
   }
 }
 
-/**
- * Hard contact shadow: the realm's own ground stepped toward night, with an
- * edge (DECISIONS.md #13); alpha-blended black is invisible on turf. `depth`
- * separates actors from props: at one shared value every cast tiled into a
- * stripe that read as terrain.
- */
-export function drawShadow(f: Frame, x: number, width: number, depth = 0.52): void {
-  const { ctx, model, skin, view } = f;
-  // Stone, not turf, once the fight is enclosed — a green cast shadow on a
-  // dungeon floor is the road's ground pretending it followed the hero in.
-  const ground = model.boss ? skin.rock : skin.turf;
-  const core = mixHex(ground, '#1a1c2c', depth);
-  const edge = mixHex(ground, '#1a1c2c', depth * 0.58);
-  // The sun sits upper right, so the shadow pools to the left of the feet.
-  const cx = x - Math.round(width * 0.16);
-  const rows: readonly (readonly [number, string])[] = [
-    [1.15, core],
-    [1, core],
-    [0.72, edge],
-    [0.4, edge],
-  ];
-  rows.forEach(([scale, color], i) => {
-    const w = Math.max(2, Math.round(width * scale));
-    ctx.fillStyle = color;
-    // +1: the turf's own lip owns the first row under the horizon, and a
-    // shadow drawn on it reads as part of that line rather than as contact.
-    ctx.fillRect(Math.floor(cx - w / 2), view.groundY + 1 + i, w, 1);
-  });
-}
-
 /** The hero's own light and contact shadow. Ground decals, so they stay under everything. */
 export function drawHeroGround(f: Frame): void {
   const { model, view, sprites } = f;
@@ -104,10 +75,7 @@ export function drawHero(f: Frame): void {
   const stride = model.reduceMotion ? 0 : Math.floor(world.clockSec * 7 * model.momentumMult) % 2;
   const sprite = stride === 0 ? heroA : heroB;
   const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(world.clockSec * 14) * 0.6);
-  // No rim pass. It drew the sprite's own black outline offset four ways, so
-  // the "halo of the sky's own light" its comment promised was a second ring
-  // of the darkest ink in the frame - the hero read as a blob at thumbnail
-  // size, which is the opposite of the job.
+  // No rim pass: a second ring of the darkest ink reads as a blob at thumbnail size.
   drawSprite(ctx, sprite, view.heroX, view.groundY + bob, false);
 
   // The blade sweeps a real arc; nearest-neighbour rotation keeps it pixelated.
@@ -116,16 +84,13 @@ export function drawHero(f: Frame): void {
   const t = world.swingAnim / SWING_ANIM_SEC;
   const angle = world.swingAnim > 0 ? -1.25 + (1 - t) * 1.42 : -0.3;
   const handX = view.heroX + 5;
-  // The grip rides just above the belt, so it follows the sprite instead of a
-  // constant: at a fixed -9 the hand stayed at the old 20px hero's hip and
-  // ended up at the taller one's thigh, with the blade swinging from his knee.
+  // The grip rides just above the belt, sized from the sprite so a taller hero keeps the blade at his hip.
   const handY = view.groundY + bob - Math.round(heroA.height * 0.42);
   drawSpriteRotated(ctx, sword, handX, handY, angle, 2, 2);
 
   if (world.swingAnim > 0) {
-    // A crescent that tapers along the sweep and thins as the swing ends.
-    // The old version was a ring of equal blobs, which read as a broken
-    // sprite rather than as a blade trail.
+    // A crescent that tapers along the sweep and thins as the swing ends;
+    // a ring of equal blobs reads as a broken sprite, not a blade trail.
     const steps = 10;
     for (let i = 0; i < steps; i++) {
       const along = i / (steps - 1);
@@ -165,8 +130,7 @@ export function drawMonsters(f: Frame): LaneSpan[] {
         ? Math.round(Math.max(0, Math.sin(world.clockSec * 3.4 + m.bob)) ** 2 * 6)
         : model.reduceMotion
           ? 0
-          : // Queued creatures sway on their own phase. Two of a kind
-            // standing in identical poses was called out by name.
+          : // Queued creatures sway on their own phase, so two of a kind never share a pose.
             Math.round(Math.sin(world.clockSec * 1.6 + m.bob * 2.3) * 2);
     const x = m.x + m.spread - lunge;
     if (x < -40 || x > view.worldRightX + 60) continue;
@@ -174,9 +138,8 @@ export function drawMonsters(f: Frame): LaneSpan[] {
     const scale = i === 0 ? leadScale(model) : 1;
     drawShadow(f, x, (sprite.width - 2) * scale, i === 0 ? ACTOR_SHADOW : undefined);
     drawSprite(ctx, sprite, x, view.groundY + bob, true, false, scale);
-    // The flash lights the creature rather than replacing it. Swapping in the
-    // silhouette outright turned a 24x30 golem into a white mass for a third
-    // of all frames, which is what read as a missing sprite.
+    // The flash lights the creature rather than replacing it: a solid white
+    // silhouette for a third of all frames reads as a missing sprite.
     if (m.flash > 0) {
       ctx.globalAlpha = 0.55;
       drawSprite(ctx, sprite, x, view.groundY + bob, true, true, scale);
@@ -200,10 +163,8 @@ export function drawMonsters(f: Frame): LaneSpan[] {
     }));
     ctx.fillStyle = OUTLINE_INK;
     ctx.fillRect(bx - 1, by - 1, w + 2, 4);
-    // A mid value, not another near-black. Ring and trough were both darker
-    // than the turf, so a nearly-dead creature - which is every frame a
-    // capture lands on - wore a solid black slab across its shoulders with
-    // no internal contrast at all.
+    // A mid value, not another near-black: ring and trough both darker than
+    // the turf is a solid black slab across a nearly-dead creature's shoulders.
     ctx.fillStyle = '#847e87';
     ctx.fillRect(bx, by, w, 2);
     // Never the accent: a yellow bar over a creature read as a wind-up

@@ -3,6 +3,7 @@
 
 import type { LootArc } from '@wanderblade/core';
 import { formatNumber } from '../format';
+import type { FloaterTier } from './fx';
 import type { Viewport } from './geometry';
 import type { RealmSkin } from './palette';
 import type { GroundTexture } from './road';
@@ -65,7 +66,8 @@ export interface SceneSprites {
   sword: BakedSprite;
   coin: BakedSprite;
   gem: BakedSprite;
-  skinned: SkinnedSprites;
+  /** Resolved per access off the current realm; the scene backs it with a getter. */
+  readonly skinned: SkinnedSprites;
 }
 
 /** The subset of CanvasRenderingContext2D a flat-fill draw loop needs — narrow enough to fake in a test without a real canvas. */
@@ -99,6 +101,12 @@ export const LOOT_GLOW = '#fbf236';
 export const PROP_SPAN = 1400;
 export const SWINGS_PER_SEC = 1.7;
 export const SWING_ANIM_SEC = 0.32;
+/**
+ * The number hierarchy. Gold headline lives in the DOM HUD; everything in the
+ * world ranks below it and every in-world number is assigned a tier here, so
+ * size and color are never picked per call site.
+ */
+export const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 1, damage: 1 };
 
 /** Deterministic [0,1) hash — prop layout must not shimmer between frames. */
 export function hash01(n: number): number {

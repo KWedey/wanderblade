@@ -12,6 +12,7 @@ import {
   PROP_SPAN,
   SWING_ANIM_SEC,
   SWINGS_PER_SEC,
+  TIER_SCALE,
   damagePerSwing,
   formatShort,
   hash01,
@@ -37,8 +38,8 @@ import {
   type Particle,
   type PeakState,
 } from './fx';
+import { comboSpans } from './combo';
 import type { Viewport } from './geometry';
-import { TIER_SCALE, comboSpans } from './overlay';
 import { NUMERAL_FONT, textWidth } from './pixels';
 import { LANE_BASE_OFFSET, LANE_COUNT, LANE_STEP, placeRun, type LaneSpan } from './textlane';
 
@@ -353,8 +354,7 @@ function killMonster(w: World, input: WorldInput): void {
   const x = lead ? lead.x + lead.spread : view.heroX + BLADE_REACH;
   const y = view.groundY;
   burst(w, x, y - 10, 14, [skin.monBody, skin.monBodyDark, ...SPARK_COLORS], 130);
-  // One burst at the contact pixel: the two crossing white bars this replaces
-  // were the brightest object in the frame, and read as a mouse cursor.
+  // One burst at the contact pixel; a crossed white mark reads as a mouse cursor.
   burst(w, x, y - 12, 10, ['#ffffff', ...SPARK_COLORS], 62);
   w.shake = Math.min(MAX_SHAKE, w.shake + 2.1);
 

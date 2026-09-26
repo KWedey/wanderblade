@@ -170,7 +170,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     world.collectAnchor = { x: p.x, y: Math.max(2, p.y) };
   }
 
-  const toScene = (clientX: number, clientY: number) => toSceneAt(view, canvas, clientX, clientY);
+  function toScene(clientX: number, clientY: number): { x: number; y: number } {
+    return toSceneAt(view, canvas, clientX, clientY);
+  }
 
   /** The view owns layout; it tells the scene how much chrome sits above the road. */
   function setSceneTop(cssPx: number): void {

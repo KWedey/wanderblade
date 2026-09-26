@@ -16,7 +16,7 @@ import {
   type PillarSpan,
   type RealmSkin,
 } from './palette';
-import { GROUND_BANDS, drawGroundBands } from './road';
+import { GROUND_BANDS, drawGroundBands, fillFlatDisc } from './road';
 
 /** Dungeon room geometry (DECISIONS.md #58): brick course height, wall/ceiling band counts, edge-vignette bands and their width in scene pixels. */
 const BRICK_H = 7;
@@ -88,14 +88,6 @@ export function drawPillars(
     const edgeX = span.x === 0 ? span.x + span.w - edgeW : span.x;
     ctx.fillStyle = edgeColor;
     ctx.fillRect(edgeX, top, edgeW, bottom - top);
-  }
-}
-
-/** A filled circle on any `FillCtx` — mass, not an outline (mirrors the closure-local `fillDisc` used by the sun). */
-function fillFlatDisc(ctx: FillCtx, cx: number, cy: number, r: number): void {
-  for (let dy = -r; dy <= r; dy++) {
-    const half = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
-    ctx.fillRect(cx - half, cy + dy, half * 2 + 1, 1);
   }
 }
 

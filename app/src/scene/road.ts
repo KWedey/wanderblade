@@ -1,6 +1,5 @@
 // The road diorama: sky, hills, turf and everything that scrolls past the hero.
 
-import { drawShadow } from './actors';
 import { PROP_SPAN, hash01, type FillCtx, type Frame } from './frame';
 import { wrap } from './fx';
 import type { Viewport } from './geometry';
@@ -193,6 +192,46 @@ export function drawGroundBands(
   }
 }
 
+/**
+ * Hard contact shadow: the realm's own ground stepped toward night, with an
+ * edge (DECISIONS.md #13); alpha-blended black is invisible on turf. `depth`
+ * separates actors from props: at one shared value every cast tiled into a
+ * stripe that read as terrain.
+ */
+export function drawShadow(f: Frame, x: number, width: number, depth = 0.52): void {
+  const { ctx, model, skin, view } = f;
+  // Stone, not turf, once the fight is enclosed — a green cast shadow on a
+  // dungeon floor is the road's ground pretending it followed the hero in.
+  const ground = model.boss ? skin.rock : skin.turf;
+  const core = mixHex(ground, '#1a1c2c', depth);
+  const edge = mixHex(ground, '#1a1c2c', depth * 0.58);
+  // The sun sits upper right, so the shadow pools to the left of the feet.
+  const cx = x - Math.round(width * 0.16);
+  const rows: readonly (readonly [number, string])[] = [
+    [1.15, core],
+    [1, core],
+    [0.72, edge],
+    [0.4, edge],
+  ];
+  rows.forEach(([scale, color], i) => {
+    const w = Math.max(2, Math.round(width * scale));
+    ctx.fillStyle = color;
+    // +1: the turf's own lip owns the first row under the horizon, and a
+    // shadow drawn on it reads as part of that line rather than as contact.
+    ctx.fillRect(Math.floor(cx - w / 2), view.groundY + 1 + i, w, 1);
+  });
+}
+
+/** A filled circle, scanline by scanline — mass, not an outline. Rows outside `[yMin, yMax)` are skipped. */
+export function fillFlatDisc(ctx: FillCtx, cx: number, cy: number, r: number, yMin = -Infinity, yMax = Infinity): void {
+  for (let dy = -r; dy <= r; dy++) {
+    const y = cy + dy;
+    if (y < yMin || y >= yMax) continue;
+    const half = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
+    ctx.fillRect(cx - half, y, half * 2 + 1, 1);
+  }
+}
+
 function band(f: Frame, y: number, h: number, color: string): void {
   if (h <= 0) return;
   const { ctx, view } = f;
@@ -216,31 +255,20 @@ export function sunAt(view: Viewport): { x: number; y: number; r: number } {
   return { x: Math.floor(view.vw * 0.6), y: Math.max(Math.ceil(r * 2.45), Math.floor(view.groundY * 0.13)), r };
 }
 
-/** A filled circle, scanline by scanline — mass, not an outline. */
-function fillDisc(f: Frame, cx: number, cy: number, r: number): void {
-  const { ctx, view } = f;
-  for (let dy = -r; dy <= r; dy++) {
-    const y = cy + dy;
-    if (y < 0 || y >= view.sceneBottomY) continue;
-    const half = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
-    ctx.fillRect(cx - half, y, half * 2 + 1, 1);
-  }
-}
-
 /**
  * Stacked solid discs over the treeline, never a radial gradient: behind the
  * canopy the disc tore into two fragments a critic read as an artifact. Each
  * halo band overpaints the last, so the glow is carried by area and colour.
  */
 export function drawSun(f: Frame): void {
-  const { ctx, skin } = f;
-  const sun = sunAt(f.view);
+  const { ctx, skin, view } = f;
+  const sun = sunAt(view);
   for (const band of sunHaloBands(sun.r)) {
     ctx.fillStyle = mixHex(skin.sun, skin.skyTop, band.skyMix);
-    fillDisc(f, sun.x, sun.y, band.r);
+    fillFlatDisc(ctx, sun.x, sun.y, band.r, 0, view.sceneBottomY);
   }
   ctx.fillStyle = skin.sun;
-  fillDisc(f, sun.x, sun.y, sun.r);
+  fillFlatDisc(ctx, sun.x, sun.y, sun.r, 0, view.sceneBottomY);
 }
 
 /** A third depth on the horizon, behind the far hills. */
@@ -348,8 +376,7 @@ interface GroveInks {
 }
 
 /**
- * Distance sets value and height together: the far rank used to tower over
- * the near one at nearly its saturation, so thirty trees read as one flat
+ * Distance sets value and height together, or thirty trees read as one flat
  * sheet. Foliage holds its hue harder than bark, or the far canopies come out
  * the grey-white of the clouds behind them.
  */
@@ -368,7 +395,7 @@ function groveInks(skin: RealmSkin, depth: number): GroveInks {
   };
 }
 
-/** Tapered trunk with a root flare, a sunward lit edge and bark streaks: uniform straight-sided columns were named outright. */
+/** Tapered trunk with a root flare, a sunward lit edge and bark streaks; a straight-sided column reads as a pole. */
 function drawTrunk(ctx: CanvasRenderingContext2D, t: GroveTree, inks: GroveInks): void {
   const { i, x, trunkW, crownY, footY } = t;
   const barkH = Math.max(1, footY - crownY);

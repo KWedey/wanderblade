@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { drawShadow } from '../src/scene/actors';
 import type { Frame, SceneModel, SceneSprites, SkinnedSprites } from '../src/scene/frame';
 import { createViewport, type Viewport } from '../src/scene/geometry';
 import { drawMomentumMeter } from '../src/scene/overlay';
 import { OUTLINE_INK, lightnessOf, mixHex, realmSkin } from '../src/scene/palette';
 import { NUMERAL_FONT } from '../src/scene/pixels';
-import { drawFence } from '../src/scene/road';
+import { drawFence, drawShadow } from '../src/scene/road';
 import type { BakedSprite } from '../src/scene/sprites';
 import { createWorld } from '../src/scene/world';
+import { sceneModel } from './scene-model';
 
 interface Call {
   op: 'fillRect' | 'drawImage';
@@ -75,29 +75,10 @@ function fakeSkinned(): SkinnedSprites {
   };
 }
 
-function model(over: Partial<SceneModel> = {}): SceneModel {
-  return {
-    region: 0,
-    kills: 0,
-    killProgress: 0,
-    goldPerKill: 0,
-    dps: 0,
-    momentum: 0,
-    momentumMult: 1,
-    attackSpeedMult: 1,
-    paused: false,
-    reduceMotion: false,
-    boss: false,
-    arcs: [],
-    timeSec: 0,
-    ...over,
-  };
-}
-
 function frame(over: { model?: Partial<SceneModel>; view?: Partial<Viewport> } = {}): { f: Frame; calls: Call[] } {
   const { ctx, calls } = recordingCtx();
   const view = { ...createViewport(), vw: 300, vh: 170, groundY: 120, sceneBottomY: 170, worldRightX: 200, heroX: 72, ...over.view };
-  const m = model(over.model);
+  const m = sceneModel(over.model);
   const sprites: SceneSprites = {
     heroA: fakeSprite(14, 22),
     heroB: fakeSprite(14, 22),

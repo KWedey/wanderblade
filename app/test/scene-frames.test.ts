@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { LootArc } from '@wanderblade/core';
 import { createScene, type SceneModel } from '../src/scene/scene';
+import { sceneModel } from './scene-model';
 
 /**
  * Every 2d-context call the scene makes, across every canvas it creates, in
@@ -74,23 +75,9 @@ function installDom(rec: Recorder): void {
   });
 }
 
+/** A paying road frame: an enemy worth gold, a hero with dps, and an engine clock the arcs fly against. */
 function baseModel(over: Partial<SceneModel> = {}): SceneModel {
-  return {
-    region: 0,
-    kills: 0,
-    killProgress: 0,
-    goldPerKill: 12,
-    dps: 40,
-    momentum: 0,
-    momentumMult: 1,
-    attackSpeedMult: 1,
-    paused: false,
-    reduceMotion: false,
-    boss: false,
-    arcs: [],
-    timeSec: 100,
-    ...over,
-  };
+  return sceneModel({ goldPerKill: 12, dps: 40, timeSec: 100, ...over });
 }
 
 function arcsAt(timeSec: number): LootArc[] {
