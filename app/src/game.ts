@@ -16,6 +16,8 @@ import {
   buyAscendancyNode as coreBuyAscendancyNode,
   buySkill as coreBuySkill,
   bossEtaSec,
+  CLOCK_MS_PER_SEC,
+  clockAfter,
   goldPerKill,
   enterPortal as coreEnterPortal,
   heroDps,
@@ -68,8 +70,8 @@ const SUSPEND_TICK_SEC = 90;
 const BOSS_RESULT_MS = 2600;
 /** How long a refused action explains itself in the panel. */
 const REFUSAL_MS = 4000;
-/** Smallest gap between two strike stamps, so a burst stays strictly ordered. */
-const STRIKE_EPSILON_SEC = 1e-4;
+/** Smallest gap between two strike stamps: one clock tick, so a burst stays strictly ordered. */
+const STRIKE_EPSILON_SEC = 1 / CLOCK_MS_PER_SEC;
 /**
  * Gold count-up smoothing rate in 1/s, applied as `1 - exp(-rate * dt)` per
  * frame so the counter converges identically on 60Hz and 120Hz displays.
@@ -174,8 +176,11 @@ export class Game {
       return;
     }
 
-    const dtSec = (now - this.lastTickMs) / 1000;
-    this.lastTickMs = now;
+    // Whole milliseconds, so the engine clock never sees a fraction it would
+    // round and the remainder of the wall clock carries to the next tick.
+    const dtMs = Math.floor(now - this.lastTickMs);
+    const dtSec = dtMs / 1000;
+    this.lastTickMs += dtMs;
 
     if (dtSec > 0) {
       const strikes = this.drainStrikes();
@@ -296,15 +301,17 @@ export class Game {
    */
   strike(aim: ArcPoint | null): void {
     this.cue('strike');
+    // Floored to the tick the next advance will also floor to, so a stamp can
+    // never land past the target that advance will reach.
     const sinceTickSec = Math.min(
-      (performance.now() - this.lastTickMs) / 1000,
+      Math.floor(performance.now() - this.lastTickMs) / 1000,
       MAX_EXTRAPOLATE_SEC,
     );
-    const floor = this.state.timeSec + STRIKE_EPSILON_SEC;
+    const floor = clockAfter(this.state.timeSec, STRIKE_EPSILON_SEC);
     const last = this.pendingStrikes[this.pendingStrikes.length - 1];
     const atSec = Math.max(
-      this.state.timeSec + sinceTickSec,
-      last ? last.atSec + STRIKE_EPSILON_SEC : floor,
+      clockAfter(this.state.timeSec, sinceTickSec),
+      last ? clockAfter(last.atSec, STRIKE_EPSILON_SEC) : floor,
     );
     this.pendingStrikes.push({ atSec, aim });
   }

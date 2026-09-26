@@ -3,6 +3,8 @@ import {
   advance,
   arcPositionAt,
   ARC_CATCH_MULT,
+  CLOCK_MS_PER_SEC,
+  clockAfter,
   ARC_CATCH_PERP,
   arcCatchRadius,
   arcHeadingAt,
@@ -85,7 +87,9 @@ describe('loot arcs', () => {
     expect(coins).toBeGreaterThan(1);
     const target = s.arcs[0] as LootArc;
 
-    const at = 1.5 * ROAD_KILL0_SEC;
+    // The strike sits exactly on the advance target, so it is stamped the way
+    // the clock will reach it rather than by a float sum an ulp past it.
+    const at = clockAfter(s.timeSec, ROAD_KILL0_SEC / 2);
     const events = advance(s, ROAD_KILL0_SEC / 2, [
       { atSec: at, aim: aimAt(target, at) },
     ]);
@@ -107,9 +111,10 @@ describe('loot arcs', () => {
     let events: ReturnType<typeof advance> = [];
     for (const coin of coins) {
       const at = coin.expiresAtSec - ARC_FLIGHT_SEC / 2;
-      events = events.concat(advance(s, Math.max(1e-9, at - s.timeSec + 1e-9), [
-        { atSec: at, aim: aimAt(coin, at) },
-      ]));
+      // Whole milliseconds, one past the strike, so the clock grid never
+      // rounds the target back to before it.
+      const dt = Math.ceil((at - s.timeSec) * CLOCK_MS_PER_SEC + 1) / CLOCK_MS_PER_SEC;
+      events = events.concat(advance(s, dt, [{ atSec: at, aim: aimAt(coin, at) }]));
     }
     expect(events.filter((e) => e.type === 'arcCatch')).toHaveLength(coins.length);
     const kill = coins.reduce((t, a) => t + a.gold, 0);

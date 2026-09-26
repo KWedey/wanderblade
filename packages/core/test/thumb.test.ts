@@ -7,6 +7,7 @@ import {
   arcCatchRadius,
   arcHitIndex,
   arcSpeedAt,
+  clockAfter,
   initialState,
   type ArcPoint,
   type GameState,
@@ -83,14 +84,18 @@ function thumbAim(
   return { x: seen.x + scatter * Math.cos(a), y: seen.y + scatter * Math.sin(a) };
 }
 
-/** Catch rate over 400 taps at 3.3/s, aiming as a thumb would. */
+/**
+ * Catch rate over 4000 taps at 3.3/s, aiming as a thumb would. `busyRoad`
+ * idles 27 s between kills, so 400 taps see only ~26 coins and two catches of
+ * luck decide the wide-scatter ratio; ten times that is a measurement.
+ */
 function catchRate(target: Target, latencySec: number, scatter = 0): number {
   const s = busyRoad();
   advance(s, 3);
   let taps = 0;
   let caught = 0;
-  for (let i = 0; i < 400; i++) {
-    const at = s.timeSec + 1 / 3.3;
+  for (let i = 0; i < 4000; i++) {
+    const at = clockAfter(s.timeSec, 1 / 3.3);
     const arc = pick(s, at, target);
     const aim = arc ? thumbAim(arc, at, latencySec, scatter, i) : null;
     const events = advance(s, at - s.timeSec, [{ atSec: at, aim }]);
@@ -113,7 +118,7 @@ function intendedShare(target: Target, latencySec: number, scatter = 0): number 
   let caught = 0;
   let intended = 0;
   for (let i = 0; i < 400; i++) {
-    const at = s.timeSec + 1 / 3.3;
+    const at = clockAfter(s.timeSec, 1 / 3.3);
     const arc = pick(s, at, target);
     const aim = arc ? thumbAim(arc, at, latencySec, scatter, i) : null;
     if (arc && aim) {
@@ -134,7 +139,7 @@ function rateAtLatency(lat: number): number {
   let taps = 0;
   let caught = 0;
   for (let i = 0; i < 400; i++) {
-    const at = s.timeSec + 1 / 3.3;
+    const at = clockAfter(s.timeSec, 1 / 3.3);
     const arc = pick(s, at, 'landing');
     const aim = arc ? thumbAim(arc, at, lat, 0, i) : null;
     const events = advance(s, at - s.timeSec, [{ atSec: at, aim }]);
@@ -243,7 +248,7 @@ describe('the catch window is constant in time, not in distance', () => {
     advance(s, 3);
     let caught = 0;
     for (let i = 0; i < 200; i++) {
-      const at = s.timeSec + 1 / 3.3;
+      const at = clockAfter(s.timeSec, 1 / 3.3);
       const events = advance(s, at - s.timeSec, [
         { atSec: at, aim: { x: 3.5, y: 2.5 } },
       ]);

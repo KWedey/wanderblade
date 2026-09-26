@@ -62,6 +62,9 @@ export {
 } from './constants';
 export type { AscNodeDef, SkillDef, SpeciesDef } from './constants';
 
+// --- Clock ---------------------------------------------------------------
+export { CLOCK_MS_PER_SEC, clockAfter, clockMs } from './clock';
+
 // --- Types ---------------------------------------------------------------
 export type {
   ArcPoint,

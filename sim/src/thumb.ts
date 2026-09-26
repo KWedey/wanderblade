@@ -9,6 +9,7 @@ import {
   ARC_CATCH_MULT,
   arcPositionAt,
   ARC_CATCH_SEC,
+  clockMs,
   ARC_FLIGHT_SEC,
   ARC_MAX_REACH,
   ARC_MIN_REACH,
@@ -166,7 +167,10 @@ export function runThumb(thumb: Thumb, opts: SweepOptions, warm?: GameState): Th
 
   while (state.timeSec - t0 < opts.seconds) {
     seen.push({ atSec: state.timeSec, arcs: [...state.arcs] });
-    while (seen.length > 2 && seen[1]!.atSec <= state.timeSec - latency) seen.shift();
+    // Compared in clock milliseconds: a float subtraction lands an ulp either
+    // side of a frame stamp and silently picks a frame one tap staler.
+    const sawMs = clockMs(state.timeSec) - thumb.latencyMs;
+    while (seen.length > 2 && clockMs(seen[1]!.atSec) <= sawMs) seen.shift();
 
 
     // The strike resolves here; the player saw the coin `latency` before that.

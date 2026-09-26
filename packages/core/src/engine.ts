@@ -34,6 +34,7 @@ import {
   swingInterval,
 } from './formulas';
 import { arcHitIndex, arcsForKill } from './arcs';
+import { CLOCK_MS_PER_SEC, clockMs } from './clock';
 import { addMomentum, momentumAt } from './momentum';
 import { createRng, type Rng } from './rng';
 import type {
@@ -424,8 +425,8 @@ function processStrike(
   events: GameEvent[],
   recap: Recap,
   strike: Strike,
+  clock: number,
 ): void {
-  const clock = strike.atSec;
   state.momentum = addMomentum(state.momentum, clock, MOMENTUM_PER_STRIKE);
   if (state.phase !== 'road') return;
 
@@ -486,9 +487,10 @@ function scheduleNext(state: GameState, clock: number): void {
 
 /**
  * THE engine, event-stepped per kill or swing with `strikes` merged in by
- * timestamp. `strikes` must be sorted ascending; timestamps outside
- * `(timeSec, timeSec + seconds]` are ignored, so splitting an interval hands
- * each strike to exactly one half. Ties resolve strike-first.
+ * timestamp. `seconds` and every strike instant are taken to the nearest
+ * millisecond (see clock.ts). `strikes` must be sorted ascending; instants
+ * outside `(timeSec, timeSec + seconds]` are ignored, so splitting an interval
+ * hands each strike to exactly one half. Ties resolve strike-first.
  */
 export function advance(
   state: GameState,
@@ -496,29 +498,32 @@ export function advance(
   strikes: readonly Strike[] = [],
 ): GameEvent[] {
   const events: EventLog = [];
-  const recap = emptyRecap(Math.max(0, seconds));
+  const deltaMs = clockMs(seconds);
+  const recap = emptyRecap(Math.max(0, deltaMs) / CLOCK_MS_PER_SEC);
 
-  if (!(seconds > 0)) {
+  if (!(deltaMs > 0)) {
     events.recap = recap;
     return events;
   }
 
   const rng = createRng(state.rngState);
-  const start = state.timeSec;
-  const target = start + seconds;
+  const startMs = clockMs(state.timeSec);
+  const targetMs = startMs + deltaMs;
+  const target = targetMs / CLOCK_MS_PER_SEC;
 
   let si = 0;
-  while (si < strikes.length && (strikes[si] as Strike).atSec <= start) si += 1;
+  while (si < strikes.length && clockMs((strikes[si] as Strike).atSec) <= startMs) si += 1;
 
   for (;;) {
     const strike = si < strikes.length ? (strikes[si] as Strike) : null;
-    const nextStrike = strike ? strike.atSec : Infinity;
-    const strikeDue = nextStrike <= target;
+    const nextStrikeMs = strike ? clockMs(strike.atSec) : Infinity;
+    const strikeDue = nextStrikeMs <= targetMs;
     const actionDue = state.nextActionAtSec <= target;
     if (!strikeDue && !actionDue) break;
 
-    if (strike && strikeDue && (!actionDue || nextStrike <= state.nextActionAtSec)) {
-      processStrike(state, events, recap, strike);
+    const strikeClock = nextStrikeMs / CLOCK_MS_PER_SEC;
+    if (strike && strikeDue && (!actionDue || strikeClock <= state.nextActionAtSec)) {
+      processStrike(state, events, recap, strike, strikeClock);
       si += 1;
       continue;
     }
