@@ -16,7 +16,7 @@ import {
   SPEND_PRICED_FLOOR,
   SPEND_TARGET,
 } from './probes';
-import type { BreachKind, SeedResult, Uplift, ValidatorResult } from './types';
+import type { BreachKind, Check, SeedResult, Uplift, ValidatorResult } from './types';
 
 export function fmtTime(sec: number | null): string {
   if (sec === null || !Number.isFinite(sec)) return 'never';
@@ -27,7 +27,17 @@ export function fmtTime(sec: number | null): string {
 }
 
 function ok(id: string, name: string, pass: boolean, detail: string): ValidatorResult {
-  return { id, name, pass, detail };
+  return { id, name, pass, skipped: false, detail };
+}
+
+function skip(id: string, name: string): ValidatorResult {
+  return { id, name, pass: false, skipped: true, detail: 'not measured under --quick' };
+}
+
+/** A direct experiment's verdict, or a skip when `--quick` never ran it. */
+function checked(id: string, name: string, c: Check | null, quick: boolean): ValidatorResult {
+  if (c === null) return quick ? skip(id, name) : ok(id, name, false, 'not measured');
+  return ok(id, name, c.pass, c.detail);
 }
 
 function ratios(list: Uplift[]): number[] {
@@ -76,24 +86,18 @@ export function runCorrectness(r: SeedResult): ValidatorResult[] {
         : why('during boss') || 'a Road resource moved during boss elapsed time',
     ),
   );
+  const quick = r.config.quick;
+  out.push(checked('C3', 'Offline boss HP equals live boss HP', r.offlineMatchesLive, quick));
   out.push(
-    ok('C3', 'Offline boss HP equals live boss HP', r.offlineMatchesLive, r.offlineMatchesLiveDetail),
-  );
-  out.push(
-    ok(
+    checked(
       'C4',
       'Identical timestamped inputs give identical results',
       r.replayIdentical,
-      r.replayIdenticalDetail,
+      quick,
     ),
   );
   out.push(
-    ok(
-      'C5',
-      'Abandonment resets boss progress only, never banks',
-      r.abandonClean,
-      r.abandonCleanDetail,
-    ),
+    checked('C5', 'Abandonment resets boss progress only, never banks', r.abandonClean, quick),
   );
   out.push(
     ok(
@@ -104,20 +108,15 @@ export function runCorrectness(r: SeedResult): ValidatorResult[] {
     ),
   );
   out.push(
-    ok(
+    checked(
       'C7',
       'Remaining offline time advances the next realm Road',
       r.remainingTimeCarried,
-      r.remainingTimeCarriedDetail,
+      quick,
     ),
   );
   out.push(
-    ok(
-      'C8',
-      'Earnings bonus moves gold and never DPS',
-      r.earningsBonusIsolated,
-      r.earningsBonusIsolatedDetail,
-    ),
+    checked('C8', 'Earnings bonus moves gold and never DPS', r.earningsBonusIsolated, quick),
   );
   out.push(
     ok(
@@ -144,6 +143,7 @@ export function runCorrectness(r: SeedResult): ValidatorResult[] {
 
 export function runPacing(r: SeedResult): ValidatorResult[] {
   const out: ValidatorResult[] = [];
+  const quick = r.config.quick;
 
   const road = ratios(r.roadUplift);
   out.push(
@@ -156,23 +156,19 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
   );
 
   const eight = r.eightHourBuys;
+  const p3 = '8h idle return affords ≥1 upgrade';
   out.push(
-    ok(
-      'P3',
-      '8h idle return affords ≥1 upgrade',
-      eight.length > 0 && eight.every((n) => n >= 1),
-      `buys ${range(eight)}`,
-    ),
+    quick
+      ? skip('P3', p3)
+      : ok('P3', p3, eight.length > 0 && eight.every((n) => n >= 1), `buys ${range(eight)}`),
   );
 
   const day = r.twentyFourHourZones;
+  const p4 = '24h idle return advances ≥1 zone';
   out.push(
-    ok(
-      'P4',
-      '24h idle return advances ≥1 zone',
-      day.length > 0 && day.every((n) => n >= 1),
-      `zones ${range(day)}`,
-    ),
+    quick
+      ? skip('P4', p4)
+      : ok('P4', p4, day.length > 0 && day.every((n) => n >= 1), `zones ${range(day)}`),
   );
 
   const activeH = r.portalReachSec.active === null ? null : r.portalReachSec.active / SEC_PER_HOUR;
@@ -206,15 +202,18 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
   );
 
   const pv = r.promptVsOverfarm;
+  const p7 = 'Ascending promptly beats farming a ready realm 2x longer';
   out.push(
-    ok(
-      'P7',
-      'Ascending promptly beats farming a ready realm 2x longer',
-      pv !== null && pv.promptBanked > pv.overfarmBanked,
-      pv === null
-        ? 'not measured'
-        : `prompt ${pv.promptBanked.toFixed(1)} vs overfarm ${pv.overfarmBanked.toFixed(1)} Ascendancy at ${fmtTime(pv.horizonSec)}`,
-    ),
+    quick
+      ? skip('P7', p7)
+      : ok(
+          'P7',
+          p7,
+          pv !== null && pv.promptBanked > pv.overfarmBanked,
+          pv === null
+            ? 'not measured'
+            : `prompt ${pv.promptBanked.toFixed(1)} vs overfarm ${pv.overfarmBanked.toFixed(1)} Ascendancy at ${fmtTime(pv.horizonSec)}`,
+        ),
   );
 
   // Three claims, because one number cannot carry this honestly.
@@ -309,20 +308,24 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
           `(${pu.activeEarned.toFixed(0)} vs ${pu.idleEarned.toFixed(0)})${endNote}`
         : `Ascendancy ratio not banded — run reached ${fmtTime(pu.measuredAtSec)}, ` +
           `band is stated at ${fmtTime(pu.horizonSec)} (${pu.ratio.toFixed(2)}x so far)${endNote}`;
+  const p10 =
+    `Permanent power: ${PERMANENT_RATIO_MIN}–${PERMANENT_RATIO_MAX}x Ascendancy at ` +
+    `${PERMANENT_HORIZON_SEC / SEC_PER_DAY}d, first ascension ≥${PERMANENT_SOONER_MIN}x sooner`;
   out.push(
-    ok(
-      'P10',
-      `Permanent power: ${PERMANENT_RATIO_MIN}–${PERMANENT_RATIO_MAX}x Ascendancy at ` +
-        `${PERMANENT_HORIZON_SEC / SEC_PER_DAY}d, first ascension ≥${PERMANENT_SOONER_MIN}x sooner`,
-      ratioOk && soonerOk,
-      pu === null
-        ? 'not measured'
-        : `${ratioNote}; ` +
-          `first ascension ${fmtTime(pu.activeFirstAscensionSec)} vs ${fmtTime(pu.idleFirstAscensionSec)}` +
-          `${ascendSooner === null ? '' : ` (${ascendSooner.toFixed(2)}x sooner)`}; ` +
-          `${pu.rankTarget} tree ranks ${fmtTime(pu.activeRankSec)} vs ${fmtTime(pu.idleRankSec)}` +
-          `${rankSooner === null ? '' : ` (${rankSooner.toFixed(2)}x, reported not banded)`}`,
-    ),
+    quick
+      ? skip('P10', p10)
+      : ok(
+          'P10',
+          p10,
+          ratioOk && soonerOk,
+          pu === null
+            ? 'not measured'
+            : `${ratioNote}; ` +
+              `first ascension ${fmtTime(pu.activeFirstAscensionSec)} vs ${fmtTime(pu.idleFirstAscensionSec)}` +
+              `${ascendSooner === null ? '' : ` (${ascendSooner.toFixed(2)}x sooner)`}; ` +
+              `${pu.rankTarget} tree ranks ${fmtTime(pu.activeRankSec)} vs ${fmtTime(pu.idleRankSec)}` +
+              `${rankSooner === null ? '' : ` (${rankSooner.toFixed(2)}x, reported not banded)`}`,
+        ),
   );
 
   return out;

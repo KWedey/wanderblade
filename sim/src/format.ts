@@ -13,8 +13,12 @@ function num(x: number): string {
   return x.toFixed(2);
 }
 
+function verdict(v: ValidatorResult): string {
+  return v.skipped ? 'SKIP' : v.pass ? 'PASS' : 'FAIL';
+}
+
 function mark(v: ValidatorResult): string {
-  return `  ${v.pass ? 'PASS' : 'FAIL'}  ${v.id}  ${v.name}\n          ${v.detail}`;
+  return `  ${verdict(v)}  ${v.id}  ${v.name}\n          ${v.detail}`;
 }
 
 export function formatSeedReport(r: SeedResult): string {
@@ -129,8 +133,13 @@ export function formatSummary(results: SeedResult[]): string {
   lines.push('');
 
   const ids = new Map<string, { name: string; pass: number; total: number; fails: string[] }>();
+  const skipped = new Map<string, string>();
   for (const r of results) {
     for (const v of [...r.correctness, ...r.pacing]) {
+      if (v.skipped) {
+        skipped.set(v.id, v.name);
+        continue;
+      }
       const row = ids.get(v.id) ?? { name: v.name, pass: 0, total: 0, fails: [] };
       row.total += 1;
       if (v.pass) row.pass += 1;
@@ -146,12 +155,15 @@ export function formatSummary(results: SeedResult[]): string {
     lines.push(`  ${pass ? 'PASS' : 'FAIL'}  ${id}  ${row.name}  (${row.pass}/${row.total} seeds)`);
     for (const f of row.fails) lines.push(`          ${f}`);
   }
+  for (const [id, name] of skipped) lines.push(`  SKIP  ${id}  ${name}  (not measured under --quick)`);
 
+  const skipNote = skipped.size === 0 ? '' : `; ${skipped.size} skipped under --quick`;
   lines.push('');
   lines.push(
     allPass
-      ? `ALL PASS — ${ids.size} validators × ${results.length} seeds`
-      : `FAIL — ${[...ids.values()].filter((r) => r.pass < r.total).length} of ${ids.size} validators failed on at least one seed`,
+      ? `ALL PASS — ${ids.size} validators × ${results.length} seeds${skipNote}`
+      : `FAIL — ${[...ids.values()].filter((r) => r.pass < r.total).length} of ${ids.size} ` +
+          `measured validators failed on at least one seed${skipNote}`,
   );
   lines.push('');
   lines.push('The harness always exits 0; the verdict is the line above.');

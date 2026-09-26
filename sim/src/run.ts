@@ -74,16 +74,11 @@ function emptyResult(
     victories: main.state.ascendancy.victories,
     correctnessBreaches: main.breaches,
     correctnessLive: main.violations,
-    offlineMatchesLive: true,
-    offlineMatchesLiveDetail: 'skipped (--quick)',
-    replayIdentical: true,
-    replayIdenticalDetail: 'skipped (--quick)',
-    abandonClean: true,
-    abandonCleanDetail: 'skipped (--quick)',
-    remainingTimeCarried: true,
-    remainingTimeCarriedDetail: 'skipped (--quick)',
-    earningsBonusIsolated: true,
-    earningsBonusIsolatedDetail: 'skipped (--quick)',
+    offlineMatchesLive: null,
+    replayIdentical: null,
+    abandonClean: null,
+    remainingTimeCarried: null,
+    earningsBonusIsolated: null,
   };
 }
 
@@ -146,12 +141,6 @@ function simulateSeed(seed: number, config: SimConfig): SeedResult {
     quick.pacing = runPacing(quick);
     return quick;
   }
-  const offline = offlineMatchesLive(readyState);
-  const replay = replayIdentical(clone(idleReach.state));
-  const abandon = abandonClean(readyState);
-  const carried = remainingTimeCarried(readyState);
-  const earnings = earningsBonusIsolated(clone(main.state));
-
   const result: SeedResult = {
     seed,
     config,
@@ -181,16 +170,11 @@ function simulateSeed(seed: number, config: SimConfig): SeedResult {
     victories: main.state.ascendancy.victories,
     correctnessBreaches: main.breaches,
     correctnessLive: main.violations,
-    offlineMatchesLive: offline.pass,
-    offlineMatchesLiveDetail: offline.detail,
-    replayIdentical: replay.pass,
-    replayIdenticalDetail: replay.detail,
-    abandonClean: abandon.pass,
-    abandonCleanDetail: abandon.detail,
-    remainingTimeCarried: carried.pass,
-    remainingTimeCarriedDetail: carried.detail,
-    earningsBonusIsolated: earnings.pass,
-    earningsBonusIsolatedDetail: earnings.detail,
+    offlineMatchesLive: offlineMatchesLive(readyState),
+    replayIdentical: replayIdentical(clone(idleReach.state)),
+    abandonClean: abandonClean(readyState),
+    remainingTimeCarried: remainingTimeCarried(readyState),
+    earningsBonusIsolated: earningsBonusIsolated(clone(main.state)),
   };
 
   result.correctness = runCorrectness(result);

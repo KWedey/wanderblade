@@ -14,11 +14,7 @@ import {
 } from '@wanderblade/core';
 import { CAP_RATE, strikeTimes } from './policy';
 import { clone } from './simulate';
-
-export interface Check {
-  pass: boolean;
-  detail: string;
-}
+import type { Check } from './types';
 
 /** One long advance must equal many short ones, in the boss phase and on the Road. */
 export function offlineMatchesLive(portalReadyState: GameState): Check {

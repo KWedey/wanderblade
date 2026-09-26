@@ -10,7 +10,7 @@ import {
   type LootArc,
 } from '@wanderblade/core';
 import { parseArgs } from '../src/args';
-import { formatSeedReport } from '../src/format';
+import { formatSeedReport, formatSummary } from '../src/format';
 import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
 import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
 import {
@@ -32,6 +32,7 @@ import type {
   SeedResult,
   ShopSample,
   SimConfig,
+  ValidatorResult,
 } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
@@ -265,6 +266,8 @@ let cachedWeek: ReturnType<typeof runPlayer> | null = null;
 const weekRun = (): ReturnType<typeof runPlayer> =>
   (cachedWeek ??= runPlayer(1, cfg(WEEK), { policy: 'road-active', entry: 'prompt' }));
 
+const PASSED = { pass: true, detail: '' };
+
 function stubResult(over: Partial<SeedResult> = {}): SeedResult {
   const main = (cachedRun ??= runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' }));
   return {
@@ -293,19 +296,66 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     victories: 0,
     correctnessBreaches: main.breaches,
     correctnessLive: main.violations,
-    offlineMatchesLive: true,
-    offlineMatchesLiveDetail: '',
-    replayIdentical: true,
-    replayIdenticalDetail: '',
-    abandonClean: true,
-    abandonCleanDetail: '',
-    remainingTimeCarried: true,
-    remainingTimeCarriedDetail: '',
-    earningsBonusIsolated: true,
-    earningsBonusIsolatedDetail: '',
+    offlineMatchesLive: PASSED,
+    replayIdentical: PASSED,
+    abandonClean: PASSED,
+    remainingTimeCarried: PASSED,
+    earningsBonusIsolated: PASSED,
     ...over,
   };
 }
+
+// `--quick` never runs the long probes. Before the skipped state existed it
+// printed "FAIL — 4 of 20" for validators nothing had measured.
+describe('--quick marks unmeasured validators skipped, never failed', () => {
+  const quick = (): SeedResult =>
+    stubResult({
+      config: cfg({ quick: true }),
+      offlineMatchesLive: null,
+      replayIdentical: null,
+      abandonClean: null,
+      remainingTimeCarried: null,
+      earningsBonusIsolated: null,
+    });
+  const SKIPPED = ['C3', 'C4', 'C5', 'C7', 'C8', 'P3', 'P4', 'P7', 'P10'];
+
+  it('skips exactly the validators --quick cannot measure', () => {
+    const r = quick();
+    const all = [...runCorrectness(r), ...runPacing(r)];
+    expect(all.filter((v) => v.skipped).map((v) => v.id)).toEqual(SKIPPED);
+    for (const v of all.filter((v) => v.skipped)) expect(v.pass).toBe(false);
+  });
+
+  it('fails, not skips, an experiment a full run left unmeasured', () => {
+    const r = stubResult({ offlineMatchesLive: null });
+    const c3 = runCorrectness(r).find((v) => v.id === 'C3');
+    expect(c3).toMatchObject({ pass: false, skipped: false, detail: 'not measured' });
+  });
+
+  it('prints SKIP in the seed report and counts only measured validators in the summary', () => {
+    const r = quick();
+    r.correctness = runCorrectness(r);
+    r.pacing = runPacing(r);
+    const report = formatSeedReport(r);
+    expect(report).toContain('  SKIP  P3  ');
+    expect(report).not.toContain('FAIL  P3');
+
+    const measured = [...r.correctness, ...r.pacing].filter((v) => !v.skipped);
+    for (const v of measured) v.pass = true;
+    const summary = formatSummary([r]);
+    expect(summary).toContain(`ALL PASS — ${measured.length} validators × 1 seeds; ${SKIPPED.length} skipped under --quick`);
+    expect(summary).toContain('  SKIP  P10  ');
+  });
+
+  it('still fails the summary when a measured validator fails', () => {
+    const r = quick();
+    r.correctness = runCorrectness(r);
+    r.pacing = runPacing(r);
+    const p1 = r.pacing.find((v) => v.id === 'P1') as ValidatorResult;
+    p1.pass = false;
+    expect(formatSummary([r])).toMatch(/^FAIL — \d+ of 11 measured validators/m);
+  });
+});
 
 describe('validators are total', () => {
   it('emits every C and P id with a boolean verdict', () => {
