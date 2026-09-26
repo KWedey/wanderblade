@@ -10,7 +10,7 @@ import {
   type LootArc,
 } from '@wanderblade/core';
 import { parseArgs } from '../src/args';
-import { formatSeedReport, formatSummary } from '../src/format';
+import { formatSeedReport, formatSummary, REALM_CSV_COLUMNS, realmsCsv } from '../src/format';
 import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
 import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
 import {
@@ -357,6 +357,51 @@ describe('--quick marks unmeasured validators skipped, never failed', () => {
   });
 });
 
+// docs/ECONOMY.md's required output names active time, gear curve, pending and
+// banked Ascendancy, tree purchases, earnings bonus and abandonments per realm.
+describe('every RealmRecord field reaches the report and the CSV', () => {
+  const full: RealmRecord = {
+    realm: 3,
+    startSec: 1000,
+    portalReadySec: 4600,
+    portalEnterSec: 4660,
+    victorySec: 7900,
+    roadSec: 3660,
+    bossSec: 3240,
+    activeSec: 2400,
+    bossEtaAtEntrySec: 5400,
+    bossActiveEtaAtEntrySec: 3000,
+    gearPowerAtEntry: 12345,
+    goldPeak: 98765,
+    pendingAtVictory: 41.5,
+    bankedAfter: 123,
+    earningsMultAfter: 1.25,
+    treePurchasesTotal: 7,
+    abandons: 2,
+  };
+
+  it('prints every field in the realm table row', () => {
+    const row = formatSeedReport(stubResult({ realms: [full] }))
+      .split('\n')
+      .find((l) => l.startsWith('   3 ')) as string;
+    for (const cell of ['1.02h', '54.0m', '40.0m', '1.50h', '12345', '98765', '41.50', '123', '1.25', ' 7 ', ' 2']) {
+      expect(row, cell).toContain(cell);
+    }
+  });
+
+  it('writes every field as a CSV column, null as an empty cell', () => {
+    const keys = Object.keys(full).sort();
+    expect([...REALM_CSV_COLUMNS].sort()).toEqual(keys);
+    const csv = realmsCsv([full, { ...full, realm: 4, victorySec: null, bankedAfter: null }]);
+    const [header, a, b] = csv.trimEnd().split('\n') as [string, string, string];
+    expect(header.split(',')).toEqual([...REALM_CSV_COLUMNS]);
+    expect(a.split(',')).toHaveLength(REALM_CSV_COLUMNS.length);
+    expect(b.split(',')[REALM_CSV_COLUMNS.indexOf('victorySec')]).toBe('');
+    expect(b.split(',')[REALM_CSV_COLUMNS.indexOf('bankedAfter')]).toBe('');
+    expect(a.split(',')[REALM_CSV_COLUMNS.indexOf('abandons')]).toBe('2');
+  });
+});
+
 describe('validators are total', () => {
   it('emits every C and P id with a boolean verdict', () => {
     const stub = stubResult();
@@ -679,7 +724,6 @@ describe('witnessedBeats separates what the player saw from what happened while 
       bossEtaAtEntrySec: null,
       bossActiveEtaAtEntrySec: null,
       gearPowerAtEntry: 0,
-      dpsAtEntry: 0,
       goldPeak: 0,
       ...over,
     }) as RealmRecord;

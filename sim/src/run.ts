@@ -205,7 +205,7 @@ function main(): void {
     const result = simulateSeed(config.seed + i, config);
     results.push(result);
     out.push(formatSeedReport(result));
-    if (config.csv) csvPaths.push(writeCsv(result, csvDir));
+    if (config.csv) csvPaths.push(...writeCsv(result, csvDir));
   }
 
   out.push(formatThumb(config.seed));

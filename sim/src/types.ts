@@ -41,12 +41,13 @@ export interface RealmRecord {
   /** The same prediction at sustained full momentum — the fight's active length. */
   bossActiveEtaAtEntrySec: number | null;
   gearPowerAtEntry: number;
-  dpsAtEntry: number;
   goldPeak: number;
   pendingAtVictory: number | null;
   bankedAfter: number | null;
   earningsMultAfter: number | null;
   treePurchasesTotal: number;
+  /** Boss attempts walked away from inside this realm. */
+  abandons: number;
 }
 
 /** A periodic snapshot of the run, for the CSV timeline. */

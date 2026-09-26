@@ -119,12 +119,12 @@ function blankRealm(realm: number, startSec: number): RealmRecord {
     bossEtaAtEntrySec: null,
     bossActiveEtaAtEntrySec: null,
     gearPowerAtEntry: 0,
-    dpsAtEntry: 0,
     goldPeak: 0,
     pendingAtVictory: null,
     bankedAfter: null,
     earningsMultAfter: null,
     treePurchasesTotal: 0,
+    abandons: 0,
   };
 }
 
@@ -325,7 +325,6 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     r.portalEnterSec = state.timeSec;
     r.roadSec = state.timeSec - r.startSec;
     r.gearPowerAtEntry = gearPowerTotal(state.gear);
-    r.dpsAtEntry = heroDps(state);
     r.bossEtaAtEntrySec = bossEtaSec(state, 0);
     r.bossActiveEtaAtEntrySec = bossEtaSec(state, 1);
     snapshots.set(r.realm, clone(state));
@@ -345,6 +344,8 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
           if (opts.stopAtPortalReady) stop = true;
         } else if (e.type === 'bossVictory') {
           current().pendingAtVictory = e.pendingBanked;
+        } else if (e.type === 'abandon') {
+          current().abandons += 1;
         } else if (e.type === 'ascend') {
           const r = current();
           r.victorySec = e.timeSec;

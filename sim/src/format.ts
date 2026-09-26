@@ -4,7 +4,7 @@ import { DEFAULT_PX_PER_UNIT, runThumb, warmState, type Thumb } from './thumb';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fmtTime } from './validators';
-import type { SeedResult, ValidatorResult } from './types';
+import type { RealmRecord, SeedResult, ValidatorResult } from './types';
 
 function num(x: number): string {
   if (!Number.isFinite(x)) return '∞';
@@ -31,16 +31,29 @@ export function formatSeedReport(r: SeedResult): string {
   );
 
   lines.push('');
-  lines.push('   realm  road      portalReady  entered   victory   boss      eta@entry  banked');
+  lines.push(
+    '   realm  road      portalReady  entered   victory   boss      active    eta@entry  ' +
+      'gear@entry  goldPeak  pending@win  banked  earnMult  treeBuys  abandons',
+  );
+  const since = (sec: number | null, x: RealmRecord): string =>
+    fmtTime(sec === null ? null : sec - x.startSec);
+  const opt = (v: number | null): string => (v === null ? '—' : num(v));
   for (const x of r.realms) {
     lines.push(
       `   ${String(x.realm).padEnd(6)} ${fmtTime(x.roadSec).padEnd(9)} ` +
-        `${fmtTime(x.portalReadySec === null ? null : x.portalReadySec - x.startSec).padEnd(12)} ` +
-        `${fmtTime(x.portalEnterSec === null ? null : x.portalEnterSec - x.startSec).padEnd(9)} ` +
-        `${fmtTime(x.victorySec === null ? null : x.victorySec - x.startSec).padEnd(9)} ` +
+        `${since(x.portalReadySec, x).padEnd(12)} ` +
+        `${since(x.portalEnterSec, x).padEnd(9)} ` +
+        `${since(x.victorySec, x).padEnd(9)} ` +
         `${fmtTime(x.bossSec).padEnd(9)} ` +
+        `${fmtTime(x.activeSec).padEnd(9)} ` +
         `${fmtTime(x.bossEtaAtEntrySec).padEnd(10)} ` +
-        `${x.bankedAfter === null ? '—' : num(x.bankedAfter)}`,
+        `${num(x.gearPowerAtEntry).padEnd(11)} ` +
+        `${num(x.goldPeak).padEnd(9)} ` +
+        `${opt(x.pendingAtVictory).padEnd(12)} ` +
+        `${opt(x.bankedAfter).padEnd(7)} ` +
+        `${opt(x.earningsMultAfter).padEnd(9)} ` +
+        `${String(x.treePurchasesTotal).padEnd(9)} ` +
+        `${x.abandons}`,
     );
   }
 
@@ -170,9 +183,10 @@ export function formatSummary(results: SeedResult[]): string {
   return lines.join('\n');
 }
 
-export function writeCsv(r: SeedResult, dir: string): string {
+/** Writes the sample timeline and the realm table; returns both paths. */
+export function writeCsv(r: SeedResult, dir: string): string[] {
   mkdirSync(dir, { recursive: true });
-  const path = join(dir, `run-${r.seed}.csv`);
+  const samplesPath = join(dir, `run-${r.seed}.csv`);
   const header =
     'timeSec,phase,realm,zone,gold,gearPower,dps,heroLevel,pending,banked,bossHpFrac,earningsMult';
   const rows = r.samples.map((s) =>
@@ -191,8 +205,37 @@ export function writeCsv(r: SeedResult, dir: string): string {
       s.earningsMult.toFixed(4),
     ].join(','),
   );
-  writeFileSync(path, [header, ...rows].join('\n') + '\n', 'utf8');
-  return path;
+  writeFileSync(samplesPath, [header, ...rows].join('\n') + '\n', 'utf8');
+
+  const realmsPath = join(dir, `realms-${r.seed}.csv`);
+  writeFileSync(realmsPath, realmsCsv(r.realms), 'utf8');
+  return [samplesPath, realmsPath];
+}
+
+export const REALM_CSV_COLUMNS = [
+  'realm',
+  'startSec',
+  'portalReadySec',
+  'portalEnterSec',
+  'victorySec',
+  'roadSec',
+  'bossSec',
+  'activeSec',
+  'bossEtaAtEntrySec',
+  'bossActiveEtaAtEntrySec',
+  'gearPowerAtEntry',
+  'goldPeak',
+  'pendingAtVictory',
+  'bankedAfter',
+  'earningsMultAfter',
+  'treePurchasesTotal',
+  'abandons',
+] as const satisfies readonly (keyof RealmRecord)[];
+
+export function realmsCsv(realms: RealmRecord[]): string {
+  const cell = (v: number | null): string => (v === null ? '' : String(v));
+  const rows = realms.map((x) => REALM_CSV_COLUMNS.map((k) => cell(x[k])).join(','));
+  return [REALM_CSV_COLUMNS.join(','), ...rows].join('\n') + '\n';
 }
 
 /**
