@@ -2,9 +2,8 @@
 // docs/ECONOMY.md "Redesigned simulator contract"; P-validators are the pacing
 // bands in docs/ACTIVE-PLAY.md. Both are pure functions of a SeedResult.
 
+import { BOSS_MAX_SEC, BOSS_MIN_SEC, SEC_PER_DAY, SEC_PER_HOUR } from './policy';
 import {
-  BOSS_MAX_SEC,
-  BOSS_MIN_SEC,
   MAX_PORTAL_WAIT_FRACTION,
   MAX_PORTAL_WAIT_SEC,
   MAX_REALM_DAYS,
@@ -18,9 +17,6 @@ import {
   SPEND_TARGET,
 } from './probes';
 import type { BreachKind, SeedResult, Uplift, ValidatorResult } from './types';
-
-const SEC_PER_HOUR = 3600;
-const SEC_PER_DAY = 86_400;
 
 export function fmtTime(sec: number | null): string {
   if (sec === null || !Number.isFinite(sec)) return 'never';

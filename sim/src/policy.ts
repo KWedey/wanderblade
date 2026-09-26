@@ -22,6 +22,16 @@ export const SEC_PER_DAY = 86_400;
  */
 export const CAP_RATE = sustainStrikeRate();
 
+/**
+ * The guardian band, in active minutes. The floor is 15 rather than 20 so the
+ * opening realm's guardian fits inside one session — a first ascension a new
+ * player can finish in a sitting is better onboarding than a rounder number.
+ * The ceiling is also the entry rule: the portal preview shows this duration,
+ * and the modelled player farms on past it (docs/DECISIONS.md #24).
+ */
+export const BOSS_MIN_SEC = 15 * 60;
+export const BOSS_MAX_SEC = 90 * 60;
+
 /** Evenly spaced strikes in (from, from + seconds], all aimed at `aim`. */
 export function strikeTimes(
   from: number,
@@ -53,7 +63,7 @@ export function aimAtOldestArc(state: GameState, atSec: number): ArcPoint | null
 /** How often the player re-runs the purchase loop while a session is live. */
 const TOUCH_INTERVAL_SEC = 30;
 /** Granularity of an idle stretch. Coarse enough to be fast, fine enough to log. */
-const IDLE_SLICE_SEC = 60;
+export const IDLE_SLICE_SEC = 60;
 
 export interface RunHooks {
   onEvents?: (events: GameEvent[]) => void;

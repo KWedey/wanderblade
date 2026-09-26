@@ -1,6 +1,6 @@
 // Report and CSV rendering. Presentation only — no measurement happens here.
 
-import { runThumb, warmState, type Thumb } from './thumb';
+import { DEFAULT_PX_PER_UNIT, runThumb, warmState, type Thumb } from './thumb';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fmtTime } from './validators';
@@ -196,7 +196,7 @@ export function writeCsv(r: SeedResult, dir: string): string {
  */
 export function formatThumb(seed: number): string {
   const warm = warmState(seed);
-  const opts = { seed, seconds: 20, pxPerUnit: 31, seeds: 1 };
+  const opts = { seed, seconds: 20, pxPerUnit: DEFAULT_PX_PER_UNIT, seeds: 1 };
   const base = { scatterPx: 0, tapsPerSec: 5, lead: 0 } as const;
   const rows: [string, Thumb][] = [
     ['  0 ms  landing', { ...base, latencyMs: 0, pick: 'landing' }],
