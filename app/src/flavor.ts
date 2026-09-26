@@ -52,10 +52,15 @@ function toRoman(n: number): string {
  * so name and picture agree by construction.
  */
 export function regionName(region: number): string {
+  return lapped(REGION_NAMES, region);
+}
+
+/** `names[region]` on the first lap, then the same name with a lap numeral. */
+function lapped(names: readonly string[], region: number): string {
   const r = region < 0 ? 0 : region;
-  const biome = REGION_NAMES[r % REGION_NAMES.length]!;
-  const lap = Math.floor(r / REGION_NAMES.length);
-  return lap === 0 ? biome : `${biome} ${toRoman(lap + 1)}`;
+  const name = names[r % names.length]!;
+  const lap = Math.floor(r / names.length);
+  return lap === 0 ? name : `${name} ${toRoman(lap + 1)}`;
 }
 
 /** The scene skins and these names must stay index-aligned. */
@@ -71,10 +76,15 @@ const BOSS_NAMES = [
   'the Edgewalker',
 ];
 
-/** Named region boss; endless regions share a generic warden. */
+/**
+ * The guardian of a region. Laps exactly as regionName does, so the boss the
+ * log names is the one whose realm the HUD names.
+ */
 export function bossName(region: number): string {
-  return BOSS_NAMES[region] ?? 'the Warden of the Beyond';
+  return lapped(BOSS_NAMES, region);
 }
+
+export const BOSS_NAME_COUNT = BOSS_NAMES.length;
 
 const GEAR_NAMES: Record<GearSlot, Record<Rarity, string>> = {
   weapon: {
