@@ -77,7 +77,6 @@ export interface Frame {
   view: Viewport;
   model: SceneModel;
   skin: RealmSkin;
-  sprites: SceneSprites;
   clockSec: number;
 }
 

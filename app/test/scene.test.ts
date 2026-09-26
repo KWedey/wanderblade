@@ -2,16 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import { lightnessOf, mixHex, MIN_HILL_SHADOW_GAP, torchGlowBands } from '../src/scene/palette';
 import {
-  drawGroundBands,
-  drawHills,
   drawPillars,
   drawStoneWall,
   drawTorchFlame,
   drawTorchGlow,
   drawVignette,
   type TorchLight,
-} from '../src/scene/scene';
+} from '../src/scene/dungeon';
 import type { FillCtx } from '../src/scene/frame';
+import { drawGroundBands, drawHills } from '../src/scene/road';
 
 /** Records what drawHills actually paints — a pure-geometry test alone can pass while the loop that draws it stays broken. */
 function fakeCtx(): { ctx: FillCtx; calls: Array<{ style: string; x: number; y: number; w: number; h: number }> } {
