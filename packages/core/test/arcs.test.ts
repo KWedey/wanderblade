@@ -45,7 +45,7 @@ describe('loot arcs', () => {
   it('leaves idle gold untouched — uncaught arcs still pay in full', () => {
     const s = initialState(31);
     advance(s, ROAD_KILL0_SEC + 1e-6); // one kill at the walking pace
-    expect(s.lifetime.kills).toBe(1);
+    expect(s.killIndex).toBe(1);
     // enemyGold(0, 0) = 1, scaled by what this kill happened to be
     expect(s.gold).toBeCloseTo(speciesFor(s.killIndex).goldMult, 10);
     expect(s.arcs).toHaveLength(arcSplitCount(s.killIndex));

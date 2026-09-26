@@ -19,7 +19,7 @@ describe('road progression sanity', () => {
   it('the first kill lands on schedule and pays gold', () => {
     const s = initialState(1);
     const events = advance(s, ROAD_KILL0_SEC + 1e-6);
-    expect(s.lifetime.kills).toBe(1);
+    expect(s.killIndex).toBe(1);
     // enemyGold(0, 0) = 1, scaled by which monster this kill was
     expect(s.gold).toBeCloseTo(speciesFor(1).goldMult, 6);
     expect(s.leagues).toBeCloseTo(leaguePerKill, 6);
@@ -98,7 +98,7 @@ describe('recap accuracy', () => {
   it("the attached recap matches the run's actual state deltas", () => {
     const s = initialState(11);
     const goldBefore = s.gold;
-    const killsBefore = s.lifetime.kills;
+    const killsBefore = s.killIndex;
 
     // Aimed strikes, so the recap has catch gold in it as well as kill gold.
     const events: GameEvent[] = [];
@@ -107,7 +107,7 @@ describe('recap accuracy', () => {
     }
     const recap = summarizeEvents(events);
 
-    expect(recap.kills).toBe(s.lifetime.kills - killsBefore);
+    expect(recap.kills).toBe(s.killIndex - killsBefore);
     expect(recap.goldEarned).toBeCloseTo(s.gold - goldBefore, 3);
     expect(recap.leaguesTraveled).toBeCloseTo(s.leagues, 6);
     expect(recap.arcCatches).toBeGreaterThan(0);
@@ -119,7 +119,7 @@ describe('recap accuracy', () => {
     const recap = summarizeEvents(events);
 
     expect(events.length).toBeLessThanOrEqual(EVENT_CAP);
-    expect(recap.kills).toBe(s.lifetime.kills);
+    expect(recap.kills).toBe(s.killIndex);
     expect(recap.kills).toBeGreaterThan(EVENT_CAP); // proves capping was exercised
   });
 
@@ -130,7 +130,7 @@ describe('recap accuracy', () => {
 
     const plain = [...events]; // the spread strips the attached recap
     const recap = summarizeEvents(plain);
-    expect(recap.kills).toBe(s.lifetime.kills);
+    expect(recap.kills).toBe(s.killIndex);
     expect(recap.leaguesTraveled).toBeCloseTo(s.leagues, 6);
     // Recomputed seconds come from the last event, so they trail the advance.
     expect(recap.seconds).toBeGreaterThan(0);

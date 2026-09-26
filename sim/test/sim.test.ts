@@ -149,19 +149,19 @@ describe('the driver loops advance whether or not anyone is listening', () => {
     const s = initialState(11);
     runIdle(s, 600);
     expect(s.timeSec).toBe(600);
-    expect(s.lifetime.kills).toBeGreaterThan(0);
+    expect(s.killIndex).toBeGreaterThan(0);
   });
 
   it('strikeThrough moves the clock with no onEvents, striking and idle alike', () => {
     const striking = initialState(11);
     strikeThrough(striking, 600, CAP_RATE);
     expect(striking.timeSec).toBeGreaterThanOrEqual(600 - 1e-9);
-    expect(striking.lifetime.kills).toBeGreaterThan(0);
+    expect(striking.killIndex).toBeGreaterThan(0);
 
     const idle = initialState(11);
     strikeThrough(idle, 600, 0);
     expect(idle.timeSec).toBeGreaterThanOrEqual(600 - 1e-9);
-    expect(idle.lifetime.kills).toBeGreaterThan(0);
+    expect(idle.killIndex).toBeGreaterThan(0);
   });
 
   it('reports the same events it would have advanced silently', () => {
@@ -217,7 +217,7 @@ describe('runPlayer determinism and contract watching', () => {
     const b = runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' });
     expect(a.state.timeSec).toBe(b.state.timeSec);
     expect(a.state.gold).toBe(b.state.gold);
-    expect(a.state.lifetime.kills).toBe(b.state.lifetime.kills);
+    expect(a.state.killIndex).toBe(b.state.killIndex);
     expect(a.realms.map((r) => r.portalReadySec)).toEqual(b.realms.map((r) => r.portalReadySec));
   });
 
@@ -288,7 +288,7 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     spendDepth: spendDepth(main.shopSamples),
     deadTime: deadTime(main.realms),
     permanentUplift: null,
-    totalKills: main.state.lifetime.kills,
+    totalKills: main.state.killIndex,
     finalRealm: main.state.realm,
     victories: 0,
     correctnessBreaches: main.breaches,

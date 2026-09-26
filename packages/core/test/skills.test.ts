@@ -178,7 +178,7 @@ describe('the id lists are what a fresh and a post-ascension state are built fro
     for (const id of SKILL_IDS) s.hero.skills[id] = 3;
     enterPortal(s);
     advance(s, 3600);
-    expect(s.lifetime.ascensions).toBe(1);
+    expect(s.ascendancy.victories).toBe(1);
     expect(Object.keys(s.hero.skills).sort()).toEqual([...SKILL_IDS].sort());
     expect(Object.values(s.hero.skills).every((r) => r === 0)).toBe(true);
     expect(Object.keys(s.ascendancy.nodes).sort()).toEqual([...ASC_NODE_IDS].sort());

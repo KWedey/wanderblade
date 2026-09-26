@@ -86,11 +86,11 @@ function backfill(v: unknown): void {
     fill(v.ascendancy, 'nodes', {});
   }
   if (isObject(v.collection)) {
-    for (const key of ['bossTrophies', 'gearFound', 'zonesCleared']) fill(v.collection, key, 0);
+    for (const key of ['gearFound', 'zonesCleared']) fill(v.collection, key, 0);
     fill(v.collection, 'speciesKills', []);
   }
   if (isObject(v.lifetime)) {
-    for (const key of ['kills', 'goldEarned', 'ascensions']) fill(v.lifetime, key, 0);
+    for (const key of ['goldEarned', 'abandons', 'bossDamage']) fill(v.lifetime, key, 0);
   }
 }
 
@@ -167,11 +167,7 @@ function isValidState(v: unknown): v is GameState {
 
   const collection = s.collection as Record<string, unknown> | null;
   if (typeof collection !== 'object' || collection === null) return false;
-  if (
-    !isFiniteNumber(collection.bossTrophies) ||
-    !isFiniteNumber(collection.gearFound) ||
-    !isFiniteNumber(collection.zonesCleared)
-  ) {
+  if (!isFiniteNumber(collection.gearFound) || !isFiniteNumber(collection.zonesCleared)) {
     return false;
   }
   // A save written before the Bestiary existed carries no counter. Discarding
@@ -184,9 +180,9 @@ function isValidState(v: unknown): v is GameState {
   const lifetime = s.lifetime as Record<string, unknown> | null;
   if (typeof lifetime !== 'object' || lifetime === null) return false;
   if (
-    !isFiniteNumber(lifetime.kills) ||
     !isFiniteNumber(lifetime.goldEarned) ||
-    !isFiniteNumber(lifetime.ascensions)
+    !isFiniteNumber(lifetime.abandons) ||
+    !isFiniteNumber(lifetime.bossDamage)
   ) {
     return false;
   }

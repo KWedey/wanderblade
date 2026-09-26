@@ -114,7 +114,7 @@ describe('catching a coin buys permanent power, not just gold', () => {
 
     expect(halves.ascendancy.pending).toBe(whole.ascendancy.pending);
     expect(halves.gold).toBe(whole.gold);
-    expect(halves.lifetime.kills).toBe(whole.lifetime.kills);
+    expect(halves.killIndex).toBe(whole.killIndex);
   });
 
   it('counts into the recap, so a capped event stream still reports it', () => {

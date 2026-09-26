@@ -68,7 +68,7 @@ describe('a zone is monsters, not one monster repeated', () => {
     const s = roadAt(4, 10, 0.3);
     advance(s, 600);
     const counted = s.collection.speciesKills.reduce((t, n) => t + n, 0);
-    expect(counted).toBe(s.lifetime.kills);
+    expect(counted).toBe(s.killIndex);
     expect(s.collection.speciesKills.length).toBe(SPECIES.length);
     for (const n of s.collection.speciesKills) expect(n).toBeGreaterThan(0);
   });
@@ -91,7 +91,7 @@ describe('a zone is monsters, not one monster repeated', () => {
 
     const loaded = deserialize(JSON.stringify(old));
     expect(loaded.collection.speciesKills).toEqual([]);
-    expect(loaded.lifetime.kills).toBe(s.lifetime.kills);
+    expect(loaded.killIndex).toBe(s.killIndex);
     // And it starts counting from the next kill without throwing.
     advance(loaded, 60);
     expect(loaded.collection.speciesKills.reduce((t, n) => t + n, 0)).toBeGreaterThan(0);

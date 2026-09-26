@@ -197,7 +197,7 @@ describe('split-advance determinism: ascension', () => {
       enterPortal(split);
       const evSplit = advance(split, a).concat(advance(split, b));
 
-      expect(single.lifetime.ascensions).toBe(1);
+      expect(single.ascendancy.victories).toBe(1);
       expect(JSON.stringify(evSplit)).toBe(JSON.stringify(evSingle));
       expect(serialize(split)).toBe(serialize(single));
     });
@@ -222,7 +222,7 @@ describe('split-advance determinism: ascension', () => {
     const killIndexAtEntry = s.killIndex;
     enterPortal(s);
     advance(s, 7200);
-    expect(s.lifetime.ascensions).toBe(1);
+    expect(s.ascendancy.victories).toBe(1);
     // Road kills after ascension advanced the stream; it never rewound.
     expect(s.killIndex).toBeGreaterThan(killIndexAtEntry);
     expect(s.rngState).not.toBe(rngAtEntry);

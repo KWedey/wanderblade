@@ -95,9 +95,11 @@ export interface AscendancyState {
   victories: number;
 }
 
-/** Persistent records. Survive ascension; grant no hidden combat power. */
+/**
+ * Persistent records. Survive ascension; grant no hidden combat power. Boss
+ * trophies are `ascendancy.victories`; total kills are `killIndex`.
+ */
 export interface CollectionState {
-  bossTrophies: number;
   gearFound: number;
   zonesCleared: number;
   /** Lifetime kills per species index — the Bestiary's substrate. */
@@ -105,9 +107,7 @@ export interface CollectionState {
 }
 
 export interface LifetimeStats {
-  kills: number;
   goldEarned: number;
-  ascensions: number;
   abandons: number;
   bossDamage: number;
 }

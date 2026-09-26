@@ -70,4 +70,29 @@ describe('serialize / deserialize', () => {
     }).not.toThrow();
     expect(serialize(deserialize(json))).toBe(json);
   });
+
+  // Older saves stored kills and ascensions twice over. The copies are dropped
+  // on load, and a save from before `victories` existed keeps its count.
+  it('drops the duplicate counters an older save carries, keeping the count', () => {
+    const s = portalReady(11, 3600);
+    enterPortal(s);
+    advance(s, 86_400);
+    expect(s.ascendancy.victories).toBe(1);
+
+    const legacy = JSON.parse(serialize(s)) as Record<string, Record<string, unknown>>;
+    legacy.lifetime!.kills = s.killIndex;
+    legacy.lifetime!.ascensions = 1;
+    legacy.collection!.bossTrophies = 1;
+    delete legacy.ascendancy!.victories;
+
+    const loaded = deserialize(JSON.stringify(legacy));
+    expect(loaded.ascendancy.victories).toBe(1);
+    expect(loaded.killIndex).toBe(s.killIndex);
+    expect(serialize(loaded)).toBe(serialize(s));
+
+    const twin = deserialize(serialize(s));
+    advance(loaded, 3600);
+    advance(twin, 3600);
+    expect(serialize(loaded)).toBe(serialize(twin));
+  });
 });

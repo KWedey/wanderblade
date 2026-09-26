@@ -85,8 +85,8 @@ export function initialState(seed: number): GameState {
     ascendancy: { pending: 0, banked: 0, nodes: zeroRanks(ASC_NODE_IDS), victories: 0 },
     momentum: { value: 0, atSec: 0 },
     arcs: [],
-    collection: { bossTrophies: 0, gearFound: 0, zonesCleared: 0, speciesKills: [] },
-    lifetime: { kills: 0, goldEarned: 0, ascensions: 0, abandons: 0, bossDamage: 0 },
+    collection: { gearFound: 0, zonesCleared: 0, speciesKills: [] },
+    lifetime: { goldEarned: 0, abandons: 0, bossDamage: 0 },
   };
   state.nextActionAtSec = state.timeSec + killTime(state, 0);
   return state;
@@ -283,7 +283,6 @@ function processKill(
   state.gold += gold;
   state.collection.speciesKills[species] =
     (state.collection.speciesKills[species] ?? 0) + 1;
-  state.lifetime.kills += 1;
   state.lifetime.goldEarned += gold;
   recap.kills += 1;
   recap.goldEarned += gold;
@@ -371,9 +370,6 @@ function ascend(state: GameState, events: GameEvent[], recap: Recap, clock: numb
   state.ascendancy.banked += pendingBanked;
   state.ascendancy.pending = 0;
   state.ascendancy.victories += 1;
-
-  state.collection.bossTrophies += 1;
-  state.lifetime.ascensions += 1;
   recap.victories += 1;
   emit(events, { type: 'bossVictory', timeSec: clock, realm: fromRealm, payout, pendingBanked });
 
@@ -556,12 +552,27 @@ export function serialize(state: GameState): string {
   return JSON.stringify(state);
 }
 
+/** Counters older saves stored twice; the kept copy is `killIndex` / `victories`. */
+interface LegacyCounters {
+  lifetime?: { kills?: number; ascensions?: number };
+  collection?: { bossTrophies?: number };
+}
+
 /** Parse a state produced by `serialize`. */
 export function deserialize(json: string): GameState {
   const state = JSON.parse(json) as GameState;
+  const legacy = state as LegacyCounters;
   // A save older than the whole collection block must survive to the app's
   // backfill; throwing here discards the run instead.
   if (state.collection) state.collection.speciesKills ??= [];
+  if (legacy.collection) delete legacy.collection.bossTrophies;
+  if (legacy.lifetime) {
+    if (state.ascendancy && state.ascendancy.victories === undefined) {
+      state.ascendancy.victories = legacy.lifetime.ascensions ?? 0;
+    }
+    delete legacy.lifetime.kills;
+    delete legacy.lifetime.ascensions;
+  }
   return state;
 }
 

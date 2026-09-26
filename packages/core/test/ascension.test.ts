@@ -43,7 +43,6 @@ describe('the ascension transaction', () => {
     enterPortal(s);
     advanceToVictory(s);
 
-    expect(s.lifetime.ascensions).toBe(1);
     expect(s.ascendancy.banked).toBeCloseTo(pending + payout, 8);
     expect(s.ascendancy.pending).toBe(0);
     expect(s.ascendancy.victories).toBe(1);
@@ -78,7 +77,6 @@ describe('the ascension transaction', () => {
     buyAscendancyNode(s, 'edge');
     const nodesBefore = { ...s.ascendancy.nodes };
     const bankedAfterBuy = s.ascendancy.banked;
-    const killsBefore = s.lifetime.kills;
     const gearFoundBefore = s.collection.gearFound;
     enterPortal(s);
     const rngBefore = s.rngState;
@@ -87,9 +85,8 @@ describe('the ascension transaction', () => {
 
     expect(s.ascendancy.nodes).toEqual(nodesBefore);
     expect(s.ascendancy.banked).toBeGreaterThan(bankedAfterBuy);
-    expect(s.collection.bossTrophies).toBe(1);
+    expect(s.ascendancy.victories).toBe(1);
     expect(s.collection.gearFound).toBe(gearFoundBefore);
-    expect(s.lifetime.kills).toBe(killsBefore);
     // The stream position survives ascension; it only advances on Road kills.
     expect(s.killIndex).toBe(killIndexBefore);
     expect(s.rngState).toBe(rngBefore);
@@ -138,8 +135,8 @@ describe('ascension is atomic and idempotent', () => {
     enterPortal(many);
     for (let i = 0; i < 24; i++) advance(many, 3600);
 
-    expect(one.lifetime.ascensions).toBe(1);
-    expect(many.lifetime.ascensions).toBe(1);
+    expect(one.ascendancy.victories).toBe(1);
+    expect(many.ascendancy.victories).toBe(1);
     expect(serialize(many)).toBe(serialize(one));
   });
 
@@ -151,7 +148,7 @@ describe('ascension is atomic and idempotent', () => {
 
     const reloaded = clone(s);
     advance(reloaded, 86_400);
-    expect(reloaded.lifetime.ascensions).toBe(1);
+    expect(reloaded.ascendancy.victories).toBe(1);
     // The next realm earns gold, but no second banking happened.
     expect(reloaded.ascendancy.banked).toBe(bankedAfter);
     expect(reloaded.ascendancy.victories).toBe(1);

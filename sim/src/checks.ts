@@ -90,7 +90,7 @@ export function abandonClean(portalReadyState: GameState): Check {
   if (s.hero.level !== before.level) problems.push('hero level changed');
   if (s.zone !== before.zone) problems.push('road position changed');
   if ((s.gear.weapon?.power ?? 0) !== before.weapon) problems.push('gear changed');
-  if (s.lifetime.ascensions !== 0) problems.push('an ascension fired');
+  if (s.ascendancy.victories !== 0) problems.push('an ascension fired');
 
   enterPortal(s);
   if (s.boss.hpRemaining !== s.boss.hpMax) problems.push('guardian HP did not reset to full');
