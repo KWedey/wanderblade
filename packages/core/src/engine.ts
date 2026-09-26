@@ -227,6 +227,26 @@ function emit(events: GameEvent[], e: GameEvent): void {
   if (events.length < EVENT_CAP) events.push(e);
 }
 
+function beatsWorn(state: GameState, slot: GearSlot, power: number): boolean {
+  const current = state.gear[slot];
+  return current === null || power > current.power;
+}
+
+function equip(
+  state: GameState,
+  events: GameEvent[],
+  recap: Recap,
+  clock: number,
+  slot: GearSlot,
+  rarity: Rarity,
+  power: number,
+): void {
+  const previousPower = state.gear[slot]?.power ?? 0;
+  state.gear[slot] = { power, rarity, realm: state.realm, zone: state.zone };
+  recap.equips += 1;
+  emit(events, { type: 'equip', timeSec: clock, slot, power, rarity, previousPower });
+}
+
 /** Equip `power` in `slot` if it beats what is worn. */
 function tryEquip(
   state: GameState,
@@ -237,12 +257,8 @@ function tryEquip(
   rarity: Rarity,
   power: number,
 ): boolean {
-  const current = state.gear[slot];
-  if (current !== null && !(power > current.power)) return false;
-  const previousPower = current ? current.power : 0;
-  state.gear[slot] = { power, rarity, realm: state.realm, zone: state.zone };
-  recap.equips += 1;
-  emit(events, { type: 'equip', timeSec: clock, slot, power, rarity, previousPower });
+  if (!beatsWorn(state, slot, power)) return false;
+  equip(state, events, recap, clock, slot, rarity, power);
   return true;
 }
 
@@ -309,8 +325,9 @@ function processKill(
     const power = gearPower(realm, z, rarity, slot);
     recap.drops += 1;
     state.collection.gearFound += 1;
-    const equipped = tryEquip(state, events, recap, clock, slot, rarity, power);
+    const equipped = beatsWorn(state, slot, power);
     emit(events, { type: 'drop', timeSec: clock, realm, zone: z, slot, rarity, power, equipped });
+    if (equipped) equip(state, events, recap, clock, slot, rarity, power);
     arcGear = { slot, rarity, realm, zone: z };
   }
 

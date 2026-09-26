@@ -83,6 +83,17 @@ describe('road progression sanity', () => {
       if (e.type !== 'equip') continue;
       expect(e.power).toBeGreaterThan(e.previousPower);
     }
+    // The drop is announced before what it did: every equipped drop is followed
+    // by its own equip, and every equip on the Road follows its drop.
+    let equips = 0;
+    for (const [i, e] of events.entries()) {
+      if (e.type === 'drop' && e.equipped) {
+        expect(events[i + 1]).toMatchObject({ type: 'equip', slot: e.slot, power: e.power });
+        equips += 1;
+      }
+    }
+    expect(equips).toBeGreaterThan(0);
+    expect(events.filter((e) => e.type === 'equip')).toHaveLength(equips);
 
     const recap = summarizeEvents(events);
     expect(recap.drops / recap.kills).toBeGreaterThan(dropChance * 0.4);
