@@ -18,12 +18,17 @@ They need a dev server. Start one with `npm run dev`, then pass `--port` (or set
 measurement off another branch's server has cost this project a round.
 
 Browser work goes through `playwright`, a root devDependency. The npm package is
-small; the browser itself is not downloaded by `npm install`. Run
-`npx playwright install chromium` once, or let the resolver fall back to
-`dev-browser`'s copy (`npm i -g dev-browser && dev-browser install`).
+small; the browser itself is not downloaded by `npm install`, so run
+`npx playwright install chromium` once. The resolver takes the first install
+whose own Chromium is on disk — the repo's, then `dev-browser`'s (`npm i -g
+dev-browser && dev-browser install`) — and otherwise names the missing binary.
+The two are different Playwright versions, so one's browser cannot serve the other.
 
-Every probe closes its browser on a throw and on Ctrl-C. A stranded
-`chrome-headless-shell` used to be the usual reason this machine sat at load 40.
+Every probe launches through `withBrowser`. Playwright itself closes the browser
+on return, throw, exit and Ctrl-C; what stranded `chrome-headless-shell` — the
+usual reason this machine sat at load 40 — was the script being SIGKILLed by a
+tool timeout, which runs no hook. A watchdog now kills the browser's process
+group when the script disappears.
 
 Output lands in `.gauntlet/`, which is gitignored. The images are throwaway; the
 tools are not, which is why they live here.

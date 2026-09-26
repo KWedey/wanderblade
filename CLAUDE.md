@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A mobile active-forward idle RPG: a lone wandering swordfighter builds power on monster-filled Roads and commits that build to persistent portal bosses—designed for 15–30-minute active sessions with meaningful offline progress.
 
 **Stack:** TypeScript + web UI (canvas diorama). Capacitor wrapping for iOS/Android is planned (`docs/DECISIONS.md` #1), not yet added — there is no `@capacitor` dependency or config. npm workspaces, Node ≥ 20.
-**Current milestone:** M1R — active-forward realm rebaseline. The M0/M1a deterministic foundation and M1b HUD exist; active-play design, simulator rebaselining, and Road → Portal Boss → Ascension implementation are next. See `docs/ROADMAP.md`.
+**Current milestone:** M3 phone playtests, then M4 collections and content. The Road → Portal Boss → Ascension loop is built end to end in core, sim, and client (ADRs #14–#61); real-phone playtests and the save-migration chain remain. See `docs/ROADMAP.md`.
 
 ## Commands
 
@@ -17,7 +17,7 @@ npm run dev                  # Vite dev server at http://localhost:5173
 npm run dev -- --host        # expose on LAN for phone testing
 npm run build                # production build of app/
 npm run verify               # THE GATE: lint + typecheck + test
-npm test                     # vitest across all workspaces (38 files / 732 tests)
+npm test                     # vitest across all workspaces (40 files / 773 tests)
 npm run typecheck            # tsc --noEmit over core, sim, and app
 npm run lint                 # eslint (type-aware); --fix for the autofixable ones
 npm run sim                  # economy simulator, default 3 seeds × 14 days

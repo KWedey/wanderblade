@@ -154,7 +154,7 @@ Every client-facing scalar is finite and exact at realm 199, and the hero level 
 
 ## Implemented legacy baseline (historical reference)
 
-The current code still implements the M0/M1a economy until the redesign is built:
+The M0/M1a economy the legacy simulator was tuned against, kept for reference — the readiness window and auto-challenge below were deleted in M1R.3 (`docs/DECISIONS.md` #14–#15):
 
 - `hp(z) = 10 · 1.55^z`
 - `gold(z) = 1 · 1.48^z`

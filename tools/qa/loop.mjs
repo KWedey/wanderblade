@@ -5,12 +5,12 @@
 // the client can get through it: the client once rendered a Portal panel over
 // a gate the engine had already deleted, and no test failed.
 
-import { withBrowser } from './playwright.mjs';
+import { ProbeFailure, withBrowser } from './playwright.mjs';
 import { requireServer, resolvePort } from './port.mjs';
 
 const argv = process.argv.slice(2);
 if (argv.includes('--help') || argv.includes('-h')) {
-  console.log(`Wanderblade loop probe — plays Road -> Portal -> Ascension through the DOM
+  console.log(`Wanderblade loop probe — plays Road -> Portal -> Boss through the DOM
 
   npm run qa:loop -- [--port <n>] [--stage <name>] [--seed <n>] [--budget <sec>] [--sample <sec>]
 
@@ -30,9 +30,6 @@ const seed = flag('seed', '7');
 const budgetSec = Number(flag('budget', '600'));
 await requireServer(port);
 
-// A probe verdict, as distinct from a crash: the browser closes either way,
-// but only this one is reported as FAIL rather than a stack trace.
-class ProbeFailure extends Error {}
 const consoleErrors = [];
 const steps = [];
 const report = (extra = {}) =>
@@ -50,8 +47,7 @@ try {
 
     const deadline = Date.now() + budgetSec * 1000;
     const fail = (why, extra = {}) => {
-      report(extra);
-      throw new ProbeFailure(why);
+      throw new ProbeFailure(why, extra);
     };
 
     // Tap the road until the portal opens. Space is the same verb as a thumb.
@@ -146,9 +142,11 @@ try {
     if (consoleErrors.length > 0) fail(`${consoleErrors.length} console errors during the loop`);
   });
 } catch (e) {
+  // The trail and the console errors are the evidence either way; a crash gets them too.
+  report(e instanceof ProbeFailure ? e.extra : {});
   if (!(e instanceof ProbeFailure)) throw e;
   console.error(`FAIL: ${e.message}`);
   process.exit(1);
 }
 report();
-console.log('pass: Road -> Portal Boss -> Ascension completes through the DOM');
+console.log('pass: Road -> Portal -> Boss through the DOM, projected fight inside the band');
