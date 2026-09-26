@@ -5,7 +5,7 @@
 import { deserialize, serialize, GEAR_SLOTS, type GameState } from '@wanderblade/core';
 
 const SAVE_KEY = 'wanderblade-save-v1';
-const SAVE_VERSION = 1;
+export const SAVE_VERSION = 1;
 /**
  * Earliest wall clock a real save can carry. The offline gap is
  * `Date.now() - savedAt`, so a corrupt or epoch-0 timestamp asks `advance` for
@@ -18,6 +18,37 @@ interface SaveEnvelope {
   version: number;
   savedAt: number;
   state: string;
+}
+
+type Migration = (envelope: Record<string, unknown>) => Record<string, unknown>;
+
+/**
+ * Step `n` upgrades a version-`n` envelope to `n + 1`. Bumping SAVE_VERSION
+ * means adding the step that carries the previous version forward: an envelope
+ * with no path to the current version is discarded, and that is the player's
+ * run.
+ */
+const MIGRATIONS: Record<number, Migration> = {};
+
+/**
+ * Walk an older envelope up to the current schema. Null for a version newer
+ * than this build (a downgrade cannot know what the newer fields mean) or an
+ * older one no step reaches.
+ */
+export function migrate(envelope: unknown): SaveEnvelope | null {
+  if (!isObject(envelope) || !isFiniteNumber(envelope.version)) return null;
+  let current = envelope;
+  while (current.version !== SAVE_VERSION) {
+    const version = current.version;
+    if (!isFiniteNumber(version) || version > SAVE_VERSION) return null;
+    const step = MIGRATIONS[version];
+    if (!step) return null;
+    const next = step(current);
+    if (!isFiniteNumber(next.version) || next.version <= version) return null;
+    current = next;
+  }
+  if (typeof current.state !== 'string' || !isFiniteNumber(current.savedAt)) return null;
+  return { version: SAVE_VERSION, savedAt: current.savedAt, state: current.state };
 }
 
 /** A successfully loaded save: deserialized state plus when it was written. */
@@ -174,12 +205,8 @@ function isValidState(v: unknown): v is GameState {
   ) {
     return false;
   }
-  // A save written before the Bestiary existed carries no counter. Discarding
-  // it over a field that did not exist when it was written would wipe the run.
   const species = collection.speciesKills;
-  if (species !== undefined) {
-    if (!Array.isArray(species) || !species.every(isFiniteNumber)) return false;
-  }
+  if (!Array.isArray(species) || !species.every(isFiniteNumber)) return false;
 
   const lifetime = s.lifetime as Record<string, unknown> | null;
   if (typeof lifetime !== 'object' || lifetime === null) return false;
@@ -194,7 +221,7 @@ function isValidState(v: unknown): v is GameState {
   return true;
 }
 
-/** Read and deserialize the save, or null if absent/unreadable/wrong version. */
+/** Read, migrate and deserialize the save; null if absent, unreadable or from a newer build. */
 export function readSave(): LoadedSave | null {
   let raw: string | null;
   try {
@@ -205,16 +232,8 @@ export function readSave(): LoadedSave | null {
   if (!raw) return null;
 
   try {
-    const envelope = JSON.parse(raw) as SaveEnvelope;
-    if (
-      !envelope ||
-      envelope.version !== SAVE_VERSION ||
-      typeof envelope.state !== 'string' ||
-      !isFiniteNumber(envelope.savedAt) ||
-      envelope.savedAt < EARLIEST_SAVED_AT_MS
-    ) {
-      return null;
-    }
+    const envelope = migrate(JSON.parse(raw));
+    if (!envelope || envelope.savedAt < EARLIEST_SAVED_AT_MS) return null;
     const state: unknown = deserialize(envelope.state);
     backfill(state);
     if (!isValidState(state)) return null;

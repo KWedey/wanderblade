@@ -7,7 +7,7 @@ import {
   serialize,
   summarizeEvents,
 } from '@wanderblade/core';
-import { clearSave, readSave, writeSave } from '../src/save';
+import { clearSave, migrate, readSave, SAVE_VERSION, writeSave } from '../src/save';
 
 // The save layer talks to the global `localStorage`, which Node's test env lacks.
 // Back it with a tiny in-memory Map so writeSave/readSave round-trip for real.
@@ -24,9 +24,8 @@ class MemoryStorage {
   }
 }
 
-// Must mirror the private key/version inside save.ts to plant raw payloads.
+// Must mirror the private key inside save.ts to plant raw payloads.
 const SAVE_KEY = 'wanderblade-save-v1';
-const SAVE_VERSION = 1;
 
 globalThis.localStorage = new MemoryStorage() as unknown as Storage;
 const realDateNow = Date.now;
@@ -84,11 +83,6 @@ describe('readSave rejects unusable payloads (returns null, never throws)', () =
     expect(readSave()).toBeNull();
   });
 
-  it('wrong SAVE_VERSION', () => {
-    localStorage.setItem(SAVE_KEY, envelope(serialize(initialState(1)), { version: 999 }));
-    expect(readSave()).toBeNull();
-  });
-
   it('parseable-but-empty inner state ({})', () => {
     localStorage.setItem(SAVE_KEY, envelope('{}'));
     expect(readSave()).toBeNull();
@@ -123,6 +117,44 @@ describe('readSave rejects unusable payloads (returns null, never throws)', () =
     // A plausible one still loads.
     localStorage.setItem(SAVE_KEY, envelope(serialize(initialState(1))));
     expect(readSave()).not.toBeNull();
+  });
+});
+
+// An envelope version is a schema, not a password. An older one is carried
+// forward step by step; only a version this build has never seen is refused,
+// because a downgrade cannot know what the newer fields mean.
+describe('envelope migration', () => {
+  it('round-trips a current-version envelope through the chain untouched', () => {
+    const state = initialState(31);
+    state.gold = 777;
+    const raw = JSON.parse(envelope(serialize(state), { version: 1 })) as Record<string, unknown>;
+    const out = migrate(raw);
+    expect(out).not.toBeNull();
+    expect(out!.version).toBe(SAVE_VERSION);
+    expect(out!.savedAt).toBe(raw.savedAt);
+    expect(out!.state).toBe(raw.state);
+
+    localStorage.setItem(SAVE_KEY, JSON.stringify(raw));
+    expect(readSave()!.state.gold).toBe(777);
+  });
+
+  it('discards an envelope from a newer build rather than guessing at it', () => {
+    const newer = { version: SAVE_VERSION + 1, savedAt: Date.now(), state: serialize(initialState(1)) };
+    expect(migrate(newer)).toBeNull();
+    localStorage.setItem(SAVE_KEY, JSON.stringify(newer));
+    expect(readSave()).toBeNull();
+  });
+
+  it('discards an envelope with no version, or one no step can reach', () => {
+    expect(migrate({ savedAt: Date.now(), state: '{}' })).toBeNull();
+    expect(migrate({ version: 0, savedAt: Date.now(), state: '{}' })).toBeNull();
+    expect(migrate({ version: 'one', savedAt: Date.now(), state: '{}' })).toBeNull();
+    expect(migrate(null)).toBeNull();
+  });
+
+  it('refuses an envelope whose payload is not a string', () => {
+    expect(migrate({ version: SAVE_VERSION, savedAt: Date.now(), state: { gold: 1 } })).toBeNull();
+    expect(migrate({ version: SAVE_VERSION, savedAt: 'yesterday', state: '{}' })).toBeNull();
   });
 });
 
