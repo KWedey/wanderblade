@@ -7,7 +7,7 @@
 // debugger, because dispatching an event and watching it propagate proves
 // nothing — propagation does not depend on anyone listening.
 
-import { chromium } from './playwright.mjs';
+import { withBrowser } from './playwright.mjs';
 import { requireServer, resolvePort } from './port.mjs';
 
 const argv = process.argv.slice(2);
@@ -22,41 +22,35 @@ Exits non-zero if a held strike ignores the pointer moving.`);
 const port = resolvePort(argv);
 await requireServer(port);
 
-const browser = await chromium.launch({ headless: true });
-const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
-await page.goto(`http://localhost:${port}/?stage=mid&seed=7`, { waitUntil: 'networkidle' });
-await page.waitForFunction(() => /DPS/.test(document.body.innerText || ''), { timeout: 60000 });
-
-// Ask the debugger which listeners are actually registered on window. This is
-// the only honest answer: dispatching a pointermove and watching it propagate
-// proves nothing, because propagation happens whether or not anyone listens.
-const cdp = await page.context().newCDPSession(page);
-const kindsNow = async () => {
-  const { result } = await cdp.send('Runtime.evaluate', { expression: 'window' });
-  const { listeners } = await cdp.send('DOMDebugger.getEventListeners', { objectId: result.objectId });
-  return listeners.map((l) => l.type);
-};
-
-// A probe that has only ever passed is indistinguishable from one that cannot
-// fail. Round-trip a type nobody registers: absent before, present after.
-const CANARY = 'wanderblade-qa-canary';
-const before = await kindsNow();
-if (before.includes(CANARY)) {
-  console.error(`FAIL selftest: ${CANARY} was already registered.`);
-  process.exit(1);
-}
-await page.evaluate((t) => window.addEventListener(t, () => {}), CANARY);
-const after = await kindsNow();
-if (!after.includes(CANARY)) {
-  console.error('FAIL selftest: the listener read cannot see a listener that was just added.');
-  process.exit(1);
-}
-
-const kinds = after;
 const held = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'];
-const missing = held.filter((t) => !kinds.includes(t));
+const kinds = await withBrowser(async (browser) => {
+  const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+  await page.goto(`http://localhost:${port}/?stage=mid&seed=7`, { waitUntil: 'networkidle' });
+  await page.waitForFunction(() => /DPS/.test(document.body.innerText || ''), { timeout: 60000 });
 
-await browser.close();
+  // Ask the debugger which listeners are actually registered on window. This is
+  // the only honest answer: dispatching a pointermove and watching it propagate
+  // proves nothing, because propagation happens whether or not anyone listens.
+  const cdp = await page.context().newCDPSession(page);
+  const kindsNow = async () => {
+    const { result } = await cdp.send('Runtime.evaluate', { expression: 'window' });
+    const { listeners } = await cdp.send('DOMDebugger.getEventListeners', { objectId: result.objectId });
+    return listeners.map((l) => l.type);
+  };
+
+  // A probe that has only ever passed is indistinguishable from one that cannot
+  // fail. Round-trip a type nobody registers: absent before, present after.
+  const CANARY = 'wanderblade-qa-canary';
+  const before = await kindsNow();
+  if (before.includes(CANARY)) throw new Error(`selftest: ${CANARY} was already registered.`);
+  await page.evaluate((t) => window.addEventListener(t, () => {}), CANARY);
+  const after = await kindsNow();
+  if (!after.includes(CANARY)) {
+    throw new Error('selftest: the listener read cannot see a listener that was just added.');
+  }
+  return after;
+});
+const missing = held.filter((t) => !kinds.includes(t));
 
 const report = { port, registered: kinds.filter((t) => held.includes(t)), missing };
 console.log(JSON.stringify(report, null, 2));

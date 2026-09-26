@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { chromium } from './playwright.mjs';
+import { withBrowser } from './playwright.mjs';
 import { DEFAULT_PORT, requireServer, resolvePort } from './port.mjs';
 
 const IOS =
@@ -169,69 +169,69 @@ function probe(page, dev) {
   }, { dpr: dev.dpr, insets: dev.insets });
 }
 
-const browser = await chromium.launch({ headless: true });
 const results = [];
-for (const dev of chosen) {
-  const ctx = await browser.newContext({
-    viewport: { width: dev.w, height: dev.h },
-    deviceScaleFactor: dev.dpr,
-    isMobile: dev.dpr > 1,
-    hasTouch: dev.dpr > 1,
-    ...(dev.ua ? { userAgent: dev.ua } : {}),
-  });
-  const page = await ctx.newPage();
-  if (withInsets) {
-    const cdp = await ctx.newCDPSession(page);
-    await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: dev.insets });
-  }
-  await page.goto(`http://localhost:${port}/?stage=${stage}&seed=${seed}`, { waitUntil: 'networkidle' });
-  if (stage !== 'fresh') {
-    await page.waitForFunction(() => {
-      const t = document.body.innerText || '';
-      return !/Zone 1\/\d/.test(t) && /DPS/.test(t);
-    }, { timeout: 60000 });
-  }
-  await page.waitForTimeout(600);
-  if (selfTest) {
-    await page.evaluate(() => {
-      const decoy = (pos, label) => {
-        const b = document.createElement('button');
-        b.textContent = label;
-        b.style.cssText = `position:fixed;left:8px;${pos};width:60px;height:20px;z-index:9999`;
-        document.body.appendChild(b);
-      };
-      decoy('top:0', 'DECOY-TOP');
-      decoy('bottom:0', 'DECOY-BOTTOM');
+await withBrowser(async (browser) => {
+  for (const dev of chosen) {
+    const ctx = await browser.newContext({
+      viewport: { width: dev.w, height: dev.h },
+      deviceScaleFactor: dev.dpr,
+      isMobile: dev.dpr > 1,
+      hasTouch: dev.dpr > 1,
+      ...(dev.ua ? { userAgent: dev.ua } : {}),
     });
-  }
-  const result = { id: dev.id, ...(await probe(page, dev)) };
-  if (selfTest) {
-    const saw = (list, name) => list.some((l) => l.includes(name));
-    const top = dev.insets.top === 0 || saw(result.underTop, 'DECOY-TOP');
-    const bottom = dev.insets.bottom === 0 || saw(result.underBottom, 'DECOY-BOTTOM');
-    result.selftest = { top, bottom, insets: dev.insets };
-    if (!top || !bottom) {
-      console.error(`selftest FAILED on ${dev.id}: top=${top} bottom=${bottom}`);
-      process.exitCode = 1;
+    const page = await ctx.newPage();
+    if (withInsets) {
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: dev.insets });
     }
+    await page.goto(`http://localhost:${port}/?stage=${stage}&seed=${seed}`, { waitUntil: 'networkidle' });
+    if (stage !== 'fresh') {
+      await page.waitForFunction(() => {
+        const t = document.body.innerText || '';
+        return !/Zone 1\/\d/.test(t) && /DPS/.test(t);
+      }, { timeout: 60000 });
+    }
+    await page.waitForTimeout(600);
+    if (selfTest) {
+      await page.evaluate(() => {
+        const decoy = (pos, label) => {
+          const b = document.createElement('button');
+          b.textContent = label;
+          b.style.cssText = `position:fixed;left:8px;${pos};width:60px;height:20px;z-index:9999`;
+          document.body.appendChild(b);
+        };
+        decoy('top:0', 'DECOY-TOP');
+        decoy('bottom:0', 'DECOY-BOTTOM');
+      });
+    }
+    const result = { id: dev.id, ...(await probe(page, dev)) };
+    if (selfTest) {
+      const saw = (list, name) => list.some((l) => l.includes(name));
+      const top = dev.insets.top === 0 || saw(result.underTop, 'DECOY-TOP');
+      const bottom = dev.insets.bottom === 0 || saw(result.underBottom, 'DECOY-BOTTOM');
+      result.selftest = { top, bottom, insets: dev.insets };
+      if (!top || !bottom) {
+        console.error(`selftest FAILED on ${dev.id}: top=${top} bottom=${bottom}`);
+        process.exitCode = 1;
+      }
+    }
+    if (drawBands) {
+      await page.evaluate((insets) => {
+        const band = (pos, h, label) => {
+          if (!h) return;
+          const d = document.createElement('div');
+          d.style.cssText = `position:fixed;left:0;right:0;${pos};height:${h}px;z-index:9999;background:rgba(255,0,0,.42);border-bottom:2px solid red;pointer-events:none;font:12px monospace;color:#fff;padding:2px 6px;box-sizing:border-box`;
+          d.textContent = label;
+          document.body.appendChild(d);
+        };
+        band('top:0', insets.top, `safe-area-inset-top ${insets.top}px`);
+        band('bottom:0', insets.bottom, `safe-area-inset-bottom ${insets.bottom}px`);
+      }, dev.insets);
+    }
+    result.shot = join(outDir, `${dev.id}.png`);
+    writeFileSync(result.shot, await page.screenshot());
+    results.push(result);
+    await ctx.close();
   }
-  if (drawBands) {
-    await page.evaluate((insets) => {
-      const band = (pos, h, label) => {
-        if (!h) return;
-        const d = document.createElement('div');
-        d.style.cssText = `position:fixed;left:0;right:0;${pos};height:${h}px;z-index:9999;background:rgba(255,0,0,.42);border-bottom:2px solid red;pointer-events:none;font:12px monospace;color:#fff;padding:2px 6px;box-sizing:border-box`;
-        d.textContent = label;
-        document.body.appendChild(d);
-      };
-      band('top:0', insets.top, `safe-area-inset-top ${insets.top}px`);
-      band('bottom:0', insets.bottom, `safe-area-inset-bottom ${insets.bottom}px`);
-    }, dev.insets);
-  }
-  result.shot = join(outDir, `${dev.id}.png`);
-  writeFileSync(result.shot, await page.screenshot());
-  results.push(result);
-  await ctx.close();
-}
-await browser.close();
+});
 console.log(JSON.stringify(results, null, 1));

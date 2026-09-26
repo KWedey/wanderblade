@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { chromium } from './playwright.mjs';
+import { withBrowser } from './playwright.mjs';
 import { DEFAULT_PORT, requireServer, resolvePort } from './port.mjs';
 
 const HELP = `npm run qa:capture -- --label <name> [options]
@@ -52,28 +52,28 @@ await requireServer(port);
 const url = `http://localhost:${port}/?stage=${stage}&seed=${seed}`;
 console.log(`capturing ${url} at ${width}x${height}`);
 
-const browser = await chromium.launch({ headless: true });
-const page = await (await browser.newContext({ viewport: { width, height } })).newPage();
-await page.goto(url, { waitUntil: 'networkidle' });
+await withBrowser(async (browser) => {
+  const page = await (await browser.newContext({ viewport: { width, height } })).newPage();
+  await page.goto(url, { waitUntil: 'networkidle' });
 
-// Staging replays hours of engine time and hundreds of purchases, which outruns
-// any fixed sleep on a loaded machine and lands the shot on a fresh run.
-if (stage !== 'fresh') {
-  await page.waitForFunction(() => {
-    const t = document.body.innerText || '';
-    return !/Zone 1\/\d/.test(t) && /DPS/.test(t);
-  }, { timeout: 60000 });
-}
-await page.waitForTimeout(400);
+  // Staging replays hours of engine time and hundreds of purchases, which outruns
+  // any fixed sleep on a loaded machine and lands the shot on a fresh run.
+  if (stage !== 'fresh') {
+    await page.waitForFunction(() => {
+      const t = document.body.innerText || '';
+      return !/Zone 1\/\d/.test(t) && /DPS/.test(t);
+    }, { timeout: 60000 });
+  }
+  await page.waitForTimeout(400);
 
-// Tap fast enough to hold momentum near the ceiling; a judged frame is a hot one.
-for (let i = 0; i < taps; i++) {
-  await page.keyboard.press('Space');
-  await page.waitForTimeout(90);
-}
-await page.waitForTimeout(60); // land mid-swing rather than on the settle
-writeFileSync(out, await page.screenshot());
-await browser.close();
+  // Tap fast enough to hold momentum near the ceiling; a judged frame is a hot one.
+  for (let i = 0; i < taps; i++) {
+    await page.keyboard.press('Space');
+    await page.waitForTimeout(90);
+  }
+  await page.waitForTimeout(60); // land mid-swing rather than on the settle
+  writeFileSync(out, await page.screenshot());
+});
 
 // A PNG cannot say which branch rendered it. Several dev servers run at once
 // here on different worktrees, and reading QA off the wrong port has twice
