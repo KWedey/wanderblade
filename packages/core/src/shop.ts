@@ -32,14 +32,11 @@ export interface PurchaseOption {
   name: string;
   currency: PurchaseCurrency;
   rank: number;
-  /** `null` when the track has no cap. */
-  maxRank: number | null;
-  /** Cost of the next rank; `Infinity` once capped. */
+  /** Cost of the next rank. Every track is uncapped. */
   cost: number;
   /** Hero level this unlocks at. 0 means available from the first minute. */
   unlockLevel: number;
   unlocked: boolean;
-  atMax: boolean;
   /** Exactly what the engine will accept right now — the buy call returns true. */
   affordable: boolean;
   /**
@@ -80,7 +77,7 @@ function nodeGain(state: GameState, id: string, rank: number): number {
 
 /**
  * Every purchase track, in a stable order: hero, then skills, then tree nodes.
- * Locked and capped rows are included — the caller decides what to show.
+ * Locked rows are included — the caller decides what to show.
  */
 export function purchaseOptions(state: GameState): PurchaseOption[] {
   const out: PurchaseOption[] = [];
@@ -105,11 +102,9 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
     name: 'Hero Level',
     currency: 'gold',
     rank: level,
-    maxRank: null,
     cost: heroCost,
     unlockLevel: 0,
     unlocked: true,
-    atMax: false,
     affordable: !locked && state.gold >= heroCost,
     valuePerCost: ratio(
       (heroBaseDamage(level + 1, state.realm) - base) * ascDmg * mult,
@@ -129,11 +124,9 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
       name: def.name,
       currency: 'gold',
       rank,
-      maxRank: null,
       cost,
       unlockLevel: def.unlockLevel,
       unlocked,
-      atMax: false,
       affordable: !locked && unlocked && state.gold >= cost,
       valuePerCost: unlocked
         ? ratio(flat * mult * (skillRankMult(id, rank + 1) / skillRankMult(id, rank) - 1), cost)
@@ -152,11 +145,9 @@ export function purchaseOptions(state: GameState): PurchaseOption[] {
       name: def.name,
       currency: 'ascendancy',
       rank,
-      maxRank: null,
       cost,
       unlockLevel: 0,
       unlocked: true,
-      atMax: false,
       affordable: !locked && state.ascendancy.banked >= cost,
       valuePerCost: ratio(nodeGain(state, id, rank), cost),
     });
@@ -172,10 +163,10 @@ export function affordableCount(state: GameState): number {
   return n;
 }
 
-/** Rows carrying a real price: unlocked and not capped, affordable or not. */
+/** Rows carrying a real price: unlocked, affordable or not. */
 export function pricedCount(state: GameState): number {
   let n = 0;
-  for (const o of purchaseOptions(state)) if (o.unlocked && !o.atMax) n += 1;
+  for (const o of purchaseOptions(state)) if (o.unlocked) n += 1;
   return n;
 }
 

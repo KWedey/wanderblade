@@ -40,11 +40,9 @@ describe('purchaseOptions', () => {
     expect(rows.length).toBe(1 + SKILL_IDS.length + ASC_NODE_IDS.length);
   });
 
-  it('reports the hero level as uncapped and priced by the engine formula', () => {
+  it('prices the hero level by the engine formula', () => {
     const s = initialState(1);
     const hero = purchaseOptions(s).find((r) => r.kind === 'hero');
-    expect(hero?.maxRank).toBeNull();
-    expect(hero?.atMax).toBe(false);
     expect(hero?.cost).toBeCloseTo(levelCost(s.hero.level, s.realm), 9);
   });
 
@@ -53,7 +51,7 @@ describe('purchaseOptions', () => {
     s.hero.level = 999;
     s.gold = Infinity;
     for (const row of purchaseOptions(s)) {
-      if (row.kind !== 'skill' || row.atMax) continue;
+      if (row.kind !== 'skill') continue;
       expect(row.cost).toBeCloseTo(skillCost(row.id, row.rank, s.realm), 9);
     }
   });
@@ -68,7 +66,7 @@ describe('purchaseOptions', () => {
 
   it('marks a skill locked below its unlock level and unlocked at it', () => {
     const gated = SKILL_IDS.map((id) => SKILLS[id]).filter((d) => d && d.unlockLevel > 0);
-    if (gated.length === 0) return;
+    expect(gated.length).toBeGreaterThan(0);
     const def = gated[0]!;
     const s = initialState(1);
     s.hero.level = def.unlockLevel - 1;
@@ -100,30 +98,22 @@ describe('purchaseOptions', () => {
     }
   });
 
-  it('never reports a tree node as maxed, however deep it is bought', () => {
+  it('still prices a tree node, however deep it is bought', () => {
     const s = initialState(1);
     s.ascendancy.banked = 1e12;
     for (const id of ASC_NODE_IDS) s.ascendancy.nodes[id] = 5_000;
     for (const row of purchaseOptions(s)) {
       if (row.kind !== 'node') continue;
-      expect(row.atMax).toBe(false);
-      expect(row.maxRank).toBeNull();
+      expect(row.unlocked).toBe(true);
+      expect(row.affordable).toBe(true);
       expect(Number.isFinite(row.cost)).toBe(true);
     }
   });
 
-  it('never reports a skill as maxed, however many ranks are bought', () => {
+  it('still prices a skill at every rank a realm can actually reach', () => {
     const s = initialState(1);
     s.hero.level = 999;
-    for (const id of SKILL_IDS) s.hero.skills[id] = 5_000;
-    for (const row of purchaseOptions(s)) {
-      if (row.kind !== 'skill') continue;
-      expect(row.atMax).toBe(false);
-      expect(row.maxRank).toBeNull();
-    }
-
-    // Priced, too, at every rank a realm can actually reach. Where each price
-    // curve overflows is pinned in magnitude.test.ts.
+    // Where each price curve overflows is pinned in magnitude.test.ts.
     for (const id of SKILL_IDS) s.hero.skills[id] = 500;
     for (const row of purchaseOptions(s)) {
       if (row.kind !== 'skill') continue;

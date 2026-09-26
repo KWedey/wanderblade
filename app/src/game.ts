@@ -537,7 +537,6 @@ export class Game {
         level: r.rank,
         cost: r.cost,
         unlocked: r.unlocked,
-        atMax: r.atMax,
         unlockLevel: r.unlockLevel,
         canAfford: r.affordable,
       }));
@@ -596,7 +595,7 @@ export class Game {
     let purchaseName = `Hero Lv ${s.hero.level + 1}`;
     let purchaseCost = heroLevelCost;
     for (const skill of skills) {
-      if (!skill.unlocked || skill.atMax || skill.cost >= purchaseCost) continue;
+      if (!skill.unlocked || skill.cost >= purchaseCost) continue;
       purchaseCost = skill.cost;
       purchaseName = `${skill.name} ${skill.level + 1}`;
     }
