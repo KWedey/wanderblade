@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run verify
+      - run: npm run build
+      - name: Economy simulator must be ALL PASS
+        run: |
+          npm run sim -- --days 3 --seeds 1 | tee sim-ci.log
+          grep -q '^ALL PASS' sim-ci.log || { echo '::error::sim reported a FAIL'; exit 1; }
