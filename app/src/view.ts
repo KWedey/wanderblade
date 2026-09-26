@@ -51,6 +51,8 @@ export interface SkillVM {
   atMax: boolean;
   unlockLevel: number;
   canAfford: boolean;
+  /** Seconds until affordable at the current rate; null when affordable or the rate is zero. */
+  etaSec: number | null;
 }
 
 /**
@@ -127,6 +129,7 @@ export interface ViewModel {
   /** Why the last action did nothing, or null. Shown in the panel, not the log. */
   refusal: string | null;
   levelCost: number;
+  levelEtaSec: number | null;
   canAffordLevel: boolean;
   goldPerSec: number;
   /** Gold on hand, so an unaffordable row can show how close it is. */
@@ -675,18 +678,18 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     base: string,
     cost: number,
     canAfford: boolean,
-    vm: ViewModel,
+    etaSec: number | null,
+    gold: number,
   ): void {
     // Core's answer, carried on the row: the view holds no second opinion
-    // about what is buyable.
+    // about what is buyable or how long the wait is.
     if (canAfford) {
       fill.style.width = '100%';
       detail.textContent = base;
       return;
     }
-    fill.style.width = `${(clamp01(vm.gold / cost) * 100).toFixed(1)}%`;
-    const wait = vm.goldPerSec > 0 ? formatDuration((cost - vm.gold) / vm.goldPerSec) : null;
-    detail.textContent = wait ? `${base} \u00b7 in ~${wait}` : base;
+    fill.style.width = `${(clamp01(gold / cost) * 100).toFixed(1)}%`;
+    detail.textContent = etaSec !== null ? `${base} \u00b7 in ~${formatDuration(etaSec)}` : base;
   }
 
   function renderPanels(vm: ViewModel): void {
@@ -766,7 +769,15 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     heroBtn.disabled = !vm.canAffordLevel;
     heroBtn.classList.toggle('affordable', vm.canAffordLevel);
     heroBtn.classList.toggle('best', vm.bestBuy?.id === 'hero');
-    showReach(heroFillEl, heroDetailEl, 'Level up your blade', vm.levelCost, vm.canAffordLevel, vm);
+    showReach(
+      heroFillEl,
+      heroDetailEl,
+      'Level up your blade',
+      vm.levelCost,
+      vm.canAffordLevel,
+      vm.levelEtaSec,
+      vm.gold,
+    );
 
     // Skills.
     for (const skill of vm.skills) {
@@ -793,7 +804,15 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
         refs.btn.disabled = !skill.canAfford;
         refs.btn.classList.toggle('affordable', skill.canAfford);
         refs.btn.classList.remove('locked', 'maxed');
-        showReach(refs.fill, refs.detail, `Level ${skill.level}`, skill.cost, skill.canAfford, vm);
+        showReach(
+          refs.fill,
+          refs.detail,
+          `Level ${skill.level}`,
+          skill.cost,
+          skill.canAfford,
+          skill.etaSec,
+          vm.gold,
+        );
       }
     }
 
