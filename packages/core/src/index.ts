@@ -156,6 +156,7 @@ export {
   enterPortal,
   abandonBoss,
   advance,
+  pickRarity,
   serialize,
   deserialize,
   summarizeEvents,

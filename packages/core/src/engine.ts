@@ -189,14 +189,17 @@ function pickSlot(r: number): GearSlot {
   return GEAR_SLOTS[idx] as GearSlot;
 }
 
-function pickRarity(r: number): Rarity {
-  const x = r * 100; // weights sum to 100
+const RARITY_WEIGHT_TOTAL = RARITIES.reduce((sum, rarity) => sum + RARITY_WEIGHTS[rarity], 0);
+
+/** The rarity a unit roll `r` in [0, 1) lands on, walking the weights low to high. */
+export function pickRarity(r: number): Rarity {
+  const x = r * RARITY_WEIGHT_TOTAL;
   let acc = 0;
   for (const rarity of RARITIES) {
     acc += RARITY_WEIGHTS[rarity];
     if (x < acc) return rarity;
   }
-  return 'epic';
+  return RARITIES[RARITIES.length - 1] as Rarity;
 }
 
 /** One tier up the rarity ladder; the top tier stays put. */

@@ -69,7 +69,7 @@ export const SPECIES: readonly SpeciesDef[] = [
   { goldMult: 1.3, dropMult: 0.4 },
 ];
 
-/** Rarity roll weights (sum = 100). */
+/** Rarity roll weights; the roll is scaled by their sum, so they need not total 100. */
 export const RARITY_WEIGHTS: Record<Rarity, number> = {
   common: 70,
   uncommon: 23,
