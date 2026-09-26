@@ -9,9 +9,9 @@
 import { FONT, GLYPH_H, GLYPH_W, textWidth } from './scene/pixels';
 
 /** Marks the in-flow, transparent text that assistive tech still reads. */
-export const SR_CLASS = 'px-sr';
+const SR_CLASS = 'px-sr';
 /** Marks the decorative canvas a sighted player actually sees. */
-export const CANVAS_CLASS = 'px-ink';
+const CANVAS_CLASS = 'px-ink';
 /** Blank rows between wrapped lines, in glyph pixels. */
 export const LINE_GAP = 2;
 
@@ -382,7 +382,7 @@ export function paintElement(
  * nest a second one inside it, and an inline span measures zero wide, so every
  * label would silently fall back to webfont text.
  */
-export function isTextLeaf(el: Element): boolean {
+function isTextLeaf(el: Element): boolean {
   if (el.classList.contains(SR_CLASS) || el.classList.contains(CANVAS_CLASS)) return false;
   for (const child of el.children) {
     if (!child.classList.contains(SR_CLASS) && !child.classList.contains(CANVAS_CLASS)) {
@@ -393,7 +393,7 @@ export function isTextLeaf(el: Element): boolean {
 }
 
 /** Tags every text leaf under a root so repaint can find it. */
-export function mountPixelText(root: ParentNode): void {
+function mountPixelText(root: ParentNode): void {
   for (const el of root.querySelectorAll<HTMLElement>('*')) {
     if (isTextLeaf(el)) el.dataset['px'] = '';
   }
