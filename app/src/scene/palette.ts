@@ -476,7 +476,7 @@ export const LOOT_INK: InkSet = {
  * Separation is a relationship between layers, so the scenery behind the
  * sprite plane is pushed back and the sprite plane is left alone.
  */
-export const DEPTH_RECESSION = {
+const DEPTH_RECESSION = {
   range: 0.46,
   hillFar: 0.38,
   hillNear: 0.3,
@@ -486,9 +486,15 @@ export const DEPTH_RECESSION = {
 /** Minimum lightness a monster's body must hold over the treeline behind it. */
 export const MIN_SPRITE_BACKDROP_GAP = 0.16;
 
+const hazeCache = new WeakMap<RealmSkin, string>();
+
 /** The colour distance itself is graded toward: the realm's own deep earth. */
 export function depthHaze(skin: RealmSkin): string {
-  return mixHex(skin.soilDark, '#000000', 0.45);
+  const hit = hazeCache.get(skin);
+  if (hit) return hit;
+  const haze = mixHex(skin.soilDark, '#000000', 0.45);
+  hazeCache.set(skin, haze);
+  return haze;
 }
 
 function recede(color: string, skin: RealmSkin, amount: number): string {
@@ -772,7 +778,7 @@ export function monsterInk(body: string, ground = '#000000', prop = ground): Ink
 /** Linear blend of two hex colours. Aerial perspective: distant layers get
  *  mixed toward the haze so depth reads without any gradient. */
 /** Pushes a colour's saturation up (or down, negative) without moving its hue. */
-export function saturate(hex: string, amount: number): string {
+function saturate(hex: string, amount: number): string {
   const [h, sat, l] = toHsl(hex);
   return toHex(h, Math.min(1, Math.max(0, sat + amount)), l);
 }

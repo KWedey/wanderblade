@@ -1,11 +1,7 @@
-// The road scene: a full-bleed side-scrolling pixel world that the HUD sits on
-// top of. Owns only presentation state — parallax offsets, one monster, loot
-// arcs, particles, floaters, camera shake. Every number it *displays* is handed
-// to it by the controller; it invents no economy (DECISIONS.md #12).
-//
-// Rendering is done once into a small offscreen buffer at scene resolution,
-// then upscaled with smoothing off. That single indirection is what makes the
-// pixels square and identical everywhere instead of resolution-dependent mush.
+// The road scene: a full-bleed side-scrolling pixel world the HUD sits on top
+// of. Presentation state only: every number it displays comes from the
+// controller (DECISIONS.md #12). It renders into a small offscreen buffer and
+// upscales with smoothing off, which is what keeps the pixels square everywhere.
 
 import { formatNumber } from '../format';
 import { GUARDIAN_BODY, rosterAt, speciesIndexAt } from '../species';
@@ -169,7 +165,7 @@ export interface Scene {
 // --- Tuning --------------------------------------------------------------
 
 /** Scene units across the viewport, before integer-scale rounding. */
-export const TARGET_SCENE_WIDTH = 300;
+const TARGET_SCENE_WIDTH = 300;
 const MIN_PIXEL_SCALE = 2;
 const MAX_PIXEL_SCALE = 8;
 
@@ -178,21 +174,7 @@ const WALK_SPEED = 34;
 const HERO_X_FRAC = 0.24;
 /** The world band never shrinks below this, however tall the chrome gets. */
 const MIN_BAND_H = 60;
-/** Gap between hero and monster once the monster has closed, as a share of the
- * scene width — a fixed pixel gap crowds a phone and wastes a desktop frame. */
-/**
- * How much air is left between the blade and the lead monster's near edge.
- * Deliberately not a fraction of the viewport: on a wide screen that put the
- * creature 57 units from a hero whose blade reaches 16, and the frame was
- * judged "a man swinging at nothing". Held just past the blade's 19-unit tip
- * so the lunge closes the last of it -- at 15 the two bodies touched at rest
- * and the frame collided its fight instead of staging it.
- */
-/**
- * Where the lead creature stops. Set so the blade's tip crosses its near edge
- * rather than stopping in front of it: a critic read the fight as not
- * connecting, with a dotted trail hanging in the gap.
- */
+/** Air between blade and lead creature: just past the 19-unit tip so the lunge closes it, above 15 where the bodies touched at rest. */
 const BLADE_REACH = 20;
 /** Fraction of the kill spent closing the distance; the rest is the fight. */
 const APPROACH_FRAC = 0.3;
@@ -222,12 +204,12 @@ const FLOOR_TORCH_REACH_FRAC = 0.055;
 
 const SWINGS_PER_SEC = 1.7;
 
-/** Seconds one animated swing stands for, at `attackSpeedMult`. */
 /** Device pixels per scene pixel, snapped so the display blit is never fractional. */
 export function blitScaleFor(cssW: number, dpr: number, sceneW: number): number {
   return Math.max(1, Math.round(Math.floor(cssW * dpr) / Math.max(1, sceneW)));
 }
 
+/** Seconds one animated swing stands for, at `attackSpeedMult`. */
 export function swingInterval(attackSpeedMult: number): number {
   return 1 / (SWINGS_PER_SEC * Math.max(0.01, attackSpeedMult));
 }
@@ -256,27 +238,15 @@ const FLOATER_LIFE = 1.05;
  * size and color are never picked per call site.
  */
 const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 1, damage: 1 };
-/**
- * The catch number was LOOT_GLOW exactly, drawn inside the shower it is
- * reporting, so it dissolved into its own particles. The `+` prefix and the
- * tap position are what tell it from a damage number now, not its hue.
- */
+/** White, not LOOT_GLOW: the catch number sits inside the shower it reports and dissolved into it. */
 const TEXT_CATCH = '#ffffff';
 const TEXT_DAMAGE = '#ffffff';
 const LOOT_GLOW = '#fbf236';
-/**
- * Hit sparks are cold steel, never gold. Sharing the realm accent with loot
- * made a coin indistinguishable from the shower it spawned inside, so the one
- * thing worth aiming at looked like the thing you were told to ignore.
- */
-/**
- * Two stops down from the old white-hot burst, and never gold. White sparks
- * were the brightest pixels on screen, which is what kept beating the hero for
- * attention however they were layered; sharing the realm accent with loot made
- * a coin indistinguishable from the shower it spawned inside. Steel reads as
- * impact without competing for the eye or for the thing worth aiming at.
- */
+/** Cold steel, never white or gold: white sparks out-shone the hero, and gold made a coin vanish into its own shower. */
 const SPARK_COLORS = ['#9badb7', '#696a6a', '#847e87'];
+/** Sparks at the gold readout when a streak lands. */
+const COLLECT_SPARKS = [LOOT_GLOW, '#ffffff'];
+const NO_JOLT = { x: 0, y: 0 };
 
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
@@ -471,7 +441,7 @@ export function drawHills(
 }
 
 /** Horizontal value bands the turf splits into, far edge to near edge. */
-export const GROUND_BANDS = 4;
+const GROUND_BANDS = 4;
 
 /** Paints one tone per horizontal strip of the turf band — the same fixed-band idiom drawHills uses, applied to the ground plane instead of a silhouette. */
 export function drawGroundBands(
@@ -1181,12 +1151,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       while (queue.length < QUEUE_DEPTH) enqueueMonster(model.kills + queue.length);
     }
 
-    // The engaged monster's position is driven by the engine's kill progress,
-    // so it reaches the hero exactly when the kill resolves. Everyone behind it
-    // just walks to their slot in the line.
-    // The guardian walks out of its portal on the first sliver of the fight and
-    // then stands. Driving it by remaining health would march it at the hero
-    // over ten minutes, which is a road approach, not a duel.
+    // The lead's position follows the engine's kill progress so it arrives as
+    // the kill resolves. The guardian instead walks out over BOSS_ENTRANCE_SEC
+    // and stands: a ten-minute march on remaining health reads as a road approach.
     const closing = model.boss
       ? Math.min(1, (clockSec - bossEnteredAtSec) / BOSS_ENTRANCE_SEC)
       : null;
@@ -1259,7 +1226,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       s.age += dtSec;
       s.spin += dtSec * 14;
       if (s.age >= STREAK_SEC) {
-        burst(collectAnchor.x, collectAnchor.y, 5, ['#fbf236', '#ffffff'], 60);
+        burst(collectAnchor.x, collectAnchor.y, 5, COLLECT_SPARKS, 60);
         streaks.splice(i, 1);
       }
     }
@@ -1298,11 +1265,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /**
-   * Stacked solid discs, never a radial gradient, and drawn over the treeline
-   * rather than behind it: behind, the canopy tore the disc into two yellow
-   * fragments with sky between them, which a critic read as a rendering
-   * artifact. Each halo band fully overpaints the one before it, so the glow
-   * is carried by filled area and colour, not by which pixels are left out.
+   * Stacked solid discs over the treeline, never a radial gradient: behind the
+   * canopy the disc tore into two fragments a critic read as an artifact. Each
+   * halo band overpaints the last, so the glow is carried by area and colour.
    */
   function drawSun(skin: RealmSkin): void {
     for (const band of sunHaloBands(sunR)) {
@@ -1315,7 +1280,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
   /** A third depth on the horizon, behind the far hills. */
   function drawRange(skin: RealmSkin): void {
-    const span = vw * 4;
     ctx.fillStyle = skin.range;
     const baseY = groundY - Math.floor(groundY * 0.02);
     for (let x = 0; x < vw; x += 3) {
@@ -1333,7 +1297,6 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       ctx.fillRect(x, baseY - h, 3, Math.max(1, Math.floor(h * 0.09)));
       ctx.fillStyle = skin.range;
     }
-    void span;
   }
 
   function drawClouds(skin: RealmSkin): void {
@@ -1398,12 +1361,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     }
   }
 
-  /** A thin treeline on the ground plane, behind the fence — depth, not clutter. */
   /**
-   * Standing timber between the hills and the road. The frame used to be half
-   * empty sky, and no quantity of clouds fixes that -- it is a camera problem.
-   * Trunks run off the top edge and canopies close the upper band, so the
-   * camera reads as inside the world rather than pointed above it.
+   * Standing timber between hills and road. Half-empty sky is a camera problem
+   * no number of clouds fixes: trunks run off the top and canopies close the
+   * upper band, so the camera reads as inside the world.
    */
   function drawGrove(skin: RealmSkin): void {
     const span = vw * 2;
@@ -1690,13 +1651,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /**
-   * Concentric hard rings, not a dither. An ordered dither carries intensity
-   * in the share of pixels lit, which only reads as light while the pattern is
-   * finer than the eye can separate. The world is drawn at 1/pixelScale and
-   * upscaled, so one world pixel is a 36px block at desktop size and a 34%
-   * dither is a scatter of them - a judge read the sun's corona as "a ring of
-   * loose yellow dots ... pixels that failed to fill". At this scale intensity
-   * has to be shape.
+   * Concentric hard rings, not a dither: one world pixel is a 36px block at
+   * desktop scale, so a 34% dither is a scatter of loose dots. At this scale
+   * intensity has to be shape.
    */
   function glowDisc(cx: number, cy: number, r: number, color: string, gain = 1): void {
     if (r <= 0 || gain <= 0) return;
@@ -1737,19 +1694,10 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   }
 
   /**
-   * Hard contact shadow on the ground plane, cast away from the sun.
-   *
-   * This used to be alpha-blended black at 0.34, which on turf is almost
-   * nothing: every figure in the frame was read as floating on the grass. A
-   * shadow in this style is not a soft one turned down, it is a darker flat
-   * colour with an edge (DECISIONS.md #13), so this is the realm's own turf
-   * stepped toward night.
-   */
-  /**
-   * `depth` is what separates a figure from the scenery. Every fence, rock and
-   * creature casts on the same rows, and at one shared value they tile into a
-   * continuous stripe that reads as terrain - which is why a judge said the
-   * hero had no shadow when he had one. The actors cast darker than the props.
+   * Hard contact shadow: the realm's own ground stepped toward night, with an
+   * edge (DECISIONS.md #13); alpha-blended black is invisible on turf. `depth`
+   * separates actors from props: at one shared value every cast tiled into a
+   * stripe that read as terrain.
    */
   function drawShadow(x: number, width: number, depth = 0.52): void {
     const skin = realmSkin(model.region);
@@ -1786,12 +1734,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       lighten(model.boss ? lit.rock : lit.turf, 0.42),
       Math.min(0.6, 0.16 + momentumLift(model.momentum) * 1.5),
     );
-    // From the sprite, the way every other caller does it. A literal 12 was
-    // sized for a hero two versions ago and left him with a smaller shadow than
-    // creatures he now stands eye to eye with.
-    // From the sprite, the way every other caller does it - a literal 12 was
-    // sized for a hero two versions ago. Deeper than the props, so his contact
-    // reads as his rather than as one more segment of the ambient stripe.
+    // Sized from the sprite, deeper than the props, so his contact reads as his.
     drawShadow(heroX, heroA.width - 2, ACTOR_SHADOW);
   }
 
@@ -1826,12 +1769,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // size, which is the opposite of the job.
     drawSprite(ctx, sprite, heroX, groundY + bob, false);
 
-    // The blade sweeps through a real arc; nearest-neighbour rotation keeps it
-    // pixelated rather than feathering into an anti-aliased smear.
-    // Rests raised and forward, winds up to -72 deg and finishes level at +10,
-    // which is contact height on the creature. At -103 to +34 the wind-up went
-    // behind the shoulder and the stroke ended in the dirt past the monster:
-    // the bright blade in the grass, the dark hilt up where the blade should be.
+    // The blade sweeps a real arc; nearest-neighbour rotation keeps it pixelated.
+    // Winds up to -72 deg and finishes level at +10, contact height on the
+    // creature: a wider sweep ended in the dirt past the monster.
     const t = swingAnim / SWING_ANIM_SEC;
     const angle = swingAnim > 0 ? -1.25 + (1 - t) * 1.42 : -0.3;
     const handX = heroX + 5;
@@ -1894,13 +1834,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 
     const flame = torchFlame(skin);
 
-    // Piers narrow the open floor either side of the fight, and carry the
-    // realm's own highlight ink so a dungeon skins per-realm, not just grey.
-    // Spanned off worldRightX, not vw — the canvas paints under the docked
-    // panel, and a pier placed at the true right edge is a pier nobody sees.
-    // Drawn before the torches: the right torch's side fraction sits inside
-    // the right pier's span at common dock widths, and a torch is mounted on
-    // the stone it lights, not painted over by it.
+    // Piers carry the realm's highlight ink so a dungeon skins per realm. Spanned
+    // off worldRightX: the canvas paints under the docked panel. Drawn before the
+    // torches, which are mounted on the stone they light.
     drawPillars(
       ctx,
       pillarSpans(worldRightX, PILLAR_FRAC),
@@ -1985,11 +1921,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
         ctx.globalAlpha = 1;
       }
 
-      // Only the engaged monster carries a bar, and only while it is alive:
-      // a bar over a corpse is the clearest possible "this UI is broken".
-      // The guardian's HP already lives in the side panel (name, bar, ETA,
-      // remaining) — a second bar floating over its sprite is the same
-      // number twice, not a second signal.
+      // Only the live engaged monster carries a bar: one over a corpse reads as
+      // broken UI, and the guardian's HP already lives in the side panel.
       if (i !== 0 || model.boss) continue;
       const remaining = Math.max(0, 1 - model.killProgress);
       if (remaining >= 1 || remaining <= 0.02) continue;
@@ -2141,12 +2074,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const COMBO_METER_W = COMBO_SEGS * (COMBO_SEG_W + COMBO_GAP) - COMBO_GAP;
 
   function comboLabel(): string {
-    // Two decimals, not one: the cap is x1.75 and one decimal rounds it to
-    // x1.8, printing a multiplier the game cannot actually reach.
-    // The word is permanent. It used to collapse after two seconds to save
-    // width, but the widget floats in open sky where nothing competes for it,
-    // and a bare x1.73 names no quantity - a judge reading one frame counted
-    // the combo among the things it could name only while the word was up.
+    // Two decimals: the cap is x1.75 and one decimal prints an unreachable x1.8.
+    // The word stays up; a bare x1.73 names no quantity.
     return `COMBO \u00d7${heldMult.value.toFixed(2)}`;
   }
 
@@ -2260,7 +2189,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
       drawSun(skin);
     }
 
-    const jolt = model.reduceMotion ? { x: 0, y: 0 } : shakeOffset(shake, clockSec);
+    const jolt = model.reduceMotion ? NO_JOLT : shakeOffset(shake, clockSec);
     ctx.save();
     ctx.translate(Math.round(jolt.x), Math.round(jolt.y));
 
@@ -2321,13 +2250,9 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
 }
 
 /**
- * Compact number for in-world floaters. Delegates past 1000 to the HUD's
- * formatter: its own ladder stopped at T, so a staged late run printed
- * "2.5866247188821906E+295T" across the middle of the frame.
- *
- * A non-finite value says so in words. formatNumber answers Infinity with an
- * infinity sign, drawText skips any glyph its face lacks, and the two together
- * put a silent hole in the frame where the number that broke should be.
+ * Compact number for in-world floaters, delegating past 1000 to the HUD's
+ * formatter. A non-finite value says so in words: drawText skips glyphs its
+ * face lacks, so an infinity sign would leave a silent hole in the frame.
  */
 export function formatShort(n: number): string {
   if (!Number.isFinite(n)) return 'OVERFLOW';
