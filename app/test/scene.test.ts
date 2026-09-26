@@ -9,9 +9,9 @@ import {
   drawTorchFlame,
   drawTorchGlow,
   drawVignette,
-  type FillCtx,
   type TorchLight,
 } from '../src/scene/scene';
+import type { FillCtx } from '../src/scene/frame';
 
 /** Records what drawHills actually paints — a pure-geometry test alone can pass while the loop that draws it stays broken. */
 function fakeCtx(): { ctx: FillCtx; calls: Array<{ style: string; x: number; y: number; w: number; h: number }> } {

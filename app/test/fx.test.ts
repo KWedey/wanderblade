@@ -30,7 +30,8 @@ import {
   inPocket,
   nudgeFromPocket,
 } from '../src/scene/fx';
-import { blitScaleFor, damagePerSwing, swingInterval } from '../src/scene/scene';
+import { damagePerSwing, swingInterval } from '../src/scene/frame';
+import { blitScaleFor } from '../src/scene/geometry';
 
 /** A core arc launched at t=0, so `arcPositionAt(arc, t)` reads as flight time. */
 function coreArc(killIndex = 3): LootArc {
