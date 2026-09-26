@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as Core from '@wanderblade/core';
 import type { GameState } from '@wanderblade/core';
+import { DEFAULTS } from '../src/args';
+import type { SimConfig } from '../src/types';
 
 // Each check exists to catch an engine that drifts, leaks or couples. Only an
 // engine that actually misbehaves can prove a check would notice, so the
@@ -43,27 +45,19 @@ const {
   replayIdentical,
 } = await import('../src/checks');
 
-const config = {
-  days: 1,
-  seed: 1,
-  seeds: 1,
-  sessionMin: 20,
-  sessionsPerDay: 2,
-  csv: false,
-  quick: false,
-};
+const config: SimConfig = { ...DEFAULTS, days: 1, seeds: 1 };
 
-/** Realm 0 played actively to the moment its portal opens — the fixture run.ts uses. */
-let cachedReady: GameState | null = null;
-const ready = (): GameState =>
-  clone(
-    (cachedReady ??= runPlayer(1, config, {
-      policy: 'road-active',
-      entry: 'prompt',
-      stopAtPortalReady: true,
-      continuous: true,
-    }).state),
-  );
+/**
+ * Realm 0 played actively to the moment its portal opens — the fixture
+ * simulateSeed uses. Built once here, before any test can arm a fault.
+ */
+const portalReady = runPlayer(1, config, {
+  policy: 'road-active',
+  entry: 'prompt',
+  stopAtPortalReady: true,
+  continuous: true,
+}).state;
+const ready = (): GameState => clone(portalReady);
 
 beforeEach(() => faults.reset());
 

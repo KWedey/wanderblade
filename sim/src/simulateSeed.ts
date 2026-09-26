@@ -37,7 +37,8 @@ function roadSnapshots(samplesOwner: GameState[], want: number): GameState[] {
   return out;
 }
 
-function emptyResult(
+/** Everything the headline run alone can report; every probe still unmeasured. */
+function unmeasuredResult(
   seed: number,
   config: SimConfig,
   main: ReturnType<typeof runPlayer>,
@@ -120,56 +121,31 @@ export function simulateSeed(seed: number, config: SimConfig): SeedResult {
     main.roadStates.filter((s) => !s.portalReady),
     6,
   );
-  if (config.quick) {
-    const quick: SeedResult = {
-      ...emptyResult(seed, config, main),
-      roadUplift: roadUplift(roadStates),
-      roadWindowUplift: roadWindowUplift(roadStates),
-      bossUplift: bossUplift(entryStates),
-      portalReachSec: {
-        idle: idleReach.realms[0]?.portalReadySec ?? null,
-        active: activeReach.realms[0]?.portalReadySec ?? null,
-      },
-    };
-    quick.correctness = runCorrectness(quick);
-    quick.pacing = runPacing(quick);
-    return quick;
-  }
-  const result: SeedResult = {
-    seed,
-    config,
-    realms: main.realms,
-    samples: main.samples,
-    correctness: [],
-    pacing: [],
+  const fast: SeedResult = {
+    ...unmeasuredResult(seed, config, main),
     roadUplift: roadUplift(roadStates),
     roadWindowUplift: roadWindowUplift(roadStates),
     bossUplift: bossUplift(entryStates),
-    eightHourBuys: eightHourReturn(walkingStates),
-    twentyFourHourZones: twentyFourHourReturn(walkingStates),
     portalReachSec: {
       idle: idleReach.realms[0]?.portalReadySec ?? null,
       active: activeReach.realms[0]?.portalReadySec ?? null,
     },
-    promptVsOverfarm: promptVsOverfarm(seed, config),
-    abandonProbe: abandonProbe(readyState),
-    frontierRealm: main.frontierRealm,
-    frontierSec: main.frontierSec,
-    spendDepth: spendDepth(main.shopSamples),
-    deadTime: deadTime(main.realms),
-    witnessed: witnessedBeats(config, main.realms),
-    permanentUplift: permanentUplift(seed, config, main),
-    totalKills: main.state.lifetime.kills,
-    finalRealm: main.state.realm,
-    victories: main.state.ascendancy.victories,
-    correctnessBreaches: main.breaches,
-    correctnessLive: main.violations,
-    offlineMatchesLive: offlineMatchesLive(readyState),
-    replayIdentical: replayIdentical(clone(idleReach.state)),
-    abandonClean: abandonClean(readyState),
-    remainingTimeCarried: remainingTimeCarried(readyState),
-    earningsBonusIsolated: earningsBonusIsolated(clone(main.state)),
   };
+  const result: SeedResult = config.quick
+    ? fast
+    : {
+        ...fast,
+        eightHourBuys: eightHourReturn(walkingStates),
+        twentyFourHourZones: twentyFourHourReturn(walkingStates),
+        promptVsOverfarm: promptVsOverfarm(seed, config),
+        abandonProbe: abandonProbe(readyState),
+        permanentUplift: permanentUplift(seed, config, main),
+        offlineMatchesLive: offlineMatchesLive(readyState),
+        replayIdentical: replayIdentical(idleReach.state),
+        abandonClean: abandonClean(readyState),
+        remainingTimeCarried: remainingTimeCarried(readyState),
+        earningsBonusIsolated: earningsBonusIsolated(main.state),
+      };
 
   result.correctness = runCorrectness(result);
   result.pacing = runPacing(result);

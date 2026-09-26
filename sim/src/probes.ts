@@ -29,7 +29,7 @@ import type {
 const ROAD_WINDOW_SEC = 20 * 60;
 
 /** Guardians are allowed a long time to fall before a probe gives up. */
-const BOSS_PROBE_CAP_SEC = 30 * 86_400;
+const BOSS_PROBE_CAP_SEC = 30 * SEC_PER_DAY;
 
 /**
  * Pin the build and the road position: an open portal stops zone advance, and
@@ -111,12 +111,7 @@ export function bossUplift(entryStates: GameState[]): Uplift[] {
 export function eightHourReturn(states: GameState[]): number[] {
   return states.map((start) => {
     const s = clone(start);
-    let left = 8 * SEC_PER_HOUR;
-    while (left > 1e-9) {
-      const dt = Math.min(IDLE_SLICE_SEC, left);
-      advance(s, dt);
-      left -= dt;
-    }
+    advance(s, 8 * SEC_PER_HOUR);
     const bought = botTouch(s);
     return bought.gold + bought.tree;
   });
@@ -131,12 +126,7 @@ export function twentyFourHourReturn(states: GameState[]): number[] {
   return states.map((start) => {
     const s = clone(start);
     const before = s.collection.zonesCleared;
-    let left = 24 * SEC_PER_HOUR;
-    while (left > 1e-9) {
-      const dt = Math.min(IDLE_SLICE_SEC, left);
-      advance(s, dt);
-      left -= dt;
-    }
+    advance(s, 24 * SEC_PER_HOUR);
     return s.collection.zonesCleared - before;
   });
 }

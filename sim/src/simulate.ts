@@ -460,14 +460,16 @@ export function timeToKill(start: GameState, rate: number, capSec: number): numb
   let victoryAt: number | null = null;
   let left = capSec;
   // Strikes sit on one grid anchored at t0, so the slice size cannot drop the
-  // fractional strike each slice boundary would otherwise lose.
+  // fractional strike each slice boundary would otherwise lose. No tolerance at
+  // the boundary: advance ignores a strike past its window, and the next slice
+  // starts exactly where this one ends.
   const step = rate > 0 ? 1 / rate : Infinity;
   let nextStrike = 1;
   while (left > 1e-9 && victoryAt === null) {
     const dt = Math.min(IDLE_SLICE_SEC, left);
     const to = s.timeSec + dt;
     const strikes: Strike[] = [];
-    while (t0 + nextStrike * step <= to + 1e-9) {
+    while (t0 + nextStrike * step <= to) {
       strikes.push({ atSec: t0 + nextStrike * step, aim: null });
       nextStrike += 1;
     }

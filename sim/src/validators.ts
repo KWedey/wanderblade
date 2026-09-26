@@ -143,7 +143,9 @@ export function runCorrectness(r: SeedResult): ValidatorResult[] {
 
 export function runPacing(r: SeedResult): ValidatorResult[] {
   const out: ValidatorResult[] = [];
-  const quick = r.config.quick;
+  /** The long probes never run under `--quick`; their verdicts become skips. */
+  const longProbe = (v: ValidatorResult): ValidatorResult =>
+    r.config.quick ? skip(v.id, v.name) : v;
 
   const road = ratios(r.roadUplift);
   out.push(
@@ -156,19 +158,27 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
   );
 
   const eight = r.eightHourBuys;
-  const p3 = '8h idle return affords ≥1 upgrade';
   out.push(
-    quick
-      ? skip('P3', p3)
-      : ok('P3', p3, eight.length > 0 && eight.every((n) => n >= 1), `buys ${range(eight)}`),
+    longProbe(
+      ok(
+        'P3',
+        '8h idle return affords ≥1 upgrade',
+        eight.length > 0 && eight.every((n) => n >= 1),
+        `buys ${range(eight)}`,
+      ),
+    ),
   );
 
   const day = r.twentyFourHourZones;
-  const p4 = '24h idle return advances ≥1 zone';
   out.push(
-    quick
-      ? skip('P4', p4)
-      : ok('P4', p4, day.length > 0 && day.every((n) => n >= 1), `zones ${range(day)}`),
+    longProbe(
+      ok(
+        'P4',
+        '24h idle return advances ≥1 zone',
+        day.length > 0 && day.every((n) => n >= 1),
+        `zones ${range(day)}`,
+      ),
+    ),
   );
 
   const activeH = r.portalReachSec.active === null ? null : r.portalReachSec.active / SEC_PER_HOUR;
@@ -202,18 +212,17 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
   );
 
   const pv = r.promptVsOverfarm;
-  const p7 = 'Ascending promptly beats farming a ready realm 2x longer';
   out.push(
-    quick
-      ? skip('P7', p7)
-      : ok(
-          'P7',
-          p7,
-          pv !== null && pv.promptBanked > pv.overfarmBanked,
-          pv === null
-            ? 'not measured'
-            : `prompt ${pv.promptBanked.toFixed(1)} vs overfarm ${pv.overfarmBanked.toFixed(1)} Ascendancy at ${fmtTime(pv.horizonSec)}`,
-        ),
+    longProbe(
+      ok(
+        'P7',
+        'Ascending promptly beats farming a ready realm 2x longer',
+        pv !== null && pv.promptBanked > pv.overfarmBanked,
+        pv === null
+          ? 'not measured'
+          : `prompt ${pv.promptBanked.toFixed(1)} vs overfarm ${pv.overfarmBanked.toFixed(1)} Ascendancy at ${fmtTime(pv.horizonSec)}`,
+      ),
+    ),
   );
 
   // Three claims, because one number cannot carry this honestly.
@@ -308,24 +317,22 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
           `(${pu.activeEarned.toFixed(0)} vs ${pu.idleEarned.toFixed(0)})${endNote}`
         : `Ascendancy ratio not banded — run reached ${fmtTime(pu.measuredAtSec)}, ` +
           `band is stated at ${fmtTime(pu.horizonSec)} (${pu.ratio.toFixed(2)}x so far)${endNote}`;
-  const p10 =
-    `Permanent power: ${PERMANENT_RATIO_MIN}–${PERMANENT_RATIO_MAX}x Ascendancy at ` +
-    `${PERMANENT_HORIZON_SEC / SEC_PER_DAY}d, first ascension ≥${PERMANENT_SOONER_MIN}x sooner`;
   out.push(
-    quick
-      ? skip('P10', p10)
-      : ok(
-          'P10',
-          p10,
-          ratioOk && soonerOk,
-          pu === null
-            ? 'not measured'
-            : `${ratioNote}; ` +
-              `first ascension ${fmtTime(pu.activeFirstAscensionSec)} vs ${fmtTime(pu.idleFirstAscensionSec)}` +
-              `${ascendSooner === null ? '' : ` (${ascendSooner.toFixed(2)}x sooner)`}; ` +
-              `${pu.rankTarget} tree ranks ${fmtTime(pu.activeRankSec)} vs ${fmtTime(pu.idleRankSec)}` +
-              `${rankSooner === null ? '' : ` (${rankSooner.toFixed(2)}x, reported not banded)`}`,
-        ),
+    longProbe(
+      ok(
+        'P10',
+        `Permanent power: ${PERMANENT_RATIO_MIN}–${PERMANENT_RATIO_MAX}x Ascendancy at ` +
+          `${PERMANENT_HORIZON_SEC / SEC_PER_DAY}d, first ascension ≥${PERMANENT_SOONER_MIN}x sooner`,
+        ratioOk && soonerOk,
+        pu === null
+          ? 'not measured'
+          : `${ratioNote}; ` +
+            `first ascension ${fmtTime(pu.activeFirstAscensionSec)} vs ${fmtTime(pu.idleFirstAscensionSec)}` +
+            `${ascendSooner === null ? '' : ` (${ascendSooner.toFixed(2)}x sooner)`}; ` +
+            `${pu.rankTarget} tree ranks ${fmtTime(pu.activeRankSec)} vs ${fmtTime(pu.idleRankSec)}` +
+            `${rankSooner === null ? '' : ` (${rankSooner.toFixed(2)}x, reported not banded)`}`,
+      ),
+    ),
   );
 
   return out;

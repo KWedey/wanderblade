@@ -9,7 +9,7 @@ import {
   type GameState,
   type LootArc,
 } from '@wanderblade/core';
-import { parseArgs } from '../src/args';
+import { DEFAULTS, parseArgs } from '../src/args';
 import { formatSeedReport, formatSummary, REALM_CSV_COLUMNS, realmsCsv } from '../src/format';
 import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
 import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
@@ -36,13 +36,9 @@ import type {
 } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
+  ...DEFAULTS,
   days: 1,
-  seed: 1,
   seeds: 1,
-  sessionMin: 20,
-  sessionsPerDay: 2,
-  csv: false,
-  quick: false,
   ...over,
 });
 
@@ -305,8 +301,7 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
   };
 }
 
-// `--quick` never runs the long probes. Before the skipped state existed it
-// printed "FAIL — 4 of 20" for validators nothing had measured.
+// `--quick` never runs the long probes; a validator nothing measured is SKIP, not FAIL.
 describe('--quick marks unmeasured validators skipped, never failed', () => {
   const quick = (): SeedResult =>
     stubResult({

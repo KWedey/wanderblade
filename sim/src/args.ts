@@ -3,7 +3,7 @@
 
 import type { SimConfig } from './types';
 
-const DEFAULTS: SimConfig = {
+export const DEFAULTS: SimConfig = {
   days: 14,
   seed: 1,
   seeds: 3,

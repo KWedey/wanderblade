@@ -1,20 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULTS } from '../src/args';
 import { simulateSeed } from '../src/simulateSeed';
 import type { SimConfig } from '../src/types';
 
-// The economy contract is part of the gate: three green `npm run verify` runs
-// once shipped while a sim validator was red, because nothing here ran it.
-// Three days of one seed is the shortest run that measures every validator.
+// The economy contract is part of the gate. Three days of one seed is the
+// shortest run that measures every validator.
 describe('the economy simulator is ALL PASS on its shortest full run', () => {
-  const config: SimConfig = {
-    days: 3,
-    seed: 1,
-    seeds: 1,
-    sessionMin: 20,
-    sessionsPerDay: 2,
-    csv: false,
-    quick: false,
-  };
+  const config: SimConfig = { ...DEFAULTS, days: 3, seeds: 1 };
 
   it('measures all 20 validators and every one passes', () => {
     const r = simulateSeed(config.seed, config);
