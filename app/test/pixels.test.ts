@@ -20,7 +20,7 @@ import {
   toneBands,
 } from '../src/scene/pixels';
 import { formatNumber } from '../src/format';
-import { formatShort } from '../src/scene/scene';
+import { formatShort } from '../src/scene/frame';
 
 describe('sprite grids', () => {
   // A ragged row or an unlegended glyph silently drops pixels at bake time;
