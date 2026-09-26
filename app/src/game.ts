@@ -197,10 +197,12 @@ export class Game {
    * Never feeds back into core state — pure presentation (math in anim.ts).
    */
   private currentKillProgress(): number {
-    const sinceTickSec = this.view.isRecapOpen()
-      ? 0 // world paused behind the recap — freeze the sweep too
-      : Math.min((performance.now() - this.lastTickMs) / 1000, MAX_EXTRAPOLATE_SEC);
-    return killProgress(this.state.nextActionAtSec, this.state.timeSec, sinceTickSec, this.killDurSec);
+    return killProgress(
+      this.state.nextActionAtSec,
+      this.state.timeSec,
+      this.sinceTickSec(),
+      this.killDurSec,
+    );
   }
 
   private readonly animate = (frameMs: number): void => {
@@ -296,14 +298,10 @@ export class Game {
    */
   strike(aim: ArcPoint | null): void {
     this.cue('strike');
-    const sinceTickSec = Math.min(
-      (performance.now() - this.lastTickMs) / 1000,
-      MAX_EXTRAPOLATE_SEC,
-    );
     const floor = this.state.timeSec + STRIKE_EPSILON_SEC;
     const last = this.pendingStrikes[this.pendingStrikes.length - 1];
     const atSec = Math.max(
-      this.state.timeSec + sinceTickSec,
+      this.state.timeSec + this.sinceTickSec(),
       last ? last.atSec + STRIKE_EPSILON_SEC : floor,
     );
     this.pendingStrikes.push({ atSec, aim });
@@ -359,10 +357,18 @@ export class Game {
   }
 
   reset(): void {
-    clearSave();
+    if (!this.staged) clearSave();
     this.state = initialState(randomSeed());
     this.displayGold = 0;
+    // Everything stamped against the old run's clock goes with it: a strike
+    // held across the reset would otherwise land on the new one.
+    this.pendingStrikes.length = 0;
     this.bossResult = null;
+    this.bossResultUntilMs = 0;
+    this.refusal = null;
+    this.refusalUntilMs = 0;
+    this.hitStopUntilMs = 0;
+    this.killSchedAtSec = -1;
     this.view.setSeed(this.state.seed);
     this.view.pushLog([{ kind: 'info', text: 'A new blade sets out. The road begins again.' }]);
     if (!this.staged) writeSave(this.state);
@@ -519,6 +525,14 @@ export class Game {
           }
         : null;
 
+    // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
+    // reflect a purchase immediately instead of lagging one kill behind.
+    // Zero in the portal: the boss grants no income (DECISIONS.md #15), and a
+    // live rate over a frozen purse is the readout lying to the player.
+    const goldPerSec = s.phase === 'boss' ? 0 : this.goldPerKill / killTime(s, momentum);
+    const waitFor = (cost: number): number | null =>
+      s.gold >= cost || goldPerSec <= 0 ? null : (cost - s.gold) / goldPerSec;
+
     // The panel prices and gates nothing itself: core's shop rows are the same
     // rows the simulator counts and the engine will actually accept.
     const rows = purchaseOptions(s);
@@ -533,6 +547,7 @@ export class Game {
         atMax: r.atMax,
         unlockLevel: r.unlockLevel,
         canAfford: r.affordable,
+        etaSec: waitFor(r.cost),
       }));
 
     // The tree prices and gates itself off core, exactly as the shop rows do.
@@ -560,11 +575,6 @@ export class Game {
 
     const heroRow = rows.find((r) => r.kind === 'hero')!;
     const heroLevelCost = heroRow.cost;
-    // Fresh killTime (not the schedule-grounded cache) so the rate and ETA
-    // reflect a purchase immediately instead of lagging one kill behind.
-    // Zero in the portal: the boss grants no income (DECISIONS.md #15), and a
-    // live rate over a frozen purse is the readout lying to the player.
-    const goldPerSec = s.phase === 'boss' ? 0 : this.goldPerKill / killTime(s, momentum);
 
     // Goal gradient (DECISIONS.md #12): how far along, and how long from here.
     // A raw remaining-kill count is the opposite of a gradient - 946 of them
@@ -585,27 +595,26 @@ export class Game {
       marchGoal = `${where} in ~${formatDuration(killsLeft * killTime(s, momentum))}`;
     }
 
-    // …and the cheapest buyable power bump, with a live ETA.
-    let purchaseName = `Hero Lv ${s.hero.level + 1}`;
-    let purchaseCost = heroLevelCost;
-    for (const skill of skills) {
-      if (!skill.unlocked || skill.atMax || skill.cost >= purchaseCost) continue;
-      purchaseCost = skill.cost;
-      purchaseName = `${skill.name} ${skill.level + 1}`;
-    }
-    const purchaseReady = s.gold >= purchaseCost;
-    let purchaseGoal: string;
-    if (purchaseReady) purchaseGoal = `${purchaseName} ready — tap it!`;
-    else if (goldPerSec > 0) {
-      purchaseGoal = `${purchaseName} in ~${formatDuration((purchaseCost - s.gold) / goldPerSec)}`;
-    } else purchaseGoal = `${purchaseName} — ${formatNumber(purchaseCost - s.gold)} more gold`;
-
     // Core ranks the rows; the panel only draws the winner. dpsGain is read back
     // off the ratio core already priced, never recomputed here.
     const top = bestBuy(s, 'gold');
     const best: BestBuyVM | null = top
       ? { id: top.id, name: top.name, cost: top.cost, dpsGain: top.valuePerCost * top.cost }
       : null;
+
+    // …and the same ranking's answer to "what next": core's pick for a purse
+    // with no limit, so the chip never holds an opinion of its own about value.
+    const next = top ?? bestBuy({ ...s, gold: Infinity, phase: 'road' }, 'gold');
+    const purchaseReady = top !== null;
+    let purchaseGoal = '';
+    if (next) {
+      const purchaseName =
+        next.kind === 'hero' ? `Hero Lv ${s.hero.level + 1}` : `${next.name} ${next.rank + 1}`;
+      const wait = waitFor(next.cost);
+      if (purchaseReady) purchaseGoal = `${purchaseName} ready — tap it!`;
+      else if (wait !== null) purchaseGoal = `${purchaseName} in ~${formatDuration(wait)}`;
+      else purchaseGoal = `${purchaseName} — ${formatNumber(next.cost - s.gold)} more gold`;
+    }
 
     return {
       regionName: regionName(s.realm),
@@ -619,6 +628,7 @@ export class Game {
       bossResult: this.currentBossResult(),
       refusal: this.currentRefusal(),
       levelCost: heroLevelCost,
+      levelEtaSec: waitFor(heroLevelCost),
       canAffordLevel: heroRow.affordable,
       goldPerSec,
       gold: s.gold,

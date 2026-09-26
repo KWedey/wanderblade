@@ -9,9 +9,9 @@
 import { FONT, GLYPH_H, GLYPH_W, textWidth } from './scene/pixels';
 
 /** Marks the in-flow, transparent text that assistive tech still reads. */
-export const SR_CLASS = 'px-sr';
+const SR_CLASS = 'px-sr';
 /** Marks the decorative canvas a sighted player actually sees. */
-export const CANVAS_CLASS = 'px-ink';
+const CANVAS_CLASS = 'px-ink';
 /** Blank rows between wrapped lines, in glyph pixels. */
 export const LINE_GAP = 2;
 
@@ -317,8 +317,8 @@ export function paintElement(
   }
   const padLeft = parseFloat(style.paddingLeft) || 0;
   const padTop = parseFloat(style.paddingTop) || 0;
-  // clientWidth is 0 for an inline box; its rect is the only honest measure.
-  const outer = el.clientWidth || el.getBoundingClientRect().width;
+  const outer = outerWidth(el);
+  MEASURED_WIDTH.set(el, outer);
   const boxWidth = Math.floor(outer - padLeft - (parseFloat(style.paddingRight) || 0));
   // Honour the author's own white-space: a HUD stat marked nowrap wants the
   // largest type that fits on one line, not the largest that fits at all.
@@ -382,7 +382,7 @@ export function paintElement(
  * nest a second one inside it, and an inline span measures zero wide, so every
  * label would silently fall back to webfont text.
  */
-export function isTextLeaf(el: Element): boolean {
+function isTextLeaf(el: Element): boolean {
   if (el.classList.contains(SR_CLASS) || el.classList.contains(CANVAS_CLASS)) return false;
   for (const child of el.children) {
     if (!child.classList.contains(SR_CLASS) && !child.classList.contains(CANVAS_CLASS)) {
@@ -393,17 +393,58 @@ export function isTextLeaf(el: Element): boolean {
 }
 
 /** Tags every text leaf under a root so repaint can find it. */
-export function mountPixelText(root: ParentNode): void {
+function mountPixelText(root: ParentNode): void {
   for (const el of root.querySelectorAll<HTMLElement>('*')) {
     if (isTextLeaf(el)) el.dataset['px'] = '';
   }
 }
 
-/** Repaints every marked element under a root, tagging any that appeared. */
-export function repaintPixelText(root: ParentNode): void {
+const DIRTY = 'pxDirty';
+/** The box each leaf was last measured in; a leaf whose box moved is repainted. */
+const MEASURED_WIDTH = new WeakMap<HTMLElement, number>();
+
+/** clientWidth is 0 for an inline box; its rect is the only honest measure. */
+function outerWidth(el: HTMLElement): number {
+  return el.clientWidth || el.getBoundingClientRect().width;
+}
+
+/**
+ * Flags every leaf under `root` for the next changed-only repaint. The view
+ * calls it when a class, `hidden` or `disabled` flips, because those move a
+ * leaf's colour or width without touching its text.
+ */
+export function markPixelDirty(root: Element): void {
+  if (root instanceof HTMLElement && root.dataset['px'] !== undefined) root.dataset[DIRTY] = '';
+  for (const el of root.querySelectorAll<HTMLElement>('[data-px]')) el.dataset[DIRTY] = '';
+}
+
+/**
+ * A painted leaf keeps its accessible span; assigning textContent removes it.
+ * So a leaf still carrying one, unflagged and still in the box it was measured
+ * for, has nothing new to draw. A leaf with no span and no text has nothing to
+ * draw at all.
+ */
+function isClean(el: HTMLElement): boolean {
+  if (el.dataset[DIRTY] !== undefined) return false;
+  if (!el.querySelector(`.${SR_CLASS}`)) return (el.textContent ?? '').trim() === '';
+  return MEASURED_WIDTH.get(el) === outerWidth(el);
+}
+
+/**
+ * Repaints every marked element under a root, tagging any that appeared. With
+ * `changedOnly`, a leaf whose text, flags and box are unchanged is skipped
+ * before any style is read, and every skip check runs before the first paint so
+ * the reads never interleave with the writes.
+ */
+export function repaintPixelText(root: ParentNode, changedOnly = false): void {
   const dpr = window.devicePixelRatio || 1;
   mountPixelText(root);
+  const due: HTMLElement[] = [];
   for (const el of root.querySelectorAll<HTMLElement>('[data-px]')) {
+    if (!changedOnly || !isClean(el)) due.push(el);
+  }
+  for (const el of due) {
+    delete el.dataset[DIRTY];
     paintElement(el, dpr);
   }
 }

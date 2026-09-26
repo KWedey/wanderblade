@@ -4,21 +4,9 @@ import { affordableCount, initialState, serialize } from '@wanderblade/core';
 
 import { spendDown, STAGE_PRESETS, stageFromQuery, stageState } from '../src/devstage';
 import { readSave, writeSave } from '../src/save';
+import { installMemoryStorage } from './helpers/memory-storage';
 
-// The save layer talks to the global `localStorage`, which Node's test env lacks.
-class MemoryStorage {
-  private readonly map = new Map<string, string>();
-  getItem(key: string): string | null {
-    return this.map.get(key) ?? null;
-  }
-  setItem(key: string, value: string): void {
-    this.map.set(key, String(value));
-  }
-  removeItem(key: string): void {
-    this.map.delete(key);
-  }
-}
-globalThis.localStorage = new MemoryStorage() as unknown as Storage;
+installMemoryStorage();
 
 describe('spendDown', () => {
   it('buys nothing when nothing is affordable', () => {

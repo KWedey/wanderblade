@@ -1,4 +1,4 @@
-import { REGION_NAME_COUNT, describeEvent, regionName } from '../src/flavor';
+import { BOSS_NAME_COUNT, REGION_NAME_COUNT, bossName, describeEvent, regionName } from '../src/flavor';
 import { REALM_SKIN_COUNT } from '../src/scene/palette';
 // Boundary tests for the odometer/rate formatters. These pin every display
 // band so a future toFixed/threshold tweak fails loudly instead of silently
@@ -148,6 +148,18 @@ describe('region naming', () => {
     for (let region = 0; region < 400; region++) {
       expect(regionName(region)).not.toContain('Beyond the Edge');
     }
+  });
+
+  it('keeps one guardian per biome, lapping in step with the region', () => {
+    expect(BOSS_NAME_COUNT).toBe(REGION_NAME_COUNT);
+    for (let region = 0; region < 400; region++) {
+      const lap = regionName(region).slice(regionName(region % REGION_NAME_COUNT).length);
+      const guardian = bossName(region);
+      const first = bossName(region % REGION_NAME_COUNT);
+      expect(guardian, `realm ${region}`).toBe(`${first}${lap}`);
+      expect(guardian).not.toContain('Beyond');
+    }
+    expect(bossName(REGION_NAME_COUNT)).toBe('the Greenwood Warden II');
   });
 });
 

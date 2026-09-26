@@ -12,9 +12,9 @@ import { INK } from './scene/palette';
  * `species.test.ts` holds this list against the scene's.
  */
 export const SWARMLING = 0;
-export const OOZE = 1;
-export const HOUND = 2;
-export const STALKER = 3;
+const OOZE = 1;
+const HOUND = 2;
+const STALKER = 3;
 export const GOLEM = 4;
 
 export interface Species {

@@ -3,13 +3,24 @@ import {
   ASC_NODES,
   ASC_NODE_IDS,
   ascNodeCost,
+  bestBuy,
   earningsMultiplier,
   enemyGold,
   goldPerKill,
+  initialState,
+  killTime,
   type GameState,
+  type Recap,
   type Strike,
 } from '@wanderblade/core';
+import { clearSave, writeSave } from '../src/save';
 import type { View, ViewModel } from '../src/view';
+import { installMemoryStorage } from './helpers/memory-storage';
+
+installMemoryStorage();
+// The controller autosaves as it ticks, so every test starts from an empty save
+// or a cold load inherits the run the previous test left behind.
+beforeEach(() => clearSave());
 
 // Game reads two browser globals at construction (`window.matchMedia`) and one
 // clock (`performance.now`). Both are stubbed here so the controller can be
@@ -289,5 +300,195 @@ describe('the portal pays nothing, and says so', () => {
     const goal = vmInPhase('boss').purchaseGoal;
     expect(goal).not.toMatch(/in ~/);
     expect(goal).toMatch(/more gold|ready/);
+  });
+});
+
+// A tap while the recap is up is stamped on the paused engine clock, behind the
+// same guard the sweep and momentum read.
+describe('a strike made while the recap is open', () => {
+  beforeEach(() => {
+    nowMs = 1000;
+  });
+
+  function withRecap(open: boolean): { game: InstanceType<typeof Game>; inner: GameInternals } {
+    const game = new Game({ ...stubView, isRecapOpen: () => open });
+    game.collectRecap();
+    return { game, inner: game as unknown as GameInternals };
+  }
+
+  it('is stamped on the engine clock, never ahead of it', () => {
+    const { game, inner } = withRecap(true);
+    nowMs += 500;
+    game.strike(null);
+    const stamp = inner.pendingStrikes[0]!.atSec;
+    expect(stamp).toBeGreaterThan(inner.state.timeSec);
+    expect(stamp - inner.state.timeSec).toBeLessThan(0.01);
+  });
+
+  it('carries the display overshoot when the world is live', () => {
+    const { game, inner } = withRecap(false);
+    nowMs += 500;
+    game.strike(null);
+    expect(inner.pendingStrikes[0]!.atSec).toBeCloseTo(inner.state.timeSec + 0.5, 6);
+  });
+});
+
+describe('reset leaves nothing of the old run behind', () => {
+  interface ResetInternals {
+    pendingStrikes: Strike[];
+    refusal: string | null;
+    hitStopUntilMs: number;
+    killSchedAtSec: number;
+    killDurSec: number;
+    bossResult: 'win' | 'fail' | null;
+    state: GameState;
+    tick: () => void;
+  }
+
+  beforeEach(() => {
+    nowMs = 1000;
+  });
+
+  it('drops queued strikes, the refusal, the hit-stop and the kill schedule', () => {
+    const game = new Game(stubView);
+    const inner = game as unknown as ResetInternals;
+    game.collectRecap();
+    nowMs += 20_000;
+    inner.tick();
+    game.strike(null);
+    game.enterPortal();
+    expect(inner.pendingStrikes).toHaveLength(1);
+    expect(inner.refusal).not.toBeNull();
+    expect(inner.hitStopUntilMs).toBeGreaterThan(nowMs);
+    expect(inner.state.timeSec).toBeGreaterThan(0);
+
+    game.reset();
+
+    expect(inner.pendingStrikes).toEqual([]);
+    expect(inner.refusal).toBeNull();
+    expect(inner.hitStopUntilMs).toBe(0);
+    expect(inner.bossResult).toBeNull();
+    expect(inner.state.timeSec).toBe(0);
+    // The sweep divisor is re-grounded against the fresh run, not the old one.
+    expect(inner.killSchedAtSec).toBe(inner.state.nextActionAtSec);
+    expect(inner.killDurSec).toBe(killTime(inner.state, 0));
+  });
+
+  it('does not let a strike held across the reset land on the new run', () => {
+    const game = new Game(stubView);
+    const inner = game as unknown as ResetInternals;
+    game.collectRecap();
+    nowMs += 20_000;
+    inner.tick();
+    game.strike(null);
+    game.reset();
+    nowMs += 100;
+    inner.tick();
+    expect(inner.state.momentum.value).toBe(0);
+  });
+});
+
+// The chip is core's ranking twice over: the affordable pick when there is one,
+// and otherwise the pick for a purse with no limit. The client keeps no
+// "cheapest row" opinion of its own.
+describe('the purchase goal chip follows core\'s best buy', () => {
+  interface ChipInternals {
+    tick: () => void;
+    state: GameState;
+  }
+
+  function vmWithGold(gold: number): { vm: ViewModel; state: GameState } {
+    nowMs = 1000;
+    let latest: ViewModel | null = null;
+    const view: View = { ...stubView, renderPanels: (next) => (latest = next) };
+    const inner = new Game(view) as unknown as ChipInternals;
+    inner.state.hero.level = 12;
+    inner.state.gold = gold;
+    nowMs += 1000;
+    inner.tick();
+    if (!latest) throw new Error('no view model rendered');
+    return { vm: latest, state: inner.state };
+  }
+
+  function nameOf(vm: ViewModel, id: string, rank: number): string {
+    if (id === 'hero') return `Hero Lv ${vm.heroLevel + 1}`;
+    const skill = vm.skills.find((k) => k.id === id)!;
+    return `${skill.name} ${rank + 1}`;
+  }
+
+  it('names the row the best-buy card marks when something is affordable', () => {
+    const { vm, state } = vmWithGold(1e9);
+    const top = bestBuy(state, 'gold')!;
+    expect(vm.bestBuy?.id).toBe(top.id);
+    expect(vm.purchaseReady).toBe(true);
+    expect(vm.purchaseGoal).toBe(`${nameOf(vm, top.id, top.rank)} ready — tap it!`);
+  });
+
+  it('names the row core would pick with unlimited gold when nothing is', () => {
+    const { vm, state } = vmWithGold(0);
+    expect(vm.bestBuy).toBeNull();
+    const next = bestBuy({ ...state, gold: Infinity }, 'gold')!;
+    expect(vm.purchaseReady).toBe(false);
+    expect(vm.purchaseGoal.startsWith(`${nameOf(vm, next.id, next.rank)} in ~`)).toBe(true);
+  });
+
+  it('carries every wait on the view model, computed one way', () => {
+    const { vm } = vmWithGold(0);
+    expect(vm.goldPerSec).toBeGreaterThan(0);
+    expect(vm.levelEtaSec).toBeCloseTo((vm.levelCost - vm.gold) / vm.goldPerSec, 9);
+    for (const skill of vm.skills) {
+      if (!skill.unlocked) continue;
+      expect(skill.etaSec, skill.id).toBeCloseTo((skill.cost - vm.gold) / vm.goldPerSec, 9);
+    }
+  });
+
+  it('carries no wait for a row already affordable', () => {
+    const { vm } = vmWithGold(1e9);
+    expect(vm.levelEtaSec).toBeNull();
+    for (const skill of vm.skills) if (skill.canAfford) expect(skill.etaSec, skill.id).toBeNull();
+  });
+});
+
+// Offline progress is the same advance call as a live tick; the controller's
+// job on a cold load is to measure the gap and show what it bought.
+describe('a cold load after time away', () => {
+  const realDateNow = Date.now;
+
+  beforeEach(() => {
+    nowMs = 1000;
+  });
+
+  function loadAfter(gapSec: number): { recap: Recap | null; elapsed: number; state: GameState } {
+    const saved = initialState(99);
+    Date.now = () => realDateNow() - gapSec * 1000;
+    writeSave(saved);
+    Date.now = realDateNow;
+
+    let recap: Recap | null = null;
+    let elapsed = 0;
+    const view: View = {
+      ...stubView,
+      showRecap: (r, e) => {
+        recap = r;
+        elapsed = e;
+      },
+    };
+    const game = new Game(view) as unknown as { state: GameState };
+    return { recap, elapsed, state: game.state };
+  }
+
+  it('shows a recap whose kills match the gap it reconciled', () => {
+    const { recap, elapsed, state } = loadAfter(8 * 3600);
+    expect(recap).not.toBeNull();
+    expect(elapsed).toBeGreaterThanOrEqual(8 * 3600);
+    expect(recap!.kills).toBeGreaterThan(0);
+    expect(recap!.kills).toBe(state.lifetime.kills);
+    expect(state.timeSec).toBeGreaterThanOrEqual(8 * 3600);
+  });
+
+  it('shows no recap for a gap too short to announce', () => {
+    const { recap, state } = loadAfter(30);
+    expect(recap).toBeNull();
+    expect(state.timeSec).toBeGreaterThanOrEqual(30);
   });
 });
