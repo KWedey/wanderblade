@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  abandonBoss,
   advance,
+  clockAfter,
   dropChance,
+  enterPortal,
   EVENT_CAP,
   initialState,
   killsPerZone,
@@ -12,6 +15,7 @@ import {
   zonesPerRealm,
   type EventLog,
   type GameEvent,
+  type Recap,
 } from '../src/index';
 import { aimAtOldestArc, nearPortal, ROAD_KILL0_SEC } from './helpers';
 
@@ -125,8 +129,8 @@ describe('recap accuracy', () => {
 
   it('recomputes from a hand-assembled event list', () => {
     const s = initialState(4);
-    const events: EventLog = advance(s, 3000);
-    expect(events.recap?.seconds).toBe(3000);
+    const events = advance(s, 3000);
+    expect(events.recap.seconds).toBe(3000);
 
     const plain = [...events]; // the spread strips the attached recap
     const recap = summarizeEvents(plain);
@@ -136,4 +140,55 @@ describe('recap accuracy', () => {
     expect(recap.seconds).toBeGreaterThan(0);
     expect(recap.seconds).toBeLessThanOrEqual(3000);
   });
+
+  /**
+   * Zone clears, the portal-opening clear, catches, and a whole guardian
+   * attempt are all in the stream; the recount has to see every one of them
+   * the way the attached recap did.
+   */
+  it('recounts Ascendancy, the portal-opening zone, and boss damage from the stream', () => {
+    const s = nearPortal(9, 1);
+    const stretch: GameEvent[] = [];
+    const exact = emptyTotals();
+    const fold = (events: EventLog): void => {
+      stretch.push(...events);
+      add(exact, events.recap);
+    };
+
+    fold(advance(s, 5));
+    expect(s.portalReady).toBe(true);
+    for (let i = 0; i < 120; i++) {
+      const at = clockAfter(s.timeSec, 0.5);
+      fold(advance(s, 0.5, [{ atSec: at, aim: aimAtOldestArc(s, at) }]));
+    }
+    const entry = enterPortal(s);
+    expect(entry.entered).toBe(true);
+    stretch.push(...entry.events);
+    fold(advance(s, 120));
+    stretch.push(...abandonBoss(s).events);
+    fold(advance(s, 60));
+    stretch.push(...enterPortal(s).events);
+    while (s.phase === 'boss') fold(advance(s, 3600));
+
+    const recount = summarizeEvents(stretch);
+    expect(recount.zonesCleared).toBe(exact.zonesCleared);
+    expect(recount.zonesCleared).toBeGreaterThan(0);
+    expect(recount.pendingAscendancyEarned).toBeCloseTo(exact.pendingAscendancyEarned, 9);
+    expect(recount.pendingAscendancyEarned).toBeGreaterThan(0);
+    // Swing damage is summed one swing at a time; a difference of HP is one
+    // subtraction, so the two agree to float precision, not to the unit.
+    expect(recount.bossDamage / exact.bossDamage).toBeCloseTo(1, 9);
+    expect(recount.bossDamage).toBeGreaterThan(0);
+    expect(recount.victories).toBe(1);
+  });
 });
+
+function emptyTotals(): Pick<Recap, 'zonesCleared' | 'pendingAscendancyEarned' | 'bossDamage'> {
+  return { zonesCleared: 0, pendingAscendancyEarned: 0, bossDamage: 0 };
+}
+
+function add(into: ReturnType<typeof emptyTotals>, recap: Recap): void {
+  into.zonesCleared += recap.zonesCleared;
+  into.pendingAscendancyEarned += recap.pendingAscendancyEarned;
+  into.bossDamage += recap.bossDamage;
+}

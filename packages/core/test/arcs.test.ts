@@ -21,6 +21,7 @@ import {
   initialState,
   serialize,
   summarizeEvents,
+  type GameEvent,
   type LootArc,
 } from '../src/index';
 import {
@@ -108,7 +109,7 @@ describe('loot arcs', () => {
     const coins = [...s.arcs];
     expect(coins.length).toBeGreaterThan(1);
 
-    let events: ReturnType<typeof advance> = [];
+    let events: GameEvent[] = [];
     for (const coin of coins) {
       const at = coin.expiresAtSec - ARC_FLIGHT_SEC / 2;
       // Whole milliseconds, one past the strike, so the clock grid never
@@ -145,7 +146,7 @@ describe('loot arcs', () => {
   it('counts catch gold in the recap', () => {
     const s = initialState(33);
     const goldBefore = s.gold;
-    const events: ReturnType<typeof advance> = [];
+    const events: GameEvent[] = [];
     const end = 900;
     const step = 0.25;
     for (let t = step; t <= end + 1e-9; t += step) {

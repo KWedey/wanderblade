@@ -492,15 +492,12 @@ export function advance(
   state: GameState,
   seconds: number,
   strikes: readonly Strike[] = [],
-): GameEvent[] {
-  const events: EventLog = [];
+): EventLog {
   const deltaMs = clockMs(seconds);
   const recap = emptyRecap(Math.max(0, deltaMs) / CLOCK_MS_PER_SEC);
+  const events: EventLog = Object.assign([], { recap });
 
-  if (!(deltaMs > 0)) {
-    events.recap = recap;
-    return events;
-  }
+  if (!(deltaMs > 0)) return events;
 
   const rng = createRng(state.rngState);
   const startMs = clockMs(state.timeSec);
@@ -541,7 +538,6 @@ export function advance(
 
   state.timeSec = target;
   state.rngState = rng.getState();
-  events.recap = recap;
   return events;
 }
 
@@ -581,15 +577,17 @@ export function deserialize(json: string): GameState {
 /**
  * Aggregate a stretch of events into a Recap. Prefers the exact recap attached
  * by `advance` (accurate even when the raw event array was capped); falls back
- * to counting from the events for hand-assembled arrays.
+ * to counting from the events for hand-assembled arrays. Swings emit no event,
+ * so recounted boss damage covers only attempts entered within the stretch.
  */
-export function summarizeEvents(events: GameEvent[]): Recap {
-  const attached = (events as EventLog).recap;
+export function summarizeEvents(events: readonly GameEvent[]): Recap {
+  const attached = (events as Partial<EventLog>).recap;
   if (attached) return { ...attached };
 
   const recap = emptyRecap(0);
   let minTime = Infinity;
   let maxTime = -Infinity;
+  let hpAtEntry: number | null = null;
   for (const e of events) {
     if (e.timeSec < minTime) minTime = e.timeSec;
     if (e.timeSec > maxTime) maxTime = e.timeSec;
@@ -608,16 +606,25 @@ export function summarizeEvents(events: GameEvent[]): Recap {
       case 'arcCatch':
         recap.arcCatches += 1;
         recap.goldEarned += e.bonusGold;
+        recap.pendingAscendancyEarned += e.ascendancy;
         break;
       case 'zone':
+      case 'portalReady':
         recap.zonesCleared += 1;
+        recap.pendingAscendancyEarned += ascendancyPerZone(e.realm);
+        break;
+      case 'portalEnter':
+        hpAtEntry = e.bossHp;
+        break;
+      case 'abandon':
+        if (hpAtEntry !== null) recap.bossDamage += hpAtEntry - e.hpRemaining;
+        hpAtEntry = null;
         break;
       case 'bossVictory':
         recap.victories += 1;
+        if (hpAtEntry !== null) recap.bossDamage += hpAtEntry;
+        hpAtEntry = null;
         break;
-      case 'portalReady':
-      case 'portalEnter':
-      case 'abandon':
       case 'ascend':
         break;
     }
