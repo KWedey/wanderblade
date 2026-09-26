@@ -96,6 +96,7 @@ export {
   arcHitIndex,
   arcLandingX,
   arcPositionAt,
+  arcProgress,
   arcsForKill,
   arcSpeedAt,
   arcSplitCount,

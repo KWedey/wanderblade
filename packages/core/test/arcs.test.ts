@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   advance,
   arcPositionAt,
+  arcProgress,
+  arcSpeedAt,
   ARC_CATCH_MULT,
   CLOCK_MS_PER_SEC,
   clockAfter,
@@ -188,6 +190,35 @@ describe('loot arcs', () => {
 });
 
 // Position, not order, decides a catch (docs/DECISIONS.md #25).
+describe('arcProgress is the one reading of where a coin is in its flight', () => {
+  const arc: LootArc = { gold: 1, expiresAtSec: 10 + ARC_FLIGHT_SEC, landingX: 1.2, gear: null };
+
+  it('runs from 0 at launch to just under 1 at landing, and is null outside the flight', () => {
+    expect(arcProgress(arc, 10)).toBe(0);
+    expect(arcProgress(arc, 10 + ARC_FLIGHT_SEC / 2)).toBeCloseTo(0.5, 12);
+    expect(arcProgress(arc, 10 + ARC_FLIGHT_SEC - 1e-9)).toBeLessThan(1);
+    expect(arcProgress(arc, 10 - 1e-9)).toBeNull();
+    expect(arcProgress(arc, 10 + ARC_FLIGHT_SEC)).toBeNull();
+    expect(arcProgress({ ...arc, landingX: NaN }, 10.5)).toBeNull();
+  });
+
+  it('is the progress position, speed and heading all agree on', () => {
+    for (const at of [10, 10.3, 10 + ARC_FLIGHT_SEC / 2, 10 + ARC_FLIGHT_SEC - 0.01]) {
+      const p = arcProgress(arc, at);
+      expect(p).not.toBeNull();
+      expect(arcPositionAt(arc, at)).toEqual({ x: arc.landingX * p!, y: 4 * p! * (1 - p!) });
+      const dy = 4 - 8 * p!;
+      expect(arcSpeedAt(arc, at)).toBeCloseTo(Math.hypot(arc.landingX, dy) / ARC_FLIGHT_SEC, 12);
+      const heading = arcHeadingAt(arc, at)!;
+      expect(heading.y / heading.x).toBeCloseTo(dy / arc.landingX, 12);
+    }
+    const down = 10 + ARC_FLIGHT_SEC;
+    expect(arcPositionAt(arc, down)).toBeNull();
+    expect(arcSpeedAt(arc, down)).toBe(0);
+    expect(arcHeadingAt(arc, down)).toBeNull();
+  });
+});
+
 describe('a catch is a hit test, not a queue', () => {
   it('catches the arc the strike is aimed at, not the oldest one', () => {
     const s = initialState(31);

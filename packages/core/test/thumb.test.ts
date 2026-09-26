@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   advance,
   arcPositionAt,
+  arcProgress,
   ARC_CATCH_SEC,
   ARC_FLIGHT_SEC,
   arcCatchRadius,
@@ -22,10 +23,6 @@ import { roadAt } from './helpers';
 
 /** Which coin in the air the player goes for. */
 type Target = 'apex' | 'landing';
-
-function progress(arc: LootArc, atSec: number): number {
-  return 1 - (arc.expiresAtSec - atSec) / ARC_FLIGHT_SEC;
-}
 
 /**
  * ⚠️ Not actually busy. Setting `hero.level` and `zone` by hand leaves the kill
@@ -55,8 +52,8 @@ function pick(state: GameState, atSec: number, target: Target): LootArc | null {
   let best: LootArc | null = null;
   let bestScore = Infinity;
   for (const arc of state.arcs) {
-    if (!arcPositionAt(arc, atSec)) continue;
-    const p = progress(arc, atSec);
+    const p = arcProgress(arc, atSec);
+    if (p === null) continue;
     const score = target === 'apex' ? Math.abs(p - 0.5) : 1 - p;
     if (score < bestScore) {
       bestScore = score;

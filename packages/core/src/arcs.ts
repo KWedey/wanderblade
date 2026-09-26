@@ -81,12 +81,21 @@ export function arcsForKill(
   return out;
 }
 
-/** Where `arc` is at `atSec`, or null before launch and once it has landed. */
-export function arcPositionAt(arc: LootArc, atSec: number): ArcPoint | null {
-  // A save written before arcs had a reach leaves one uncatchable, never NaN.
+/**
+ * How far along its flight `arc` is at `atSec`, in [0, 1), or null before
+ * launch and once it has landed. A save written before arcs had a reach
+ * leaves one uncatchable, never NaN.
+ */
+export function arcProgress(arc: LootArc, atSec: number): number | null {
   if (!Number.isFinite(arc.landingX)) return null;
   const p = 1 - (arc.expiresAtSec - atSec) / ARC_FLIGHT_SEC;
-  if (!(p >= 0) || p >= 1) return null;
+  return p >= 0 && p < 1 ? p : null;
+}
+
+/** Where `arc` is at `atSec`, or null before launch and once it has landed. */
+export function arcPositionAt(arc: LootArc, atSec: number): ArcPoint | null {
+  const p = arcProgress(arc, atSec);
+  if (p === null) return null;
   return { x: arc.landingX * p, y: 4 * p * (1 - p) };
 }
 
@@ -95,9 +104,8 @@ export function arcPositionAt(arc: LootArc, atSec: number): ArcPoint | null {
  * the coin is down, which is also when it stops being catchable.
  */
 export function arcSpeedAt(arc: LootArc, atSec: number): number {
-  if (!Number.isFinite(arc.landingX)) return 0;
-  const p = 1 - (arc.expiresAtSec - atSec) / ARC_FLIGHT_SEC;
-  if (!(p >= 0) || p >= 1) return 0;
+  const p = arcProgress(arc, atSec);
+  if (p === null) return 0;
   const dy = 4 - 8 * p;
   return Math.sqrt(arc.landingX * arc.landingX + dy * dy) / ARC_FLIGHT_SEC;
 }
@@ -113,9 +121,8 @@ export function arcCatchRadius(arc: LootArc, atSec: number): number {
 
 /** Unit vector along `arc`'s travel at `atSec`, or null once it is down. */
 export function arcHeadingAt(arc: LootArc, atSec: number): ArcPoint | null {
-  if (!Number.isFinite(arc.landingX)) return null;
-  const p = 1 - (arc.expiresAtSec - atSec) / ARC_FLIGHT_SEC;
-  if (!(p >= 0) || p >= 1) return null;
+  const p = arcProgress(arc, atSec);
+  if (p === null) return null;
   const dx = arc.landingX / ARC_FLIGHT_SEC;
   const dy = (4 - 8 * p) / ARC_FLIGHT_SEC;
   const mag = Math.hypot(dx, dy);
