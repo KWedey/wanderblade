@@ -5,6 +5,7 @@ import type { LootArc } from '@wanderblade/core';
 import { formatNumber } from '../format';
 import type { Viewport } from './geometry';
 import type { RealmSkin } from './palette';
+import type { GroundTexture } from './road';
 import type { BakedSprite } from './sprites';
 import type { World } from './world';
 
@@ -80,6 +81,7 @@ export interface Frame {
   skin: RealmSkin;
   sprites: SceneSprites;
   world: World;
+  ground: GroundTexture;
 }
 
 // --- Tuning shared across modules --------------------------------------
