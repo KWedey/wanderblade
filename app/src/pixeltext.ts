@@ -399,11 +399,38 @@ function mountPixelText(root: ParentNode): void {
   }
 }
 
-/** Repaints every marked element under a root, tagging any that appeared. */
-export function repaintPixelText(root: ParentNode): void {
+const DIRTY = 'pxDirty';
+
+/**
+ * Flags every leaf under `root` for the next changed-only repaint. The view
+ * calls it when a class, `hidden` or `disabled` flips, because those move a
+ * leaf's colour or width without touching its text.
+ */
+export function markPixelDirty(root: Element): void {
+  if (root instanceof HTMLElement && root.dataset['px'] !== undefined) root.dataset[DIRTY] = '';
+  for (const el of root.querySelectorAll<HTMLElement>('[data-px]')) el.dataset[DIRTY] = '';
+}
+
+/**
+ * A painted leaf keeps its accessible span; assigning textContent removes it.
+ * So a leaf still carrying one, and not flagged, has nothing new to draw.
+ */
+function isClean(el: HTMLElement): boolean {
+  return el.dataset[DIRTY] === undefined && el.querySelector(`.${SR_CLASS}`) !== null;
+}
+
+/**
+ * Repaints every marked element under a root, tagging any that appeared. With
+ * `changedOnly`, leaves whose text and flags are unchanged are skipped before
+ * any style is read: measuring forty-five leaves at 10Hz was the panel's whole
+ * layout cost.
+ */
+export function repaintPixelText(root: ParentNode, changedOnly = false): void {
   const dpr = window.devicePixelRatio || 1;
   mountPixelText(root);
   for (const el of root.querySelectorAll<HTMLElement>('[data-px]')) {
+    if (changedOnly && isClean(el)) continue;
+    delete el.dataset[DIRTY];
     paintElement(el, dpr);
   }
 }

@@ -25,7 +25,7 @@ import {
 } from './format';
 import type { LogEntry } from './flavor';
 import { panelVars, realmSkin } from './scene/palette';
-import { paintElement, repaintPixelText } from './pixeltext';
+import { markPixelDirty, paintElement, repaintPixelText } from './pixeltext';
 import { createScene, type SceneModel } from './scene/scene';
 
 /**
@@ -182,6 +182,31 @@ function q<T extends HTMLElement>(root: ParentNode, selector: string): T {
   return el;
 }
 
+// Every panel write goes through one of these, so an unchanged value leaves the
+// bitmap layer in place and a changed colour input flags what it recolours.
+function setText(el: HTMLElement, value: string): void {
+  if (el.textContent === value) return;
+  el.textContent = value;
+}
+
+function setClass(el: HTMLElement, name: string, on: boolean): void {
+  if (el.classList.contains(name) === on) return;
+  el.classList.toggle(name, on);
+  markPixelDirty(el);
+}
+
+function setHidden(el: HTMLElement, hidden: boolean): void {
+  if (el.hidden === hidden) return;
+  el.hidden = hidden;
+  markPixelDirty(el);
+}
+
+function setDisabled(el: HTMLButtonElement, disabled: boolean): void {
+  if (el.disabled === disabled) return;
+  el.disabled = disabled;
+  markPixelDirty(el);
+}
+
 function skillMarkup(): string {
   return SKILL_IDS.map((id) => {
     const name = SKILLS[id]?.name ?? id;
@@ -231,7 +256,36 @@ function gearMarkup(): string {
   ).join('');
 }
 
-function template(): string {
+/**
+ * The drawer is the sound toggle for a player and the time-warp bench for a
+ * dev. Only a dev build renders the bench: a shipped client has no button
+ * that fabricates eight hours or wipes the run.
+ */
+function drawerMarkup(dev: boolean): string {
+  const mute = `<button class="debug-btn" type="button" data-role="mute" aria-pressed="false">Sound: on</button>`;
+  if (!dev) {
+    return `
+  <button class="debug-toggle" type="button" data-role="debug-toggle" aria-label="Settings" title="Settings">⚙</button>
+  <div class="debug-drawer" data-role="debug-drawer" hidden>
+    <div class="debug-title">Settings</div>
+    <div class="debug-actions">${mute}</div>
+  </div>`;
+  }
+  return `
+  <button class="debug-toggle" type="button" data-role="debug-toggle" aria-label="Debug" title="Debug: time-warp &amp; reset">⚙</button>
+  <div class="debug-drawer" data-role="debug-drawer" hidden>
+    <div class="debug-title">Debug</div>
+    <div class="debug-seed">seed <span data-role="seed">—</span></div>
+    <div class="debug-actions">
+      <button class="debug-btn" type="button" data-role="warp-1h">Time-warp +1h</button>
+      <button class="debug-btn" type="button" data-role="warp-8h">Time-warp +8h</button>
+      ${mute}
+      <button class="debug-btn danger" type="button" data-role="reset">Reset save</button>
+    </div>
+  </div>`;
+}
+
+function template(dev: boolean): string {
   return `
   <canvas class="scene" data-role="scene" aria-hidden="true"></canvas>
 
@@ -335,17 +389,7 @@ function template(): string {
 
   <div class="toast" data-role="toast" hidden></div>
 
-  <button class="debug-toggle" type="button" data-role="debug-toggle" aria-label="Debug" title="Debug: time-warp &amp; reset">⚙</button>
-  <div class="debug-drawer" data-role="debug-drawer" hidden>
-    <div class="debug-title">Debug</div>
-    <div class="debug-seed">seed <span data-role="seed">—</span></div>
-    <div class="debug-actions">
-      <button class="debug-btn" type="button" data-role="warp-1h">Time-warp +1h</button>
-      <button class="debug-btn" type="button" data-role="warp-8h">Time-warp +8h</button>
-      <button class="debug-btn" type="button" data-role="mute" aria-pressed="false">Sound: on</button>
-      <button class="debug-btn danger" type="button" data-role="reset">Reset save</button>
-    </div>
-  </div>
+${drawerMarkup(dev)}
 
   <div class="recap-overlay asc-overlay" data-role="asc" hidden>
     <div class="recap-card asc-card">
@@ -391,7 +435,8 @@ function formatLeagues(l: number): string {
 
 /** Build the view into `root` and wire user intents to `handlers`. */
 export function createView(root: HTMLElement, handlers: ViewHandlers): View {
-  root.innerHTML = template();
+  const dev = import.meta.env.DEV;
+  root.innerHTML = template(dev);
 
   const sceneCanvas = q<HTMLCanvasElement>(root, '[data-role="scene"]');
   const scene = createScene(sceneCanvas);
@@ -437,7 +482,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const heroFillEl = q(root, '[data-role="hero-fill"]');
   const heroDetailEl = q(root, '.hero-btn .upgrade-detail');
   const logEl = q<HTMLUListElement>(root, '[data-role="log"]');
-  const seedEl = q(root, '[data-role="seed"]');
+  const seedEl = root.querySelector<HTMLElement>('[data-role="seed"]');
 
   // Per-skill refs.
   const skillRefs = new Map<
@@ -513,9 +558,11 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   debugToggle.addEventListener('click', () => {
     debugDrawer.hidden = !debugDrawer.hidden;
   });
-  q(root, '[data-role="warp-1h"]').addEventListener('click', () => handlers.onTimeWarp(3600));
-  q(root, '[data-role="warp-8h"]').addEventListener('click', () => handlers.onTimeWarp(8 * 3600));
-  q(root, '[data-role="reset"]').addEventListener('click', handlers.onReset);
+  if (dev) {
+    q(root, '[data-role="warp-1h"]').addEventListener('click', () => handlers.onTimeWarp(3600));
+    q(root, '[data-role="warp-8h"]').addEventListener('click', () => handlers.onTimeWarp(8 * 3600));
+    q(root, '[data-role="reset"]').addEventListener('click', handlers.onReset);
+  }
   const muteBtn = q(root, '[data-role="mute"]');
   muteBtn.addEventListener('click', () => {
     const muted = handlers.onToggleMute();
@@ -550,7 +597,16 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     syncCollectAnchor();
   }
   syncSceneBand();
-  window.addEventListener('resize', syncSceneBand);
+  // Layout moves the band, so layout drives it: a viewport change, or the
+  // chrome growing when a panel appears. Never the paint loop, which read two
+  // rects ten times a second to learn nothing had moved.
+  function onLayout(): void {
+    syncSceneBand();
+    repaintAll();
+  }
+  window.addEventListener('resize', onLayout);
+  window.addEventListener('orientationchange', onLayout);
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(syncSceneBand).observe(chromeEl);
 
   // --- Strike input ------------------------------------------------------
   // One verb for the whole game: tap, click, or hold Space/Enter. Holding
@@ -640,6 +696,8 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   }
   q(root, '[data-role="asc-open"]').addEventListener('click', () => {
     ascOverlay.hidden = false;
+    // Closed overlays sit out layout changes, so the tree measures afresh.
+    markPixelDirty(ascOverlay);
   });
   q(root, '[data-role="asc-close"]').addEventListener('click', () => {
     ascOverlay.hidden = true;
@@ -685,23 +743,33 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     // about what is buyable or how long the wait is.
     if (canAfford) {
       fill.style.width = '100%';
-      detail.textContent = base;
+      setText(detail, base);
       return;
     }
     fill.style.width = `${(clamp01(gold / cost) * 100).toFixed(1)}%`;
-    detail.textContent = etaSec !== null ? `${base} \u00b7 in ~${formatDuration(etaSec)}` : base;
+    setText(detail, etaSec !== null ? `${base} \u00b7 in ~${formatDuration(etaSec)}` : base);
+  }
+
+  /** Every leaf, measured afresh: the answer to a viewport or pixel-ratio change. */
+  function repaintAll(): void {
+    repaintPixelText(panelRoot);
+    repaintPixelText(hudRoot);
+    if (!ascOverlay.hidden) repaintPixelText(ascOverlay);
+    if (!recapOverlay.hidden) repaintPixelText(recapOverlay);
   }
 
   function renderPanels(vm: ViewModel): void {
-    queueMicrotask(syncSceneBand);
-    regionEl.textContent = vm.regionName;
-    zoneEl.textContent = vm.boss
-      ? 'In the Portal'
-      : vm.portal
-        ? 'Portal reached'
-        : `Zone ${vm.zoneInRegion}/${vm.zonesPerRegion}`;
-    leaguesEl.textContent = `${formatLeagues(vm.leagues)} leagues`;
-    dpsEl.textContent = formatNumber(vm.dps);
+    setText(regionEl, vm.regionName);
+    setText(
+      zoneEl,
+      vm.boss
+        ? 'In the Portal'
+        : vm.portal
+          ? 'Portal reached'
+          : `Zone ${vm.zoneInRegion}/${vm.zonesPerRegion}`,
+    );
+    setText(leaguesEl, `${formatLeagues(vm.leagues)} leagues`);
+    setText(dpsEl, formatNumber(vm.dps));
     if (vm.dps > lastDps && lastDps >= 0) {
       // Restart the punch even if it's mid-flight (rapid purchases).
       dpsEl.classList.remove('punch');
@@ -710,65 +778,65 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     }
     lastDps = vm.dps;
 
-    goldRateEl.textContent = formatRate(vm.goldPerSec);
-    goalMarchTextEl.textContent = vm.marchGoal;
+    setText(goldRateEl, formatRate(vm.goldPerSec));
+    setText(goalMarchTextEl, vm.marchGoal);
     goalFillEl.style.width = `${(vm.marchProgress * 100).toFixed(1)}%`;
     // The bar is decoration; the chip carries the reading for a screen reader.
     goalMarchEl.setAttribute('aria-label', `${vm.marchGoal}, ${formatPercent(vm.marchProgress)}`);
-    goalPurchaseEl.textContent = vm.purchaseGoal;
-    goalPurchaseEl.classList.toggle('ready', vm.purchaseReady);
+    setText(goalPurchaseEl, vm.purchaseGoal);
+    setClass(goalPurchaseEl, 'ready', vm.purchaseReady);
 
     // Portal / boss. One panel, two states — the hero is in exactly one phase.
     const stage = vm.boss ?? vm.portal;
-    portalPanelEl.hidden = stage === null;
-    portalPanelEl.classList.toggle('committed', vm.boss !== null);
+    setHidden(portalPanelEl, stage === null);
+    setClass(portalPanelEl, 'committed', vm.boss !== null);
     if (stage) {
-      portalNameEl.textContent = stage.guardian;
-      portalEtaEl.textContent = formatDuration(stage.etaSec);
+      setText(portalNameEl, stage.guardian);
+      setText(portalEtaEl, formatDuration(stage.etaSec));
     }
 
-    portalRefusalEl.hidden = vm.refusal === null;
-    if (vm.refusal) portalRefusalEl.textContent = vm.refusal;
+    setHidden(portalRefusalEl, vm.refusal === null);
+    if (vm.refusal) setText(portalRefusalEl, vm.refusal);
 
-    bossHpEl.hidden = vm.boss === null;
-    bossLiveEl.hidden = vm.boss === null;
-    enterPortalBtn.hidden = vm.boss !== null;
+    setHidden(bossHpEl, vm.boss === null);
+    setHidden(bossLiveEl, vm.boss === null);
+    setHidden(enterPortalBtn, vm.boss !== null);
 
     if (vm.boss) {
-      portalEyebrowEl.textContent = 'Guardian';
+      setText(portalEyebrowEl, 'Guardian');
       // The preview is priced at sustained momentum and the fight at the
       // hero's actual pace, so the same guardian quotes a longer time the
       // instant you commit. Label both: the jump is the tapping, and a number
       // that worsens on an irreversible step has to say why on its own.
-      portalEtaLabelEl.textContent = 'At this pace';
-      portalNoteLabelEl.textContent = 'Remaining';
-      portalNoteEl.textContent = formatNumber(vm.boss.hpRemaining);
+      setText(portalEtaLabelEl, 'At this pace');
+      setText(portalNoteLabelEl, 'Remaining');
+      setText(portalNoteEl, formatNumber(vm.boss.hpRemaining));
       const frac = vm.boss.hpMax > 0 ? vm.boss.hpRemaining / vm.boss.hpMax : 0;
       bossHpFillEl.style.transform = `scaleX(${Math.min(1, Math.max(0, frac))})`;
-      bossHpLabelEl.textContent = formatPercent(frac);
+      setText(bossHpLabelEl, formatPercent(frac));
     } else if (vm.portal) {
-      portalEyebrowEl.textContent = 'The Portal Stands Open';
-      portalEtaLabelEl.textContent = 'Blade in hand';
-      portalNoteLabelEl.textContent = 'On victory';
-      portalNoteEl.textContent = 'The realm ascends';
+      setText(portalEyebrowEl, 'The Portal Stands Open');
+      setText(portalEtaLabelEl, 'Blade in hand');
+      setText(portalNoteLabelEl, 'On victory');
+      setText(portalNoteEl, 'The realm ascends');
     }
 
     const showFail = vm.bossResult === 'fail';
-    bossBannerEl.hidden = !showFail;
-    if (showFail) bossBannerEl.textContent = 'The guardian holds. Return stronger.';
+    setHidden(bossBannerEl, !showFail);
+    if (showFail) setText(bossBannerEl, 'The guardian holds. Return stronger.');
 
     // Victory toast (the gate panel is gone by the time a win lands).
     const showWin = vm.bossResult === 'win';
-    toastEl.hidden = !showWin;
-    if (showWin) toastEl.textContent = 'Victory! The gate opens.';
+    setHidden(toastEl, !showWin);
+    if (showWin) setText(toastEl, 'Victory! The gate opens.');
 
     // Hero level — the button names the level being BOUGHT (the reward),
     // matching the goal chip's "Hero Lv N" framing.
-    heroLevelEl.textContent = `Hero Lv ${vm.heroLevel + 1}`;
-    heroCostEl.textContent = `${formatNumber(vm.levelCost)} G`;
-    heroBtn.disabled = !vm.canAffordLevel;
-    heroBtn.classList.toggle('affordable', vm.canAffordLevel);
-    heroBtn.classList.toggle('best', vm.bestBuy?.id === 'hero');
+    setText(heroLevelEl, `Hero Lv ${vm.heroLevel + 1}`);
+    setText(heroCostEl, `${formatNumber(vm.levelCost)} G`);
+    setDisabled(heroBtn, !vm.canAffordLevel);
+    setClass(heroBtn, 'affordable', vm.canAffordLevel);
+    setClass(heroBtn, 'best', vm.bestBuy?.id === 'hero');
     showReach(
       heroFillEl,
       heroDetailEl,
@@ -783,27 +851,30 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     for (const skill of vm.skills) {
       const refs = skillRefs.get(skill.id);
       if (!refs) continue;
-      refs.btn.classList.toggle('best', vm.bestBuy?.id === skill.id);
+      setClass(refs.btn, 'best', vm.bestBuy?.id === skill.id);
       if (!skill.unlocked) {
-        refs.detail.textContent = `Unlocks at Level ${skill.unlockLevel}`;
-        refs.cost.textContent = '';
-        refs.btn.disabled = true;
-        refs.btn.classList.remove('affordable', 'maxed');
-        refs.btn.classList.add('locked');
+        setText(refs.detail, `Unlocks at Level ${skill.unlockLevel}`);
+        setText(refs.cost, '');
+        setDisabled(refs.btn, true);
+        setClass(refs.btn, 'affordable', false);
+        setClass(refs.btn, 'maxed', false);
+        setClass(refs.btn, 'locked', true);
         refs.fill.style.width = '0';
       } else if (skill.atMax) {
         // Bounded multiplier reached its cap: show MAX, hide the cost, no buy.
-        refs.detail.textContent = `Level ${skill.level} · MAX`;
-        refs.cost.textContent = '';
-        refs.btn.disabled = true;
-        refs.btn.classList.remove('affordable', 'locked');
-        refs.btn.classList.add('maxed');
+        setText(refs.detail, `Level ${skill.level} · MAX`);
+        setText(refs.cost, '');
+        setDisabled(refs.btn, true);
+        setClass(refs.btn, 'affordable', false);
+        setClass(refs.btn, 'locked', false);
+        setClass(refs.btn, 'maxed', true);
         refs.fill.style.width = '0';
       } else {
-        refs.cost.textContent = `${formatNumber(skill.cost)} G`;
-        refs.btn.disabled = !skill.canAfford;
-        refs.btn.classList.toggle('affordable', skill.canAfford);
-        refs.btn.classList.remove('locked', 'maxed');
+        setText(refs.cost, `${formatNumber(skill.cost)} G`);
+        setDisabled(refs.btn, !skill.canAfford);
+        setClass(refs.btn, 'affordable', skill.canAfford);
+        setClass(refs.btn, 'locked', false);
+        setClass(refs.btn, 'maxed', false);
         showReach(
           refs.fill,
           refs.detail,
@@ -820,12 +891,12 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     // this only draws the winner and routes the tap to the same handler the
     // marked row uses.
     const best = vm.bestBuy;
-    bestBuyBtn.hidden = best === null;
+    setHidden(bestBuyBtn, best === null);
     if (best) {
       bestBuyBtn.dataset['buy'] = best.id;
-      bestBuyNameEl.textContent = best.name === 'Hero Level' ? `Hero Lv ${vm.heroLevel + 1}` : best.name;
-      bestBuyGainEl.textContent = `+${formatNumber(best.dpsGain)} DPS`;
-      bestBuyCostEl.textContent = `${formatNumber(best.cost)} G`;
+      setText(bestBuyNameEl, best.name === 'Hero Level' ? `Hero Lv ${vm.heroLevel + 1}` : best.name);
+      setText(bestBuyGainEl, `+${formatNumber(best.dpsGain)} DPS`);
+      setText(bestBuyCostEl, `${formatNumber(best.cost)} G`);
     }
 
     // Gear.
@@ -833,26 +904,22 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
       const refs = gearRefs.get(slot);
       if (!refs) continue;
       const item = vm.gear[slot];
-      refs.slot.classList.remove(
-        'rarity-common',
-        'rarity-uncommon',
-        'rarity-rare',
-        'rarity-epic',
-        'filled',
-      );
+      for (const cls of Object.values(RARITY_CLASS)) {
+        setClass(refs.slot, cls, item !== null && cls === RARITY_CLASS[item.rarity]);
+      }
+      setClass(refs.slot, 'filled', item !== null);
       if (item) {
-        refs.name.textContent = item.name;
-        refs.power.textContent = `power ${formatNumber(item.power)}`;
-        refs.slot.classList.add(RARITY_CLASS[item.rarity], 'filled');
+        setText(refs.name, item.name);
+        setText(refs.power, `power ${formatNumber(item.power)}`);
       } else {
-        refs.name.textContent = '—';
-        refs.power.textContent = 'empty';
+        setText(refs.name, '—');
+        setText(refs.power, 'empty');
       }
     }
     renderAscendancy(vm.ascendancy);
-    repaintPixelText(panelRoot);
-    repaintPixelText(hudRoot);
-    if (!ascOverlay.hidden) repaintPixelText(ascOverlay);
+    repaintPixelText(panelRoot, true);
+    repaintPixelText(hudRoot, true);
+    if (!ascOverlay.hidden) repaintPixelText(ascOverlay, true);
   }
 
   // Per-frame path: only touch the DOM when the rendered string/scale actually
@@ -929,29 +996,31 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   function renderAscendancy(asc: AscendancyVM): void {
     // Real text, not a ::after. The bitmap layer reads textContent, so a
     // pseudo-element's mark stayed webfont and printed over the number.
-    ascOpenBank.textContent = `${formatNumber(asc.banked)} A`;
-    ascBanked.textContent = formatNumber(asc.banked);
-    ascPending.textContent = formatNumber(asc.pending);
-    ascVictories.textContent = formatNumber(asc.victories);
-    ascEarnings.textContent = `${asc.earningsMult.toFixed(2)}x`;
+    setText(ascOpenBank, `${formatNumber(asc.banked)} A`);
+    setText(ascBanked, formatNumber(asc.banked));
+    setText(ascPending, formatNumber(asc.pending));
+    setText(ascVictories, formatNumber(asc.victories));
+    setText(ascEarnings, `${asc.earningsMult.toFixed(2)}x`);
     for (const node of asc.nodes) {
       const els = ascNodeEls.get(node.id);
       if (!els) continue;
       // Rank and the multiplier it already bought, so a node reads as a thing
       // that did something rather than as a price with a name on it.
       const effect = ASC_EFFECT_LABEL[node.effect] ?? node.effect;
-      els.detail.textContent =
+      setText(
+        els.detail,
         node.rank > 0
           ? `${effect} - rank ${node.rank}, ${node.multiplier.toFixed(2)}x`
-          : `${effect} - not yet`;
-      els.cost.textContent = `${formatNumber(node.cost)} a`;
-      els.btn.classList.toggle('affordable', node.canAfford);
-      els.btn.disabled = !node.canAfford;
+          : `${effect} - not yet`,
+      );
+      setText(els.cost, `${formatNumber(node.cost)} a`);
+      setClass(els.btn, 'affordable', node.canAfford);
+      setDisabled(els.btn, !node.canAfford);
     }
   }
 
   function setSeed(seed: number): void {
-    seedEl.textContent = String(seed);
+    if (seedEl) seedEl.textContent = String(seed);
   }
 
   return {
