@@ -176,6 +176,14 @@ describe('drawFence marches posts at a fixed pitch with two continuous rails bet
     for (let i = 1; i < upper.length; i++) expect(upper[i]!.x).toBe(upper[i - 1]!.x + upper[i - 1]!.w);
   });
 
+  it('paints every rail in bark, not in whatever tone the shadow before it left behind', () => {
+    const { f, calls } = frame();
+    drawFence(f);
+    const rails = calls.filter((c) => c.op === 'fillRect' && c.w === pitch);
+    expect(rails.length).toBeGreaterThan(2);
+    for (const r of rails) expect(r.style).toBe(f.skin.bark);
+  });
+
   it('slides every post and rail by the ground scroll, so the fence moves with the road', () => {
     const still = frame();
     drawFence(still.f);

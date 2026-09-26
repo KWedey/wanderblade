@@ -2,21 +2,21 @@
 
 exports[`scene frames are pixel-identical across refactors > dungeon: the guardian walks out of its portal and is struck (landscape) 1`] = `
 {
-  "calls": 181440,
-  "sha256": "bf1848862628d77548cfe90d8c4ad0f28ffdd5cf87ad888ecf5fc0e6c2982673",
+  "calls": 181476,
+  "sha256": "04321712c732f55b5f36f63e8cbc9b004fbc6ad106d99f52bb1a97709a061a62",
 }
 `;
 
 exports[`scene frames are pixel-identical across refactors > reduce-motion road in portrait, with chrome above the band 1`] = `
 {
-  "calls": 627271,
-  "sha256": "f695f63328051f9412e73cc1f1fc5c55f8fb2901a2377d90ee831ae110aff2f3",
+  "calls": 627411,
+  "sha256": "946dba9ddf98a771e6383043c684f5039e4841f54adce2d6b4f46dae5577caa5",
 }
 `;
 
 exports[`scene frames are pixel-identical across refactors > road, mid-swing, with a strike, a catch and coins in flight (landscape, docked panel) 1`] = `
 {
-  "calls": 727756,
-  "sha256": "d5fc20ebc572feb9fed81795fd317ac074d1aee436f15cffc1e081745fd349f1",
+  "calls": 728038,
+  "sha256": "ffd004fa56afe5bdbb5405f39d78f3d36e6be4ad2341f53997f535daaa8045c1",
 }
 `;

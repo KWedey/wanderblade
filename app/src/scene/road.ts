@@ -629,9 +629,9 @@ export function drawFence(f: Frame): void {
   const sprites = f.sprites.skinned;
   const offset = wrap(world.scrollGround, FENCE_PITCH);
   const railY = view.groundY - 8;
-  ctx.fillStyle = skin.bark;
   for (let x = -FENCE_PITCH; x < view.vw + FENCE_PITCH; x += FENCE_PITCH) {
     const px = Math.floor(x - offset);
+    ctx.fillStyle = skin.bark;
     ctx.fillRect(px, railY, FENCE_PITCH, 1);
     ctx.fillRect(px, railY + 4, FENCE_PITCH, 1);
     drawShadow(f, px, sprites.fence.width + 2);
