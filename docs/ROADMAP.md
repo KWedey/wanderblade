@@ -1,6 +1,8 @@
 # Wanderblade — Roadmap
 
-**Current milestone: M1R — Active-Forward Realm Rebaseline.** The July grey-box work proved the deterministic engine and basic UI. The August design pivot replaces short optional-active check-ins, readiness gates, and voluntary New Roads with an active-forward Road → Portal Boss → Ascension structure.
+**Current milestone: M3 phone playtests, then M4 collections and content.** The Road → Portal Boss → Ascension loop is built end to end in core, sim, and client (ADRs #14–#61). What remains before M4 is evidence from real phones and the save-migration chain.
+
+Box legend: `[x]` done, `[~]` partly done with the gap named, `[ ]` not started.
 
 ## Completed foundation
 
@@ -27,7 +29,7 @@ The M0 evidence remains valuable for determinism and simulator architecture. Its
 
 The former Phase 3–5 sequence is superseded. The scene renderer remains useful, but the old Rally/Glints/Discoveries bundle is no longer the assumed active layer.
 
-## M1R — Active-Forward Realm Rebaseline *(current)*
+## M1R — Active-Forward Realm Rebaseline *(design mostly landed; M1R.2 session arc still open)*
 
 ### M1R.1 — Product and documentation contract
 
@@ -40,7 +42,7 @@ The former Phase 3–5 sequence is superseded. The scene renderer remains useful
 
 **Exit:** the repository describes one coherent current game and clearly labels the old economy as historical.
 
-### M1R.2 — Active-play design and pacing bands *(next)*
+### M1R.2 — Active-play design and pacing bands *(one item open)*
 
 - [ ] Design the 15–30-minute Road session arc and compare 2–3 mechanic sets
 - [ ] Design portal-boss tapping, cap/decay, feedback, and an accessibility-equivalent input
@@ -75,31 +77,31 @@ The former Phase 3–5 sequence is superseded. The scene renderer remains useful
 
 **Exit:** the minimal authoritative core and the new economy—not the legacy M0 economy—have passing evidence.
 
-## M2 — Persistence and client integration
+## M2 — Persistence and client integration *(complete except save migration)*
 
-- [ ] Harden the core state model and public actions for client consumption
-- [ ] Version and migrate the save schema; preserve partial boss progress across close/reload
-- [ ] Integrate manual portal entry, active boss inputs, abandonment, and atomic/idempotent victory into the controller
-- [ ] Integrate realm reset, pending-to-banked Ascendancy, tree state, and earnings bonuses
-- [ ] Complete serialization, recap, controller, and migration coverage around the state machine
+- [x] Harden the core state model and public actions for client consumption — `enterPortal`, `abandonBoss`, `buyAscendancyNode` on the public index
+- [~] Version and migrate the save schema; preserve partial boss progress across close/reload — **in progress.** The envelope is versioned and boss progress survives reload; a migration chain is landing on a separate branch
+- [x] Integrate manual portal entry, active boss inputs, abandonment, and atomic/idempotent victory into the controller — `app/src/game.ts`, `hold.ts`, `active.ts`
+- [x] Integrate realm reset, pending-to-banked Ascendancy, tree state, and earnings bonuses — `packages/core/src/engine.ts` ascension path
+- [~] Complete serialization, recap, controller, and migration coverage around the state machine — serialize, save, game and recap tests exist; migration coverage lands with the chain above
 
 **Exit:** core, simulator, save, and controller tests prove the full Road → Boss → Ascension lifecycle before UI polish.
 
-## M3 — Active Road and portal-boss client
+## M3 — Active Road and portal-boss client *(current — built; phone playtests outstanding)*
 
-- [ ] Build the Road diorama scene spine with SRD-verified placeholder monster roster
-- [ ] Implement the approved active Road mechanics and session feedback
-- [ ] Build portal preview, committed boss screen, attack-speed interaction, and protected Abandon flow
-- [ ] Build road-return and boss-damage offline recaps
-- [ ] Surface pending/banked Ascendancy, ascension summary, earnings bonus, and tree purchases
-- [ ] Conduct real-phone playtests for 15-, 20-, and 30-minute sessions plus overnight returns
+- [x] Build the Road diorama scene spine with SRD-verified placeholder monster roster — `app/src/scene/`, 35 named species plus a fallback in `app/src/species.ts`
+- [x] Implement the approved active Road mechanics and session feedback — momentum, loot arcs, `feel.ts` audio/haptics, `scene/fx.ts`
+- [x] Build portal preview, committed boss screen, attack-speed interaction, and protected Abandon flow — dungeon view (ADR #58–#61), hold-to-abandon in `view.ts`
+- [x] Build road-return and boss-damage offline recaps — `recap` on the event array, rendered by `view.ts`
+- [x] Surface pending/banked Ascendancy, ascension summary, earnings bonus, and tree purchases — Ascendancy panel in `view.ts`
+- [ ] Conduct real-phone playtests for 15-, 20-, and 30-minute sessions plus overnight returns — **no playtest record exists**
 
 **Exit:** active play is fun and materially valuable; idle returns and multi-hour bosses still feel worthwhile.
 
-## M4 — Collections, realms, and content
+## M4 — Collections, realms, and content *(next; provenance done)*
 
-- [ ] Bestiary, gear-set records, realm stars, and boss trophies
-- [ ] SRD provenance roster, required CC-BY-4.0 attribution/NOTICE, and content review
+- [~] Bestiary, gear-set records, realm stars, and boss trophies — core counts species kills, gear found, zones cleared and trophies in `collection`; **no Collection UI yet**
+- [x] SRD provenance roster, required CC-BY-4.0 attribution/NOTICE, and content review — `docs/SRD-CONTENT.md`, `THIRD_PARTY_NOTICES.md`, ADR #49
 - [ ] Original realm, portal, monster, gear, and boss presentation through the v1 finale
 - [ ] Collection cadence added to the simulator and retention evaluated in playtests
 - [ ] Revisit future companions only after the solo-hero loop is proven; no v1 party commitment

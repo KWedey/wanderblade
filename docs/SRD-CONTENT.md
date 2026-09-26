@@ -33,15 +33,37 @@ Do not add other Wizards, D&D, or affiliate attribution or compatibility claims 
 
 This initial roster records the three monster families explicitly selected during the August 2026 direction review. It authorizes only the listed adapted elements; production variants still require original Wanderblade treatment.
 
+| Wanderblade use | Shipped? | SRD 5.2.1 source | Adapted elements | Original Wanderblade elements required |
+|---|---|---|---|---|
+| Goblin family | **No** — listed, not in `app/src/species.ts` | Goblin Warrior, p. 290; Goblin Minion and Goblin Boss, p. 290 | Names and recognizable goblin archetype | Art, animation, stats, abilities, drops, groups, lore |
+| Gnoll family | **No** — listed, not in `app/src/species.ts` | Gnoll Warrior, p. 289 | Name and recognizable gnoll archetype | Art, animation, stats, abilities, drops, groups, lore |
+| Dragon portal guardians | **No** — the portal guardian is an unnamed silhouette, not a dragon | Dragon stat blocks, pp. 263–341; exact color/age entry must be recorded when selected | Dragon names and recognizable dragon archetype | Art, animation, boss mechanics, HP/DPS tuning, rewards, portal and realm lore |
+
+**Ridge Dragon — shipped, recorded here.** The Dragon Peaks roster ships a road creature named *Ridge Dragon* (`app/src/species.ts`, drawn on the golem silhouette in crimson). It is **not** a portal guardian and adopts **no SRD colour/age entry**.
+
 | Wanderblade use | SRD 5.2.1 source | Adapted elements | Original Wanderblade elements required |
 |---|---|---|---|
-| Goblin family | Goblin Warrior, p. 290; Goblin Minion and Goblin Boss, p. 290 | Names and recognizable goblin archetype | Art, animation, stats, abilities, drops, groups, lore |
-| Gnoll family | Gnoll Warrior, p. 289 | Name and recognizable gnoll archetype | Art, animation, stats, abilities, drops, groups, lore |
-| Dragon portal guardians | Dragon stat blocks, pp. 263–341; exact color/age entry must be recorded when selected | Dragon names and recognizable dragon archetype | Art, animation, boss mechanics, HP/DPS tuning, rewards, portal and realm lore |
+| Ridge Dragon | None adopted. SRD dragons are all colour + age entries (e.g. Black Dragon Wyrmling, p. 263); "dragon" alone is generic folklore predating D&D | Base word only, as folklore | "Ridge" modifier, art, animation, stats, abilities, drops, lore |
 
 ## Provenance roster — shipped creature names using an SRD/folklore base word
 
-The shipped roster (`app/src/species.ts`) carries 18 names beyond the three families above whose base word also names, or resembles, an SRD 5.2.1 monster. This section records provenance for each, per rule 2. `docs/DECISIONS.md` #49 records the review that produced this table; `.omc/blockers/srd-monster-name-provenance.md` records the licensing analysis behind it (SRD 5.2.1 is CC-BY-4.0 — using its names with attribution is permitted, so this is a provenance-recording exercise, not a rename).
+The shipped roster (`app/src/species.ts`) carries 18 names beyond the three families above whose base word also names, or resembles, an SRD 5.2.1 monster. This section records provenance for each, per rule 2. `docs/DECISIONS.md` #49 records the review that produced this table; the licensing reasoning is in "Why the names stay" below.
+
+### Why the names stay
+
+The analysis behind #49 was first written to a gitignored scratch file and lost. This is it, reconstructed from the roster and `THIRD_PARTY_NOTICES.md`.
+
+- SRD 5.2.1 is CC-BY-4.0. Using its monster names is licensed, on one condition: attribution.
+- The attribution is shipped in `THIRD_PARTY_NOTICES.md` and repeated above. The condition is met.
+- The gap rule 2 flagged was process, not licence. The names were adopted before their source was written down.
+- Renaming would touch player-visible strings, Bestiary records, and saves, and buy nothing the licence does not already grant.
+- So the fix is a record, not a rename. The two tables below are that record.
+
+| Option considered | Cost | Chosen |
+|---|---|---|
+| A. Record provenance, keep every name | One doc table | **Yes** |
+| B. Rename the 18 to non-SRD words | Strings, collection records, save compatibility | No |
+| C. Drop the names and re-roster | All of B plus art and palette rework | No |
 
 Every SRD entry and page below was verified against the official artifact — `https://media.dndbeyond.com/compendium-images/srd/5.2/SRD_CC_v5.2.1.pdf` — by text search, not by memory or a third-party index.
 

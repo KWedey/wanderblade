@@ -10,9 +10,9 @@ The target rhythm is one or two enjoyable 15–30-minute active sessions per day
 
 - **M0/M1a foundation:** implemented — deterministic auto-combat, gold, loot, levels, gear, skills, save/load, offline recap, and the economy simulator.
 - **M1b HUD:** implemented — living counters, goal feedback, and Pixel & Parchment styling.
-- **M1R active-forward rebaseline:** documented — Road → Portal Boss → Ascension, pending/banked Ascendancy, reset/persistence rules, SRD 5.2.1 boundary, and a gated implementation plan.
-- **Current playable build:** still uses the legacy readiness-gate and auto-challenge prototype. Those mechanics are retained temporarily as implementation history and are superseded by Decisions #14–#18.
-- **Next:** active-play design and numeric pacing bands, followed by core/simulator rebaselining. See `docs/ROADMAP.md`.
+- **M1R active-forward rebaseline:** implemented — Road → Portal Boss → Ascension in core, sim, and client; pending/banked Ascendancy; SRD 5.2.1 boundary. The readiness-gate prototype is gone (Decisions #14–#18).
+- **M2 persistence and M3 client:** built — dungeon boss view, momentum and loot arcs, recaps, Ascendancy panel. Save migration chain and real-phone playtests are the open items.
+- **Next:** real-phone playtests (M3), then collections and content (M4). See `docs/ROADMAP.md`.
 
 ## Quickstart
 
@@ -20,7 +20,7 @@ The target rhythm is one or two enjoyable 15–30-minute active sessions per day
 npm install
 npm run dev            # run the current prototype at http://localhost:5173
 npm run dev -- --host  # expose it on the LAN for phone testing
-npm run sim            # run the historical M0 gate-economy simulator
+npm run sim            # economy simulator: 3 seeds x 14 days, prints PASS/FAIL per band
 npm run verify         # the gate: lint + typecheck + test
 npm test               # test suite across core, simulator, and app
 npm run typecheck      # strict TypeScript across all workspaces
@@ -32,12 +32,14 @@ Requires Node ≥ 20.
 
 ## Current prototype walkthrough
 
-The playable app has not yet implemented the approved redesign. To inspect the existing foundation:
+To play the loop end to end:
 
-1. Run `npm run dev` and watch deterministic auto-combat, gold, DPS, gear, and zone events.
-2. Buy hero levels and bounded skill ranks.
-3. Use the debug time warp to exercise offline reconciliation and the return recap.
-4. Inspect the legacy Readiness/Challenge gate knowing it will be replaced by the persistent portal-boss state.
+1. Run `npm run dev`, then tap or press Space to Strike. Momentum speeds the swing; catching a thrown coin pays extra.
+2. Buy hero levels, skills, and gear until the Road reaches its portal.
+3. Enter the portal. The guardian keeps its wounds offline; hold the Abandon button to walk away.
+4. Win to ascend: the realm resets, Ascendancy banks, and the tree opens.
+5. Use the debug time warp (gear icon) to exercise offline reconciliation and the return recap.
+6. Add `?stage=mid&seed=7` to the URL to start deep into a run.
 
 ## Layout
 

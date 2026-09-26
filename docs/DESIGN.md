@@ -156,12 +156,22 @@ Boss HP reaching zero triggers one atomic ascension transaction:
 ## Screens
 
 1. **Road** — diorama, hero, road encounters, gold, pending Ascendancy, temporary upgrades, and the manual portal-entry flow.
-2. **Portal Boss** — persistent boss combat, HP/duration feedback, tapping interaction, and Abandon action.
+2. **Portal Boss (the dungeon)** — an enclosed stone room with one guardian filling it (DECISIONS.md #58–#61). One HP bar, hero DPS, time remaining, the same Strike as the Road, and a hold-to-abandon button that fills before it fires.
 3. **Hero** — current realm level, gear, temporary skills, and persistent Ascendancy unlocks.
 4. **Collection** — Bestiary, gear-set records, realm stars, and boss trophies.
 5. **World** — completed realms, current realm, threatened settlements, next portal, banked Ascendancy, and the Ascendancy tree.
 6. **Return recap** — road earnings while away or boss damage dealt while away; never claims road income during boss combat.
-7. **World's Edge** — the state at the end of the realm ladder. Specified below.
+7. **Ascendancy** — a panel opened from the Road: pending and banked Ascendancy, the three tree nodes with rank and price, and the realm earnings bonus (DECISIONS.md #16, #27). Purchases are the only persistent combat power (guardrail 8).
+8. **World's Edge** — the state at the end of the realm ladder. Specified below.
+
+### Client mechanics decided outside this document
+
+| Mechanic | What it does | Where it is decided |
+|---|---|---|
+| Hold-to-autostrike aim (`app/src/hold.ts`) | A held thumb strikes at the cap rate. Sliding onto a coin aims at it; a keyboard hold aims at nothing | DECISIONS.md #19, #25 |
+| Feel (`app/src/feel.ts`) | Every hit, catch and purchase has a synthesized sound and a haptic pulse. No audio files; fed only by engine events | DECISIONS.md #12 |
+| Dev staging (`app/src/devstage.ts`) | `?stage=fresh\|mid\|late&seed=n` advances real engine time so a capture shows a deep run. Never writes a display value | DECISIONS.md #12; `tools/qa/README.md` |
+| Thumb harness (`npm run thumb`) | Models a late, loose human thumb against core and reports catch rate and aimed-coin share per latency | DECISIONS.md #43, #47 |
 
 ### World's Edge — the state at realm 300
 

@@ -364,6 +364,8 @@ It is a **hump**: a trough near day 10, a peak near day 30, then a slow decline 
 
 `sim/test/sim.test.ts` pins all four cases: in-band passes, out-of-band fails, a short run leaves the ratio unbanded and says so, and a short run still fails on a weak sooner-clause so it cannot pass vacuously.
 
+**Superseded by #48** — the fixed 14-day checkpoint stands, but P10 is not banded past content end (day 76).
+
 ## 40. A gear slot is worth a different amount — 2026-08-26
 
 **Decision:** `gearPower` takes the slot: `gearPower(realm, z, rarity, slot)`, multiplied by `SLOT_POWER` — **weapon 1.15, armor 1.00, trinket 0.85**. The table sums to exactly `GEAR_SLOTS.length`, so a matched kit is worth precisely what it was unweighted. This is the #37 pattern — a mean-1 multiplier table, no RNG draw, no band moves.
@@ -563,6 +565,8 @@ The last row is the whole problem in one line: **sloppy aim scores 19% where per
 
 **One implementation note worth keeping.** The caught coin is identified by matching `bonusGold`, not by splitting the advance around the strike. `advance` skips a strike stamped exactly at its start, so stopping the clock on the strike instant silently drops it and every catch rate reads zero. Coin shares are spread per-coin (#44), so the match is near-unique — acceptable for a reported number, never for an assertion.
 
+**Correction (2026-09-25):** two cross-references above point at the wrong ADRs. "The ellipse of #45" is the ellipse of **#50**; "#45" is the log-wrapping decision. "Spread per-coin (#44)" is the coin-value spread of **#46**. The text is left as written.
+
 ## 48. Content end is day 76, and no ratio past it measures pacing — 2026-08-26
 
 **Decision:** The realm-300 ceiling of #34 has a date: a steady active player reaches it on **day 74.8–78.9**, an idle player on **day 91.5–92.1**. No economy constant moves. The sim now labels content end wherever a horizon number is printed beside it, because a bare ratio taken past that point reads as a pacing failure and is not one.
@@ -628,6 +632,8 @@ The hump survives, and day 14 sits in band on both. **This is not a controlled c
 **The ceiling was already pinned, and that is what makes this safe.** `packages/core/test/magnitude.test.ts:136` asserts the first non-finite realm is exactly 301, and `:192` asserts realm 300 opens while 301, 302, 400 and 5000 refuse with `'unwinnable'` and leave the Road untouched. A growth constant that drags the frontier toward reachable realms fails there. This ADR adds the player-time reading those tests do not carry; it does not add a second copy of them.
 
 
+**Correction (2026-09-25):** the `sim/src/probes.ts` line numbers cited above have moved. `PERMANENT_HORIZON_SEC` is now at `:289` and the `measuredAtSec` clamp at `:493`. Grep for the names rather than trusting a line.
+
 ## 49. Provenance recorded, not renamed — the 18 folklore-adjacent names stay — 2026-08-26
 
 **Decision:** `docs/SRD-CONTENT.md` now records provenance for the 18 shipped creature names (`app/src/species.ts`) whose base word also names, or resembles, an SRD 5.2.1 monster — option A of `.omc/blockers/srd-monster-name-provenance.md`, approved by Kyle. No name changes, no code changes, no player-visible strings touched.
@@ -645,6 +651,8 @@ The hump survives, and day 14 sits in band on both. **This is not a controlled c
 Four base words — Wyrm, Drake, Revenant, Behemoth — do not appear anywhere in the SRD 5.2.1 text at all (confirmed by full-document search, not just its index), and each is a documented pre-D&D word (Old English/Norse "wyrm," archaic English "drake," gothic-literature "revenant," biblical "behemoth"). Compounds where only the base word is the SRD or folklore term ("Iron Kobold" → kobold) record the base word only; the modifier is original Wanderblade and is never claimed as adapted.
 
 **Count correction.** The task named "17 names"; the list it enumerated, and the actual matching set in `species.ts`, is 18 — Star Wraith and Ember Wraith are two names sharing one SRD base word. All 18 are in the roster, not 17.
+**Correction (2026-09-25):** `.omc/blockers/srd-monster-name-provenance.md` was never committed (`.omc/` is gitignored) and no copy exists. The licensing analysis it held is now written into `docs/SRD-CONTENT.md` §Why the names stay.
+
 ## 50. The catch window separates being late from aiming badly — 2026-08-26
 
 **Decision:** `ARC_CATCH_SEC` 0.14 → **0.30** (along the coin's path) and a new `ARC_CATCH_PERP` = **0.10** (across it). `arcHitIndex` scores an ellipse aligned to `arcHeadingAt` instead of a circle.

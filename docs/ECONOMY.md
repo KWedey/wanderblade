@@ -168,11 +168,20 @@ The current code still implements the M0/M1a economy until the redesign is built
 
 The legacy simulator passed its six 10-day M0 validators across three seeds. That evidence proves the old deterministic engine and gate economy met their old targets; it does not justify carrying readiness bosses, auto-challenge, gate farming, the old Legend curve, or short-check-in validators into the redesigned game.
 
-## Required follow-up decisions
+## Follow-up decisions — all decided
 
-- Active road mechanics and numeric active-versus-idle bands.
-- Boss tap cap, decay/cadence, multitouch policy, and non-tapping accessibility input.
-- Realm length, portal-availability conditions, boss HP curves, and expected duration bands.
-- Pending-Ascendancy accrual, portal-ready overfarming controls, boss payout, and tree economy.
-- Per-victory gold/passive-earnings bonus and stacking rule.
-- Offline cap policy under the new multi-realm economy.
+Every item this section once listed as open has an ADR in `docs/DECISIONS.md`.
+
+| Item | Deciding ADR |
+|---|---|
+| Active road mechanics | #19 momentum, #25 catch hit test, #30 coin split, #46 coin values, #50 catch ellipse |
+| Active-versus-idle bands | #31 banded in Ascendancy, #39 measured at 14 days, #48 content end |
+| Boss tap cap, decay, cadence, accessibility input | #19 one momentum curve and hold-to-autostrike, #15 boss phase |
+| Multitouch policy | #25 one Strike, one aim, one hit test |
+| Realm length and portal availability | #24 entry policy, #32 the Road reaches its guardian |
+| Boss HP curve and duration bands | #23 `BOSS_REALM_GAIN`, #24 what P5/P6 measure |
+| Pending-Ascendancy accrual | #22 per zone cleared |
+| Overfarming controls and boss payout | #28 P7 measures Ascendancy earned |
+| Tree economy | #27 uncapped, linear price |
+| Per-victory earnings bonus and stacking | #21 ratio-identical realms, #23 rubber-band |
+| Offline cap policy | #8 no cap, unchanged by #14 |
