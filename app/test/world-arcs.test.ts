@@ -108,6 +108,16 @@ describe('a coin that lands uncaught rests on the road and is collected by the h
     expect(f.world.catchesToAbsorb).toBe(0);
   });
 
+  it('sees a coin land when the engine prunes its list in place, as core does', () => {
+    const arcs = [arc(3, 10)];
+    const { f } = frame({ view, model: { arcs, timeSec: 10.5, kills: 2 } });
+    step(f.world, f, 1 / 60);
+    arcs.length = 0;
+    f.model = { ...f.model, timeSec: 10 + ARC_FLIGHT_SEC + 0.05 };
+    step(f.world, f, 1 / 60);
+    expect(f.world.rests).toHaveLength(1);
+  });
+
   it('does not litter the road after an offline return', () => {
     const a = arc(3, 10);
     const { f } = frame({ view, model: { arcs: [a], timeSec: 10.5, kills: 2 } });

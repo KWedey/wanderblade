@@ -666,7 +666,8 @@ function settleArcs(w: World, input: WorldInput): void {
     }
     w.rests.push({ x: at.x, y: at.y, age: 0, gold: arc.gear === null, spin: arc.expiresAtSec * 9 });
   }
-  w.seenArcs = model.arcs;
+  // A copy: the engine prunes its list in place, and the same array can never be seen to lose a member.
+  w.seenArcs = model.arcs.slice();
 }
 
 /** A kill landed in the engine — the scene never decides this. Offline returns jump thousands of kills; play one death. */
