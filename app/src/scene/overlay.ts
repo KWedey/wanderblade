@@ -1,7 +1,7 @@
 // World-anchored HUD and effects drawn over the actors: floaters, the combo
 // meter, landed coins and their streaks to the gold readout, particles.
 
-import { COMBO_GAP, COMBO_METER_W, COMBO_SEGS, COMBO_SEG_W, comboBox, comboLabel } from './combo';
+import { COMBO_GAP, COMBO_METER_W, COMBO_SCALE, COMBO_SEGS, COMBO_SEG_W, comboBox, comboLabel } from './combo';
 import { TIER_SCALE, type Frame } from './frame';
 import { floaterOffsetY, inAnyPocket, lifeRemaining } from './fx';
 import { OUTLINE_INK, mixHex } from './palette';
@@ -16,28 +16,29 @@ export function drawMomentumMeter(f: Frame): void {
   // announcing that nothing is happening.
   if (world.heldMomentum.value <= 0.02) return;
   const label = comboLabel(world.heldMult.value);
-  const labelW = textWidth(label, 1, NUMERAL_FONT);
-  const box = comboBox(world.heldMult.value);
-  const y = laneBaseline(COMBO_LANE, f.view.groundY);
+  const labelW = textWidth(label, COMBO_SCALE, NUMERAL_FONT);
+  const box = comboBox(world.heldMult.value, world.comboAnchor, f.view.worldRightX);
+  const y = box.top + COMBO_SCALE;
   const hot = world.heldMomentum.value > 0.7;
 
   // Outlined type, no plate. The 1px ring is what every other number in the
   // world wears, and it is what keeps this legible over sky or canopy
   // without pasting a rectangle of chrome across the frame.
   drawText(ctx, label, box.x, y, {
-    scale: 1,
+    scale: COMBO_SCALE,
     fill: hot ? '#ffffff' : skin.accent,
     outline: OUTLINE_INK,
     align: 'left',
     font: NUMERAL_FONT,
   });
 
-  const meterX = box.x + labelW + 3;
-  const meterY = y + 1;
+  const meterX = box.x + labelW + 3 * COMBO_SCALE;
+  const meterY = y + COMBO_SCALE;
+  const cellH = NUMERAL_FONT.h * COMBO_SCALE;
   // The pip track is built the way the creature health bar is built: a dark
   // frame with cells inside it, so the two read as the same world's meters.
   ctx.fillStyle = OUTLINE_INK;
-  ctx.fillRect(meterX - 1, meterY - 1, COMBO_METER_W + 2, NUMERAL_FONT.h + 2);
+  ctx.fillRect(meterX - 1, meterY - 1, COMBO_METER_W + 2, cellH + 2);
   const filled = Math.min(COMBO_SEGS, Math.round(world.heldMomentum.value * COMBO_SEGS));
   // At rest a row of dark cells reads as broken, not idle. A slow chase
   // light across the empty cells reads as armed and waiting.
@@ -52,7 +53,7 @@ export function drawMomentumMeter(f: Frame): void {
       : idle
         ? mixHex('#3d3846', skin.accent, 0.55)
         : '#3d3846';
-    ctx.fillRect(meterX + i * (COMBO_SEG_W + COMBO_GAP), meterY, COMBO_SEG_W, NUMERAL_FONT.h);
+    ctx.fillRect(meterX + i * (COMBO_SEG_W + COMBO_GAP), meterY, COMBO_SEG_W, cellH);
   }
 }
 

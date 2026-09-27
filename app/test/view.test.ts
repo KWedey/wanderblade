@@ -16,6 +16,7 @@ vi.mock('../src/scene/scene', () => ({
     setSceneTop: () => {},
     setSceneRight: () => {},
     setCollectAnchor: () => {},
+    setComboAnchor: () => {},
     dispose: () => {},
   }),
 }));

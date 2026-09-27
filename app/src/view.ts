@@ -575,6 +575,8 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   function syncCollectAnchor(): void {
     const r = hudGoldEl.getBoundingClientRect();
     scene.setCollectAnchor(r.left + r.width / 2, r.top + r.height / 2);
+    const d = dpsEl.getBoundingClientRect();
+    scene.setComboAnchor(d.right, d.bottom);
   }
   /**
    * The view owns layout, so it is the view that tells the scene how much

@@ -1,7 +1,7 @@
 // The figures on the ground plane: the hero and his blade, the monster queue,
 // coins in flight, and the contact shadows and light pools under them.
 
-import { ACTOR_SHADOW, LOOT_GLOW, SWING_ANIM_SEC, type Frame } from './frame';
+import { ACTOR_SHADOW, LOOT_GLOW, SWING_ANIM_SEC, strideGain, type Frame } from './frame';
 import { inAnyPocket } from './fx';
 import { OUTLINE_INK, glowRingRadii, lighten, momentumLift } from './palette';
 import { drawShadow } from './road';
@@ -72,7 +72,7 @@ export function drawHeroGround(f: Frame): void {
 export function drawHero(f: Frame): void {
   const { ctx, model, view, world } = f;
   const { heroA, heroB, sword } = f.sprites;
-  const stride = model.reduceMotion ? 0 : Math.floor(world.clockSec * 7 * model.momentumMult) % 2;
+  const stride = model.reduceMotion ? 0 : Math.floor(world.clockSec * 7 * strideGain(model.momentumMult)) % 2;
   const sprite = stride === 0 ? heroA : heroB;
   const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(world.clockSec * 14) * 0.6);
   // No rim pass: a second ring of the darkest ink reads as a blob at thumbnail size.

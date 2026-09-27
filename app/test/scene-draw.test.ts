@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { COMBO_SCALE } from '../src/scene/combo';
+import { strideGain } from '../src/scene/frame';
 import { drawMomentumMeter } from '../src/scene/overlay';
 import { OUTLINE_INK, lightnessOf, mixHex } from '../src/scene/palette';
 import { NUMERAL_FONT } from '../src/scene/pixels';
@@ -102,9 +104,12 @@ describe('drawFence marches posts at a fixed pitch with two continuous rails bet
   });
 });
 
-describe('drawMomentumMeter is a widget in the upper-left gutter, hidden at rest', () => {
+describe('drawMomentumMeter is a widget under the DPS readout, hidden at rest', () => {
   const segs = 6;
-  const meterW = segs * 3 - 1;
+  const seg = 2 * COMBO_SCALE;
+  const pitch = 3 * COMBO_SCALE;
+  const meterW = segs * pitch - COMBO_SCALE;
+  const cellH = NUMERAL_FONT.h * COMBO_SCALE;
 
   function cells(calls: Call[]): Call[] {
     return calls.slice(-segs);
@@ -117,7 +122,7 @@ describe('drawMomentumMeter is a widget in the upper-left gutter, hidden at rest
     expect(calls).toHaveLength(0);
   });
 
-  it('frames six two-pixel cells in the outline ink and lights as many as momentum has filled', () => {
+  it('frames six cells at twice the numeral scale in the outline ink and lights as many as momentum has filled', () => {
     const { f, calls } = frame();
     f.world.heldMomentum = { value: 0.5, holdLeftSec: 0 };
     f.world.heldMult = { value: 1.37, holdLeftSec: 0 };
@@ -125,12 +130,12 @@ describe('drawMomentumMeter is a widget in the upper-left gutter, hidden at rest
     const ring = calls[calls.length - segs - 1]!;
     expect(ring.style).toBe(OUTLINE_INK);
     expect(ring.w).toBe(meterW + 2);
-    expect(ring.h).toBe(NUMERAL_FONT.h + 2);
+    expect(ring.h).toBe(cellH + 2);
     const pips = cells(calls);
     pips.forEach((c, i) => {
-      expect(c.w).toBe(2);
-      expect(c.h).toBe(NUMERAL_FONT.h);
-      expect(c.x).toBe(pips[0]!.x + i * 3);
+      expect(c.w).toBe(seg);
+      expect(c.h).toBe(cellH);
+      expect(c.x).toBe(pips[0]!.x + i * pitch);
     });
     expect(pips.map((c) => c.style)).toEqual([
       f.skin.accent,
@@ -140,6 +145,38 @@ describe('drawMomentumMeter is a widget in the upper-left gutter, hidden at rest
       '#3d3846',
       '#3d3846',
     ]);
+  });
+
+  it('draws the label at scale 2: every glyph run is a multiple of two pixels tall', () => {
+    const { f, calls } = frame();
+    f.world.heldMomentum = { value: 0.5, holdLeftSec: 0 };
+    drawMomentumMeter(f);
+    const label = calls.slice(0, calls.length - segs - 1);
+    expect(label.length).toBeGreaterThan(0);
+    expect(label.every((c) => c.h === COMBO_SCALE)).toBe(true);
+  });
+
+  it('hangs right-aligned under the DPS readout when the view has anchored it inside the band', () => {
+    const { f, calls } = frame();
+    f.world.heldMomentum = { value: 0.5, holdLeftSec: 0 };
+    f.world.comboAnchor = { x: 180, y: 12 };
+    drawMomentumMeter(f);
+    const ring = calls[calls.length - segs - 1]!;
+    expect(ring.x + ring.w).toBeLessThanOrEqual(181);
+    expect(ring.x + ring.w).toBeGreaterThan(170);
+    expect(ring.y).toBeGreaterThan(12);
+    expect(Math.min(...calls.map((c) => c.y))).toBeGreaterThanOrEqual(12);
+  });
+
+  it('takes the band\'s top-right corner when the readout sits above the band, as in portrait', () => {
+    const { f, calls } = frame();
+    f.world.heldMomentum = { value: 0.5, holdLeftSec: 0 };
+    f.world.comboAnchor = { x: 180, y: -40 };
+    drawMomentumMeter(f);
+    const ring = calls[calls.length - segs - 1]!;
+    expect(ring.x + ring.w).toBeLessThanOrEqual(f.view.worldRightX - 3);
+    expect(ring.x + ring.w).toBeGreaterThan(f.view.worldRightX - 12);
+    expect(Math.min(...calls.map((c) => c.y))).toBeLessThan(12);
   });
 
   it('turns the label and the top two cells white once the combo runs hot', () => {
@@ -174,5 +211,13 @@ describe('drawMomentumMeter is a widget in the upper-left gutter, hidden at rest
     still.f.world.clockSec = 0.5;
     drawMomentumMeter(still.f);
     expect(cells(still.calls).every((c) => c.style === '#3d3846')).toBe(true);
+  });
+});
+
+describe('the stride says the combo is running', () => {
+  it('walks at rest speed with no momentum and steeper than the multiplier with it', () => {
+    expect(strideGain(1)).toBe(1);
+    expect(strideGain(1.75)).toBeGreaterThan(1.75);
+    expect(strideGain(0.5)).toBe(1);
   });
 });

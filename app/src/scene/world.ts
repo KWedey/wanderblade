@@ -15,6 +15,7 @@ import {
   damagePerSwing,
   formatShort,
   hash01,
+  strideGain,
   swingInterval,
   type Frame,
   type SceneModel,
@@ -37,7 +38,7 @@ import {
   type Particle,
   type PeakState,
 } from './fx';
-import { comboSpans } from './combo';
+import { comboSpans, type ComboAnchor } from './combo';
 import type { Viewport } from './geometry';
 import { NUMERAL_FONT, textWidth } from './pixels';
 import { LANE_BASE_OFFSET, LANE_COUNT, LANE_STEP, placeRun, type LaneSpan } from './textlane';
@@ -182,6 +183,8 @@ export interface World {
   catchesToAbsorb: number;
   /** Scene point loot streaks fly to — the HUD's gold readout. */
   collectAnchor: { x: number; y: number };
+  /** Scene point the combo widget hangs from — the HUD's DPS readout. */
+  comboAnchor: ComboAnchor;
   /** Scene coords of the last aimed strike, so a catch pays out where it was earned. */
   lastAim: { x: number; y: number } | null;
   /** Lanes the engaged monster's health bar sat across last frame; floaters route around them. */
@@ -223,6 +226,7 @@ export function createWorld(): World {
     seenArcs: [],
     catchesToAbsorb: 0,
     collectAnchor: { x: 0, y: 0 },
+    comboAnchor: null,
     lastAim: null,
     barSpans: [],
   };
@@ -257,7 +261,9 @@ function addFloater(w: World, input: WorldInput, raw: Omit<Floater, 'lane'>): vo
   const preferred = Math.max(0, Math.min(LANE_COUNT - 1, wish));
   const taken = floaters.map(floaterSpan);
   const evictable = taken.length;
-  if (w.heldMomentum.value > 0.02) taken.push(...comboSpans(w.heldMult.value, groundY));
+  if (w.heldMomentum.value > 0.02) {
+    taken.push(...comboSpans(w.heldMult.value, w.comboAnchor, input.view.worldRightX, groundY));
+  }
   taken.push(...w.barSpans);
   const { lane, evict } = placeRun(f.x - width / 2, width, taken, LANE_COUNT, 3, preferred, evictable);
   // Descending, so each splice leaves the lower indices valid.
@@ -801,7 +807,7 @@ export function step(w: World, input: WorldInput, dtSec: number): void {
   w.heldMomentum = peakFollow(w.heldMomentum, model.momentum, dtSec);
   w.heldMult = peakFollow(w.heldMult, model.momentumMult, dtSec);
 
-  const speed = WALK_SPEED * model.momentumMult;
+  const speed = WALK_SPEED * strideGain(model.momentumMult);
   advanceScroll(w, input, speed, dtSec);
 
   w.shake = decayTo(w.shake, 0, SHAKE_DECAY, dtSec);

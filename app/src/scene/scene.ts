@@ -73,6 +73,8 @@ export interface Scene {
   setSceneRight(cssPx: number): void;
   /** Viewport point loot streaks fly to — the HUD's gold readout. */
   setCollectAnchor(clientX: number, clientY: number): void;
+  /** Viewport point the combo widget hangs from — the DPS readout's bottom-right corner. */
+  setComboAnchor(clientX: number, clientY: number): void;
   dispose(): void;
 }
 
@@ -129,6 +131,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const chrome: Chrome = { topCss: 0, rightCss: 0 };
   const world = createWorld();
   let collectAnchorCss: { x: number; y: number } | null = null;
+  let comboAnchorCss: { x: number; y: number } | null = null;
   const model: SceneModel = {
     region: 0,
     zone: 0,
@@ -165,6 +168,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     displayCtx.imageSmoothingEnabled = false;
     ctx.imageSmoothingEnabled = false;
     if (collectAnchorCss) setCollectAnchor(collectAnchorCss.x, collectAnchorCss.y);
+    if (comboAnchorCss) setComboAnchor(comboAnchorCss.x, comboAnchorCss.y);
     f.ground = buildGroundTexture(view);
   }
 
@@ -174,6 +178,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     // The gold counter sits above the band in portrait, so a coin would fly to
     // a point off the top of the world. Clamp it to the band's own edge.
     world.collectAnchor = { x: p.x, y: Math.max(2, p.y) };
+  }
+
+  function setComboAnchor(clientX: number, clientY: number): void {
+    comboAnchorCss = { x: clientX, y: clientY };
+    world.comboAnchor = toScene(clientX, clientY);
   }
 
   function toScene(clientX: number, clientY: number): { x: number; y: number } {
@@ -286,6 +295,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     strikeAt,
     catchArc: (bonusGold, upgraded) => catchArc(world, f, bonusGold, upgraded),
     setCollectAnchor,
+    setComboAnchor,
     setSceneTop,
     setSceneRight,
     dispose,

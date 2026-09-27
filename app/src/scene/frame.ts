@@ -115,6 +115,17 @@ export function hash01(n: number): number {
   return x - Math.floor(x);
 }
 
+/**
+ * How much faster the hero walks on screen at a momentum multiplier. Steeper
+ * than the multiplier itself: core's x1.75 read as a slight hurry, and the
+ * stride is the one thing on screen that says a combo is running. Display
+ * only; it feeds no distance (DECISIONS.md #12).
+ */
+export function strideGain(momentumMult: number): number {
+  return 1 + Math.max(0, momentumMult - 1) * STRIDE_STEEPEN;
+}
+const STRIDE_STEEPEN = 2.2;
+
 /** Seconds one animated swing stands for, at `attackSpeedMult`. */
 export function swingInterval(attackSpeedMult: number): number {
   return 1 / (SWINGS_PER_SEC * Math.max(0.01, attackSpeedMult));
