@@ -12,13 +12,9 @@ import {
   serialize,
   type GameState,
 } from '@wanderblade/core';
-import { CAP_RATE, strikeTimes } from './policy';
+import { CAP_RATE, SEC_PER_DAY, SEC_PER_HOUR, strikeTimes } from './policy';
 import { clone } from './simulate';
-
-export interface Check {
-  pass: boolean;
-  detail: string;
-}
+import type { Check } from './types';
 
 /** One long advance must equal many short ones, in the boss phase and on the Road. */
 export function offlineMatchesLive(portalReadyState: GameState): Check {
@@ -27,7 +23,7 @@ export function offlineMatchesLive(portalReadyState: GameState): Check {
   enterPortal(offline);
   enterPortal(live);
 
-  const span = 4 * 3600;
+  const span = 4 * SEC_PER_HOUR;
   advance(offline, span);
   for (let i = 0; i < span * 4; i++) advance(live, 0.25);
 
@@ -42,7 +38,7 @@ export function offlineMatchesLive(portalReadyState: GameState): Check {
 
 /** The same strike timestamps must reproduce the same state, however split. */
 export function replayIdentical(start: GameState): Check {
-  const span = 3600;
+  const span = SEC_PER_HOUR;
   const strikes = strikeTimes(start.timeSec, span, CAP_RATE);
 
   const single = clone(start);
@@ -106,7 +102,7 @@ export function remainingTimeCarried(portalReadyState: GameState): Check {
   const s = clone(portalReadyState);
   if (!enterPortal(s).entered) return { pass: false, detail: 'could not enter the portal' };
 
-  const events = advance(s, 14 * 86_400);
+  const events = advance(s, 14 * SEC_PER_DAY);
   const ascend = events.find((e) => e.type === 'ascend');
   if (!ascend) return { pass: false, detail: 'the guardian did not fall inside 14 days' };
 

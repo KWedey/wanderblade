@@ -18,7 +18,8 @@ jobs:
       - run: npm ci
       - run: npm run verify
       - run: npm run build
-      - name: Economy simulator must be ALL PASS
+      # The full 3-day run is sim/test/gate.test.ts inside verify; this smokes the CLI.
+      - name: Economy simulator CLI must be ALL PASS
         run: |
-          npm run sim -- --days 3 --seeds 1 | tee sim-ci.log
+          npm run sim -- --quick --days 3 --seeds 1 | tee sim-ci.log
           grep -q '^ALL PASS' sim-ci.log || { echo '::error::sim reported a FAIL'; exit 1; }

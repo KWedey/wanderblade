@@ -12,7 +12,7 @@ import {
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
-import { CAP_RATE, SEC_PER_DAY, SEC_PER_HOUR, strikeThrough } from './policy';
+import { CAP_RATE, IDLE_SLICE_SEC, SEC_PER_DAY, SEC_PER_HOUR, strikeThrough } from './policy';
 import { clone, runPlayer, timeToKill, totalEarned, type RunOptions } from './simulate';
 import type {
   DeadTime,
@@ -28,15 +28,8 @@ import type {
 
 const ROAD_WINDOW_SEC = 20 * 60;
 
-/**
- * The guardian band, in active minutes. The floor is 15 rather than 20 so the
- * opening realm's guardian fits inside one session — a first ascension a new
- * player can finish in a sitting is better onboarding than a rounder number.
- */
-export const BOSS_MIN_SEC = 15 * 60;
-export const BOSS_MAX_SEC = 90 * 60;
 /** Guardians are allowed a long time to fall before a probe gives up. */
-const BOSS_PROBE_CAP_SEC = 30 * 86_400;
+const BOSS_PROBE_CAP_SEC = 30 * SEC_PER_DAY;
 
 /**
  * Pin the build and the road position: an open portal stops zone advance, and
@@ -118,12 +111,7 @@ export function bossUplift(entryStates: GameState[]): Uplift[] {
 export function eightHourReturn(states: GameState[]): number[] {
   return states.map((start) => {
     const s = clone(start);
-    let left = 8 * SEC_PER_HOUR;
-    while (left > 1e-9) {
-      const dt = Math.min(300, left);
-      advance(s, dt);
-      left -= dt;
-    }
+    advance(s, 8 * SEC_PER_HOUR);
     const bought = botTouch(s);
     return bought.gold + bought.tree;
   });
@@ -138,12 +126,7 @@ export function twentyFourHourReturn(states: GameState[]): number[] {
   return states.map((start) => {
     const s = clone(start);
     const before = s.collection.zonesCleared;
-    let left = 24 * SEC_PER_HOUR;
-    while (left > 1e-9) {
-      const dt = Math.min(300, left);
-      advance(s, dt);
-      left -= dt;
-    }
+    advance(s, 24 * SEC_PER_HOUR);
     return s.collection.zonesCleared - before;
   });
 }
@@ -182,7 +165,7 @@ export function abandonProbe(
   const investSec = Number.isFinite(etaBefore) ? etaBefore / 3 : 2 * SEC_PER_HOUR;
   let left = investSec;
   while (left > 1e-9 && attempt.phase === 'boss') {
-    const dt = Math.min(300, left);
+    const dt = Math.min(IDLE_SLICE_SEC, left);
     advance(attempt, dt);
     left -= dt;
   }
@@ -194,7 +177,7 @@ export function abandonProbe(
   const goldBefore = farming.lifetime.goldEarned;
   left = investSec;
   while (left > 1e-9) {
-    const dt = Math.min(300, left);
+    const dt = Math.min(IDLE_SLICE_SEC, left);
     advance(farming, dt);
     left -= dt;
     botTouch(farming);

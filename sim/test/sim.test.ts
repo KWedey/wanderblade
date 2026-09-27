@@ -9,8 +9,8 @@ import {
   type GameState,
   type LootArc,
 } from '@wanderblade/core';
-import { parseArgs } from '../src/args';
-import { formatSeedReport } from '../src/format';
+import { DEFAULTS, parseArgs } from '../src/args';
+import { formatSeedReport, formatSummary, REALM_CSV_COLUMNS, realmsCsv } from '../src/format';
 import { botBuyGold, botBuyTree, botTouch } from '../src/bot';
 import { aimAtOldestArc, CAP_RATE, runIdle, strikeThrough, strikeTimes } from '../src/policy';
 import {
@@ -32,16 +32,13 @@ import type {
   SeedResult,
   ShopSample,
   SimConfig,
+  ValidatorResult,
 } from '../src/types';
 
 const cfg = (over: Partial<SimConfig> = {}): SimConfig => ({
+  ...DEFAULTS,
   days: 1,
-  seed: 1,
   seeds: 1,
-  sessionMin: 20,
-  sessionsPerDay: 2,
-  csv: false,
-  quick: false,
   ...over,
 });
 
@@ -265,6 +262,8 @@ let cachedWeek: ReturnType<typeof runPlayer> | null = null;
 const weekRun = (): ReturnType<typeof runPlayer> =>
   (cachedWeek ??= runPlayer(1, cfg(WEEK), { policy: 'road-active', entry: 'prompt' }));
 
+const PASSED = { pass: true, detail: '' };
+
 function stubResult(over: Partial<SeedResult> = {}): SeedResult {
   const main = (cachedRun ??= runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' }));
   return {
@@ -293,19 +292,110 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     victories: 0,
     correctnessBreaches: main.breaches,
     correctnessLive: main.violations,
-    offlineMatchesLive: true,
-    offlineMatchesLiveDetail: '',
-    replayIdentical: true,
-    replayIdenticalDetail: '',
-    abandonClean: true,
-    abandonCleanDetail: '',
-    remainingTimeCarried: true,
-    remainingTimeCarriedDetail: '',
-    earningsBonusIsolated: true,
-    earningsBonusIsolatedDetail: '',
+    offlineMatchesLive: PASSED,
+    replayIdentical: PASSED,
+    abandonClean: PASSED,
+    remainingTimeCarried: PASSED,
+    earningsBonusIsolated: PASSED,
     ...over,
   };
 }
+
+// `--quick` never runs the long probes; a validator nothing measured is SKIP, not FAIL.
+describe('--quick marks unmeasured validators skipped, never failed', () => {
+  const quick = (): SeedResult =>
+    stubResult({
+      config: cfg({ quick: true }),
+      offlineMatchesLive: null,
+      replayIdentical: null,
+      abandonClean: null,
+      remainingTimeCarried: null,
+      earningsBonusIsolated: null,
+    });
+  const SKIPPED = ['C3', 'C4', 'C5', 'C7', 'C8', 'P3', 'P4', 'P7', 'P10'];
+
+  it('skips exactly the validators --quick cannot measure', () => {
+    const r = quick();
+    const all = [...runCorrectness(r), ...runPacing(r)];
+    expect(all.filter((v) => v.skipped).map((v) => v.id)).toEqual(SKIPPED);
+    for (const v of all.filter((v) => v.skipped)) expect(v.pass).toBe(false);
+  });
+
+  it('fails, not skips, an experiment a full run left unmeasured', () => {
+    const r = stubResult({ offlineMatchesLive: null });
+    const c3 = runCorrectness(r).find((v) => v.id === 'C3');
+    expect(c3).toMatchObject({ pass: false, skipped: false, detail: 'not measured' });
+  });
+
+  it('prints SKIP in the seed report and counts only measured validators in the summary', () => {
+    const r = quick();
+    r.correctness = runCorrectness(r);
+    r.pacing = runPacing(r);
+    const report = formatSeedReport(r);
+    expect(report).toContain('  SKIP  P3  ');
+    expect(report).not.toContain('FAIL  P3');
+
+    const measured = [...r.correctness, ...r.pacing].filter((v) => !v.skipped);
+    for (const v of measured) v.pass = true;
+    const summary = formatSummary([r]);
+    expect(summary).toContain(`ALL PASS — ${measured.length} validators × 1 seeds; ${SKIPPED.length} skipped under --quick`);
+    expect(summary).toContain('  SKIP  P10  ');
+  });
+
+  it('still fails the summary when a measured validator fails', () => {
+    const r = quick();
+    r.correctness = runCorrectness(r);
+    r.pacing = runPacing(r);
+    const p1 = r.pacing.find((v) => v.id === 'P1') as ValidatorResult;
+    p1.pass = false;
+    expect(formatSummary([r])).toMatch(/^FAIL — \d+ of 11 measured validators/m);
+  });
+});
+
+// docs/ECONOMY.md's required output names active time, gear curve, pending and
+// banked Ascendancy, tree purchases, earnings bonus and abandonments per realm.
+describe('every RealmRecord field reaches the report and the CSV', () => {
+  const full: RealmRecord = {
+    realm: 3,
+    startSec: 1000,
+    portalReadySec: 4600,
+    portalEnterSec: 4660,
+    victorySec: 7900,
+    roadSec: 3660,
+    bossSec: 3240,
+    activeSec: 2400,
+    bossEtaAtEntrySec: 5400,
+    bossActiveEtaAtEntrySec: 3000,
+    gearPowerAtEntry: 12345,
+    goldPeak: 98765,
+    pendingAtVictory: 41.5,
+    bankedAfter: 123,
+    earningsMultAfter: 1.25,
+    treePurchasesTotal: 7,
+    abandons: 2,
+  };
+
+  it('prints every field in the realm table row', () => {
+    const row = formatSeedReport(stubResult({ realms: [full] }))
+      .split('\n')
+      .find((l) => l.startsWith('   3 ')) as string;
+    for (const cell of ['1.02h', '54.0m', '40.0m', '1.50h', '12345', '98765', '41.50', '123', '1.25', ' 7 ', ' 2']) {
+      expect(row, cell).toContain(cell);
+    }
+  });
+
+  it('writes every field as a CSV column, null as an empty cell', () => {
+    const keys = Object.keys(full).sort();
+    expect([...REALM_CSV_COLUMNS].sort()).toEqual(keys);
+    const csv = realmsCsv([full, { ...full, realm: 4, victorySec: null, bankedAfter: null }]);
+    const [header, a, b] = csv.trimEnd().split('\n') as [string, string, string];
+    expect(header.split(',')).toEqual([...REALM_CSV_COLUMNS]);
+    expect(a.split(',')).toHaveLength(REALM_CSV_COLUMNS.length);
+    expect(b.split(',')[REALM_CSV_COLUMNS.indexOf('victorySec')]).toBe('');
+    expect(b.split(',')[REALM_CSV_COLUMNS.indexOf('bankedAfter')]).toBe('');
+    expect(a.split(',')[REALM_CSV_COLUMNS.indexOf('abandons')]).toBe('2');
+  });
+});
 
 describe('validators are total', () => {
   it('emits every C and P id with a boolean verdict', () => {
@@ -629,7 +719,6 @@ describe('witnessedBeats separates what the player saw from what happened while 
       bossEtaAtEntrySec: null,
       bossActiveEtaAtEntrySec: null,
       gearPowerAtEntry: 0,
-      dpsAtEntry: 0,
       goldPeak: 0,
       ...over,
     }) as RealmRecord;

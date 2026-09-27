@@ -41,12 +41,13 @@ export interface RealmRecord {
   /** The same prediction at sustained full momentum — the fight's active length. */
   bossActiveEtaAtEntrySec: number | null;
   gearPowerAtEntry: number;
-  dpsAtEntry: number;
   goldPeak: number;
   pendingAtVictory: number | null;
   bankedAfter: number | null;
   earningsMultAfter: number | null;
   treePurchasesTotal: number;
+  /** Boss attempts walked away from inside this realm. */
+  abandons: number;
 }
 
 /** A periodic snapshot of the run, for the CSV timeline. */
@@ -152,11 +153,21 @@ export interface DeadTime {
   realms: number;
 }
 
-/** A single PASS/FAIL result. */
+/** One direct correctness experiment's verdict. */
+export interface Check {
+  pass: boolean;
+  detail: string;
+}
+
+/**
+ * A single validator verdict. `skipped` means the run never measured it
+ * (`--quick`), so `pass` is false and the summary leaves it out of its count.
+ */
 export interface ValidatorResult {
   id: string;
   name: string;
   pass: boolean;
+  skipped: boolean;
   detail: string;
 }
 
@@ -217,14 +228,10 @@ export interface SeedResult {
   correctnessBreaches: BreachKind[];
   /** Readable detail for those breaches, capped at 20 lines. */
   correctnessLive: string[];
-  offlineMatchesLive: boolean;
-  offlineMatchesLiveDetail: string;
-  replayIdentical: boolean;
-  replayIdenticalDetail: string;
-  abandonClean: boolean;
-  abandonCleanDetail: string;
-  remainingTimeCarried: boolean;
-  remainingTimeCarriedDetail: string;
-  earningsBonusIsolated: boolean;
-  earningsBonusIsolatedDetail: string;
+  /** The direct experiments; null when `--quick` left them unmeasured. */
+  offlineMatchesLive: Check | null;
+  replayIdentical: Check | null;
+  abandonClean: Check | null;
+  remainingTimeCarried: Check | null;
+  earningsBonusIsolated: Check | null;
 }

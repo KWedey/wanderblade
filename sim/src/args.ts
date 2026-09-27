@@ -3,7 +3,7 @@
 
 import type { SimConfig } from './types';
 
-const DEFAULTS: SimConfig = {
+export const DEFAULTS: SimConfig = {
   days: 14,
   seed: 1,
   seeds: 3,
@@ -23,7 +23,7 @@ export const HELP = `Wanderblade economy simulator
   --session-min N      minutes per active session        (default ${DEFAULTS.sessionMin})
   --sessions-per-day N active sessions per day           (default ${DEFAULTS.sessionsPerDay})
   --csv                write sim/out/run-<seed>.csv
-  --quick              only the fast pacing probes (P1, P2, P5, P6)
+  --quick              skip the long probes; C3-5, C7-8, P3-4, P7, P10 print SKIP
   --help               this message
 
 The harness always exits 0. Read the printed PASS/FAIL summary.`;

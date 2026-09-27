@@ -151,7 +151,7 @@ Content from D&D books, settings, adventures, brands, or art that is not in the 
 
 ## 24. Portal entry policy: enter on a prepared build, and what P1/P5/P6 actually measure — 2026-08-25
 
-**Decision:** The simulated player enters the portal when the previewed fight is at most 90 minutes (`PREPARED_MAX_ETA_SEC`), or after 3 days of preparation patience, whichever comes first. Three pacing validators pin their measurement definitions:
+**Decision:** The simulated player enters the portal when the previewed fight is at most 90 minutes (`PREPARED_MAX_ETA_SEC`, since folded into `BOSS_MAX_SEC` in `sim/src/policy.ts`), or after 3 days of preparation patience, whichever comes first. Three pacing validators pin their measurement definitions:
 
 - **P1** (Road active vs idle) freezes both position *and* build — portal-ready, best-in-zone epics in every slot — so it isolates the income multiplier from the fact that active play also reaches richer zones. The unfrozen number is printed as context, not asserted.
 - **P5** (realm start to portal) runs continuously, without session pauses, so it measures play time rather than wall clock.

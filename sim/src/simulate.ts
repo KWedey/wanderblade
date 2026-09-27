@@ -22,9 +22,18 @@ import {
   swingInterval,
   type GameEvent,
   type GameState,
+  type Strike,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
-import { CAP_RATE, runActive, runIdle, SEC_PER_DAY, strikeTimes, type RunHooks } from './policy';
+import {
+  BOSS_MAX_SEC,
+  CAP_RATE,
+  IDLE_SLICE_SEC,
+  runActive,
+  runIdle,
+  SEC_PER_DAY,
+  type RunHooks,
+} from './policy';
 import type {
   BreachKind,
   PolicyName,
@@ -37,12 +46,6 @@ import type {
 /** How often a Road clone is kept as a probe fixture. */
 const ROAD_STATE_INTERVAL_SEC = 3600;
 
-/**
- * A "prepared build" in the pacing band's sense: the client previews the
- * guardian's estimated duration before entry, so the modelled player farms on
- * rather than committing to a fight the preview says will take all week.
- */
-const PREPARED_MAX_ETA_SEC = 90 * 60;
 /** Even an unpromising realm gets committed to eventually. */
 const PREPARE_PATIENCE_SEC = 3 * SEC_PER_DAY;
 
@@ -116,12 +119,12 @@ function blankRealm(realm: number, startSec: number): RealmRecord {
     bossEtaAtEntrySec: null,
     bossActiveEtaAtEntrySec: null,
     gearPowerAtEntry: 0,
-    dpsAtEntry: 0,
     goldPeak: 0,
     pendingAtVictory: null,
     bankedAfter: null,
     earningsMultAfter: null,
     treePurchasesTotal: 0,
+    abandons: 0,
   };
 }
 
@@ -304,7 +307,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     if (
       r.portalReadySec !== null &&
       state.timeSec - r.portalReadySec < PREPARE_PATIENCE_SEC &&
-      previewEtaSec(state) > PREPARED_MAX_ETA_SEC
+      previewEtaSec(state) > BOSS_MAX_SEC
     ) {
       return; // the preview says this fight is not worth committing to yet
     }
@@ -322,7 +325,6 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     r.portalEnterSec = state.timeSec;
     r.roadSec = state.timeSec - r.startSec;
     r.gearPowerAtEntry = gearPowerTotal(state.gear);
-    r.dpsAtEntry = heroDps(state);
     r.bossEtaAtEntrySec = bossEtaSec(state, 0);
     r.bossActiveEtaAtEntrySec = bossEtaSec(state, 1);
     snapshots.set(r.realm, clone(state));
@@ -342,6 +344,8 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
           if (opts.stopAtPortalReady) stop = true;
         } else if (e.type === 'bossVictory') {
           current().pendingAtVictory = e.pendingBanked;
+        } else if (e.type === 'abandon') {
+          current().abandons += 1;
         } else if (e.type === 'ascend') {
           const r = current();
           r.victorySec = e.timeSec;
@@ -455,10 +459,21 @@ export function timeToKill(start: GameState, rate: number, capSec: number): numb
   const t0 = s.timeSec;
   let victoryAt: number | null = null;
   let left = capSec;
+  // Strikes sit on one grid anchored at t0, so the slice size cannot drop the
+  // fractional strike each slice boundary would otherwise lose. No tolerance at
+  // the boundary: advance ignores a strike past its window, and the next slice
+  // starts exactly where this one ends.
+  const step = rate > 0 ? 1 / rate : Infinity;
+  let nextStrike = 1;
   while (left > 1e-9 && victoryAt === null) {
-    const dt = Math.min(300, left);
-    const from = s.timeSec;
-    const events = advance(s, dt, rate > 0 ? strikeTimes(from, dt, rate) : []);
+    const dt = Math.min(IDLE_SLICE_SEC, left);
+    const to = s.timeSec + dt;
+    const strikes: Strike[] = [];
+    while (t0 + nextStrike * step <= to) {
+      strikes.push({ atSec: t0 + nextStrike * step, aim: null });
+      nextStrike += 1;
+    }
+    const events = advance(s, dt, strikes);
     for (const e of events) if (e.type === 'bossVictory') victoryAt = e.timeSec;
     left -= dt;
   }
