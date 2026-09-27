@@ -128,7 +128,7 @@ describe('skill ranks are uncapped, and the asymptote is what bounds them', () =
   it('never refuses a rank for being too high, only for gold', () => {
     const s = initialState(1);
     s.hero.level = 20;
-    s.gold = 1e18;
+    s.gold = 1e300;
     for (let i = 0; i < 200; i++) expect(buySkill(s, 'cleave')).toBe(true);
     expect(s.hero.skills.cleave).toBe(200);
 
@@ -141,8 +141,8 @@ describe('skill ranks are uncapped, and the asymptote is what bounds them', () =
   it('holds skillMult under the ceiling however much gold is poured in', () => {
     const s = initialState(1);
     s.hero.level = 20;
-    s.gold = 1e18;
-    for (const id of SKILL_IDS) for (let i = 0; i < 300; i++) buySkill(s, id);
+    s.gold = 1e300;
+    for (const id of SKILL_IDS) for (let i = 0; i < 100; i++) buySkill(s, id);
     const ceiling = SKILL_MULT_CEILING;
     expect(skillMult(s.hero.skills)).toBeLessThan(ceiling);
   });
@@ -150,10 +150,11 @@ describe('skill ranks are uncapped, and the asymptote is what bounds them', () =
   it('charges the rising price for every rank, so gold strictly falls', () => {
     const s = initialState(1);
     s.hero.level = 20;
-    s.gold = 1e12;
+    // Enough for a dozen ranks while the wallet still resolves a single coin.
+    s.gold = 2e15;
     let prev = s.gold;
     let prevSpend = 0;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 12; i++) {
       expect(buySkill(s, 'warcry')).toBe(true);
       const spend = prev - s.gold;
       expect(spend).toBeGreaterThan(prevSpend);

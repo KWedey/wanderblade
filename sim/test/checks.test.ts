@@ -54,7 +54,7 @@ const config: SimConfig = { ...DEFAULTS, days: 1, seeds: 1 };
 const portalReady = runPlayer(1, config, {
   policy: 'road-active',
   entry: 'prompt',
-  stopAtPortalReady: true,
+  stopAtPortalReadyRealm: 0,
   continuous: true,
 }).state;
 const ready = (): GameState => clone(portalReady);

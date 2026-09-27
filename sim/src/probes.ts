@@ -199,22 +199,28 @@ export function abandonProbe(
  * excludes exactly that, and is stated here rather than hidden in a threshold.
  */
 export const SPEND_GRACE_SEC = 60;
-/** Below this many affordable rows the player has no real choice to make. */
-const STARVED_BELOW = 2;
-/** The affordable-row count the panel should offer at a typical look. */
-export const SPEND_TARGET = 4;
+/**
+ * Scarcity (docs/DECISIONS.md #63): a panel where every row is green is a
+ * panel with no decision on it. At most this many rows may be affordable at a
+ * typical look, and the share of looks that stay this lean is what P8 bands.
+ */
+export const SPEND_LEAN_MAX = 2;
+export const SPEND_LEAN_MIN_FRACTION = 0.8;
+/**
+ * The other edge: a starved panel is still forbidden. At nearly every look a
+ * row is affordable or the current income covers the cheapest one within this
+ * many seconds — the "N in ~30s" chip the client shows is a promise, not a wait.
+ */
+export const SPEND_REACH_SEC = 60;
+export const SPEND_REACH_MIN_FRACTION = 0.95;
 /** Priced rows the panel must carry at *every* look, gold irrelevant. */
 export const SPEND_PRICED_FLOOR = 5;
 /**
- * Ceilings for the starvation clauses, set from first measurement rather than
- * guessed: across a 30-day run the player is under two affordable rows for
- * 0.12% of looks, p50 60s and p99 150s, and every long one sits at the same
- * point — the deliberate spend-down just before committing to a guardian.
- * Emptying your own wallet on purpose is not an empty shop, so the bar is set
- * to pass that and still fail loudly on a real stall, which in the capped-tree
- * game ran to hours rather than minutes.
+ * The longest stretch with nothing within reach. The 95% clause is a share, so
+ * a long run could hide one real stall inside it; this catches the stall on
+ * its own. Set from measurement: the deliberate spend-down before a guardian is
+ * a minute or two, and the capped-tree game ran to hours (docs/DECISIONS.md #36).
  */
-export const SPEND_MAX_STARVED_FRACTION = 0.01;
 export const SPEND_MAX_DROUGHT_SEC = 300;
 
 /**
@@ -278,37 +284,39 @@ export const PERMANENT_HORIZON_SEC = 14 * SEC_PER_DAY;
  */
 export const HORIZON_SWEEP_DAYS = [3, 7, 14, 21, 30, 45, 60, 75, 90];
 
-/** Summarise every look at the upgrade panel taken past the grace window. */
+/**
+ * Summarise every in-session look at the upgrade panel taken past the grace
+ * window. Idle slices are excluded: nobody is looking and nothing is bought,
+ * so their wallets balloon and say nothing about the panel a player sees. The
+ * return after a gap is P3's question, not this one.
+ */
 export function spendDepth(samples: ShopSample[]): SpendDepth {
-  const counted = samples.filter((x) => x.sinceRealmStartSec >= SPEND_GRACE_SEC);
+  const counted = samples.filter(
+    (x) => x.inSession && x.sinceRealmStartSec >= SPEND_GRACE_SEC,
+  );
   if (counted.length === 0) {
     return {
       counted: 0,
-      minAffordable: 0,
       minPriced: 0,
+      leanFraction: 0,
+      reachFraction: 0,
       worstRealm: -1,
-      richFraction: 0,
-      starvedFraction: 1,
-      longestStarvedSec: Infinity,
+      longestDroughtSec: Infinity,
     };
   }
 
-  let minAffordable = Infinity;
   let minPriced = Infinity;
-  let worstRealm = counted[0]!.realm;
-  let starved = 0;
-  let rich = 0;
-  let longestStarvedSec = 0;
+  let lean = 0;
+  let reached = 0;
+  const unreachedByRealm = new Map<number, number>();
+  let longestDroughtSec = 0;
   let runStartSec: number | null = null;
   let prevSec: number | null = null;
 
   for (const x of counted) {
-    if (x.affordable < minAffordable) {
-      minAffordable = x.affordable;
-      worstRealm = x.realm;
-    }
     if (x.priced < minPriced) minPriced = x.priced;
-    if (x.affordable >= SPEND_TARGET) rich += 1;
+    if (x.affordable <= SPEND_LEAN_MAX) lean += 1;
+    const within = x.affordable >= 1 || x.reachSec <= SPEND_REACH_SEC;
 
     // Bracket the drought rather than measure sample-to-sample: it began some
     // time after the last healthy look and ended some time before the next, so
@@ -316,29 +324,38 @@ export function spendDepth(samples: ShopSample[]): SpendDepth {
     // last starved sample reads 0s for a drought seen once and understates
     // every other by up to one sampling interval — the wrong direction for a
     // number a validator leans on.
-    if (x.affordable < STARVED_BELOW) {
-      starved += 1;
-      if (runStartSec === null) runStartSec = prevSec ?? x.timeSec;
-      const span = x.timeSec - runStartSec;
-      if (span > longestStarvedSec) longestStarvedSec = span;
-    } else {
+    if (within) {
+      reached += 1;
       if (runStartSec !== null) {
         const span = x.timeSec - runStartSec;
-        if (span > longestStarvedSec) longestStarvedSec = span;
+        if (span > longestDroughtSec) longestDroughtSec = span;
       }
       runStartSec = null;
+    } else {
+      unreachedByRealm.set(x.realm, (unreachedByRealm.get(x.realm) ?? 0) + 1);
+      if (runStartSec === null) runStartSec = prevSec ?? x.timeSec;
+      const span = x.timeSec - runStartSec;
+      if (span > longestDroughtSec) longestDroughtSec = span;
     }
     prevSec = x.timeSec;
   }
 
+  let worstRealm = -1;
+  let worstCount = 0;
+  for (const [realm, n] of unreachedByRealm) {
+    if (n > worstCount) {
+      worstCount = n;
+      worstRealm = realm;
+    }
+  }
+
   return {
     counted: counted.length,
-    minAffordable,
     minPriced,
+    leanFraction: lean / counted.length,
+    reachFraction: reached / counted.length,
     worstRealm,
-    richFraction: rich / counted.length,
-    starvedFraction: starved / counted.length,
-    longestStarvedSec,
+    longestDroughtSec,
   };
 }
 

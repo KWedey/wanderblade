@@ -6,8 +6,9 @@ import {
   buyHeroLevel,
   buySkill,
   enterPortal,
+  FULL_LENGTH_REALM,
   initialState,
-  zonesPerRealm,
+  zonesForRealm,
 } from '../src/index';
 import { idleTo, nearPortal, portalReady, strikesAt } from './helpers';
 
@@ -67,11 +68,11 @@ describe('phase exclusivity and manual entry', () => {
     const s = nearPortal(9, 60);
     advance(s, 3600);
     expect(s.portalReady).toBe(true);
-    expect(s.zone).toBe(zonesPerRealm - 1);
+    expect(s.zone).toBe(zonesForRealm(0) - 1);
     const killsBefore = s.killIndex;
     advance(s, 3600);
     expect(s.killIndex).toBeGreaterThan(killsBefore);
-    expect(s.zone).toBe(zonesPerRealm - 1);
+    expect(s.zone).toBe(zonesForRealm(0) - 1);
     expect(s.realm).toBe(0);
   });
 });
@@ -139,7 +140,9 @@ describe('the boss phase pays nothing', () => {
   });
 
   it('has no death, enrage, or automatic failure — HP only ever falls', () => {
-    const s = portalReady(6, 30 * 86_400);
+    // A full-length realm: the opening guardian is small enough that bare
+    // hero damage fells it inside a day, which is the point of realm 0.
+    const s = portalReady(6, 30 * 86_400, FULL_LENGTH_REALM);
     enterPortal(s);
     let last = s.boss.hpRemaining;
     for (let i = 0; i < 20; i++) {

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   advance,
+  ARC_CATCH_MULT,
+  ARC_SPLIT_MAX,
   ascendancyBossPayout,
   ascendancyPerZone,
   ascMultiplier,
@@ -20,6 +22,7 @@ import {
   heroBaseDamage,
   heroDps,
   initialState,
+  killsPerZoneFor,
   killTime,
   levelCost,
   realmScale,
@@ -27,29 +30,50 @@ import {
   SKILL_IDS,
   skillMult,
   swingInterval,
-  zonesPerRealm,
+  zonesForRealm,
   type GameState,
 } from '../src/index';
 
 /**
- * Hero level at `realm` on the curve the simulator actually walks: about 180
- * by realm 10, then roughly 1.3 more per realm. Level and realm both feed
+ * Hero level at `realm` on the curve the simulator actually walks. Level resets
+ * on ascension, so a realm's ladder is the levels its HP span demands
+ * (50 zones at ln rH / ln rD, about 97) plus what the earnings bonus funds on
+ * top (about half a level per realm). Level and realm both feed
  * `heroBaseDamage` and `levelCost`, so an invented level moves the overflow
  * frontier on its own.
  */
 function levelAt(realm: number): number {
-  return Math.round(180 + 1.3 * realm);
+  return Math.round(100 + 0.5 * realm);
+}
+
+/**
+ * The most ranks of one skill a realm could buy if every coin it drops were
+ * caught and spent on that track alone. Cost and gold both carry the realm
+ * scale, so the bound is the same in every realm past the ramp.
+ */
+function rankReach(id: string, realm: number): number {
+  let budget = 0;
+  for (let z = 0; z < zonesForRealm(realm); z++) {
+    budget += killsPerZoneFor(realm) * enemyGold(realm, z) * (1 + ARC_SPLIT_MAX * ARC_CATCH_MULT);
+  }
+  let rank = 0;
+  let spent = 0;
+  while (spent + skillCost(id, rank, realm) <= budget) {
+    spent += skillCost(id, rank, realm);
+    rank += 1;
+  }
+  return rank;
 }
 
 /** A late-realm state: deep gear, a deep tree, a long ladder of hero levels. */
 function deepState(realm: number, level = levelAt(realm)): GameState {
   const s = initialState(1);
   s.realm = realm;
-  s.zone = zonesPerRealm - 1;
+  s.zone = zonesForRealm(realm) - 1;
   s.killsInZone = 0;
   s.portalReady = true;
   s.hero.level = level;
-  const power = gearPower(realm, zonesPerRealm - 1, 'epic', 'weapon');
+  const power = gearPower(realm, s.zone, 'epic', 'weapon');
   s.gear.weapon = { power, rarity: 'epic', realm, zone: s.zone };
   s.gear.armor = { power, rarity: 'epic', realm, zone: s.zone };
   s.gear.trinket = { power, rarity: 'epic', realm, zone: s.zone };
@@ -87,7 +111,7 @@ function clientFacing(s: GameState): Array<[string, number]> {
     ['ascDamageMult', ascMultiplier(s.ascendancy, 'damage')],
     ['ascGearMult', ascMultiplier(s.ascendancy, 'gearPower')],
     ['levelCost', levelCost(s.hero.level, s.realm)],
-    ['skillCost', skillCost('sunder', 200, s.realm)],
+    ['skillCost', skillCost('sunder', 2 * rankReach('sunder', s.realm), s.realm)],
     ['ascNodeCost', ascNodeCost('edge', 300)],
     ['ascendancyPerZone', ascendancyPerZone(s.realm)],
     ['ascendancyBossPayout', ascendancyBossPayout(s.realm)],
@@ -140,18 +164,18 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
     };
     const frontier = {
       bossHp: firstNonFinite((r) => bossHp(r)),
-      enemyHp: firstNonFinite((r) => enemyHp(r, zonesPerRealm - 1)),
-      gearPower: firstNonFinite((r) => gearPower(r, zonesPerRealm - 1, 'epic', 'weapon')),
-      enemyGold: firstNonFinite((r) => enemyGold(r, zonesPerRealm - 1)),
+      enemyHp: firstNonFinite((r) => enemyHp(r, zonesForRealm(r) - 1)),
+      gearPower: firstNonFinite((r) => gearPower(r, zonesForRealm(r) - 1, 'epic', 'weapon')),
+      enemyGold: firstNonFinite((r) => enemyGold(r, zonesForRealm(r) - 1)),
       levelCost: firstNonFinite((r) => levelCost(0, r)),
       realmScale: firstNonFinite((r) => realmScale(r)),
     };
     expect(frontier).toEqual({
       bossHp: 301,
       enemyHp: 330,
-      gearPower: 330,
-      enemyGold: 333,
-      levelCost: 341,
+      gearPower: 331,
+      enemyGold: 329,
+      levelCost: 340,
       realmScale: 342,
     });
 
@@ -175,10 +199,10 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
       }
       return Infinity;
     };
-    expect(topLevel(0)).toBe(5063);
-    expect(topLevel(100)).toBe(3575);
-    expect(topLevel(199)).toBe(2102);
-    expect(topLevel(296)).toBe(659);
+    expect(topLevel(0)).toBe(2473);
+    expect(topLevel(100)).toBe(1744);
+    expect(topLevel(199)).toBe(1022);
+    expect(topLevel(296)).toBe(315);
     // The curve the simulator walks stays well clear of both.
     expect(levelAt(199)).toBeLessThan(topLevel(199));
     expect(levelAt(296)).toBeLessThan(topLevel(296));
@@ -193,7 +217,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
     const ready = (realm: number): GameState => {
       const s = initialState(5);
       s.realm = realm;
-      s.zone = zonesPerRealm - 1;
+      s.zone = zonesForRealm(realm) - 1;
       s.portalReady = true;
       return s;
     };
@@ -231,24 +255,34 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
 
   /**
    * A skill's price is geometric in its own rate, so the steepest track
-   * overflows first. Pinned because an Infinity price is a MAX label wearing a
-   * different hat, and ADR #26 promises the panel never shows one.
+   * overflows first, and the realm scale eats the headroom as realms deepen.
+   * Pinned because an Infinity price is a MAX label wearing a different hat,
+   * and ADR #26 promises the panel never shows one.
    */
   it('keeps every skill priced far past the ranks a realm reaches', () => {
-    const frontier: Record<string, number> = {};
-    for (const id of SKILL_IDS) {
-      let rank = 0;
-      while (rank < 20_000 && Number.isFinite(skillCost(id, rank, 0))) rank += 1;
-      frontier[id] = rank;
-    }
-    expect(frontier).toEqual({
-      cleave: 6232,
-      warcry: 4057,
-      riposte: 5045,
-      sunder: 5765,
-      secondWind: 3694,
+    const frontierAt = (realm: number): Record<string, number> => {
+      const out: Record<string, number> = {};
+      for (const id of SKILL_IDS) {
+        let rank = 0;
+        while (rank < 20_000 && Number.isFinite(skillCost(id, rank, realm))) rank += 1;
+        out[id] = rank;
+      }
+      return out;
+    };
+    expect(frontierAt(0)).toEqual({
+      cleave: 510,
+      warcry: 284,
+      riposte: 197,
+      sunder: 151,
+      secondWind: 122,
     });
-    // Realm-local ranks reset every ascension and peak in the low hundreds.
-    expect(Math.min(...Object.values(frontier))).toBeGreaterThan(1000);
+    // Realm-local ranks reset every ascension; the last winnable realm keeps
+    // twice the ranks its whole gold could ever buy on any one track.
+    const deep = frontierAt(300);
+    for (const id of SKILL_IDS) {
+      const reach = rankReach(id, 300);
+      expect(reach, `${id} reach`).toBeGreaterThan(1);
+      expect(deep[id], `${id} frontier ${deep[id]} vs reach ${reach}`).toBeGreaterThan(2 * reach);
+    }
   });
 });

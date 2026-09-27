@@ -7,18 +7,19 @@ import {
   gearPower,
   GEAR_SLOTS,
   initialState,
-  zonesPerRealm,
+  ZONES_FULL,
+  zonesForRealm,
   type GameState,
 } from '../src/index';
 
 /** A portal-ready Road state in `realm` whose build can actually fell the guardian. */
-function readyIn(realm: number, gearZone = zonesPerRealm - 1): GameState {
+function readyIn(realm: number, gearZone = zonesForRealm(realm) - 1): GameState {
   const s = initialState(9);
   s.realm = realm;
-  s.zone = zonesPerRealm - 1;
+  s.zone = zonesForRealm(realm) - 1;
   s.killsInZone = 0;
   s.portalReady = true;
-  s.hero.level = 120;
+  s.hero.level = Math.round((120 * zonesForRealm(realm)) / ZONES_FULL);
   for (const slot of GEAR_SLOTS) {
     const power = gearPower(realm, gearZone, 'epic', slot);
     s.gear[slot] = { power, rarity: 'epic', realm, zone: gearZone };
@@ -28,13 +29,16 @@ function readyIn(realm: number, gearZone = zonesPerRealm - 1): GameState {
   return s;
 }
 
+/** The fight is walked in steps this long, so it ends on one of their edges. */
+const FIGHT_STEP_SEC = 30;
+
 /** Fight to the death at `momentum`, in small steps, and return the elapsed time. */
 function fightOut(s: GameState, momentum: number, capSec: number): number | null {
   const start = s.timeSec;
   const rate = momentum > 0 ? 4 : 0;
   let next = s.timeSec;
   while (s.phase === 'boss' && s.timeSec - start < capSec) {
-    const step = Math.min(30, capSec - (s.timeSec - start));
+    const step = Math.min(FIGHT_STEP_SEC, capSec - (s.timeSec - start));
     if (rate > 0) {
       const strikes = [];
       for (let t = next; t < s.timeSec + step; t += 1 / rate) {
@@ -81,9 +85,9 @@ describe('the portal preview is the number the player commits on', () => {
 
       const actual = fightOut(s, 0, idlePreview * 4 + 600);
       expect(actual).not.toBeNull();
-      // Swings are discrete, so the last one overshoots by less than one swing.
+      // The harness walks in steps, so the measured end lands on the next edge.
       expect(actual as number).toBeGreaterThan(idlePreview * 0.95);
-      expect(actual as number).toBeLessThan(idlePreview * 1.05 + 2);
+      expect(actual as number).toBeLessThan(idlePreview * 1.05 + FIGHT_STEP_SEC);
     }
   });
 

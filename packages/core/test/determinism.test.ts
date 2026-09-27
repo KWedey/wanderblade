@@ -8,7 +8,15 @@ import {
   enterPortal,
   initialState,
   serialize,
+  bossHp,
+  enemyHp,
+  FULL_LENGTH_REALM,
+  heroDps,
+  killsPerZoneFor,
+  killTime,
+  zonesForRealm,
   type GameEvent,
+  type GameState,
 } from '../src/index';
 import { clone, portalReady, ROAD_KILL0_SEC, strikesAt } from './helpers';
 
@@ -227,6 +235,99 @@ describe('split-advance determinism: ascension', () => {
     expect(s.killIndex).toBeGreaterThan(killIndexAtEntry);
     expect(s.rngState).not.toBe(rngAtEntry);
   });
+});
+
+/**
+ * Realm length is a function of the realm (docs/DECISIONS.md #63), so the
+ * zone and realm boundaries move with the realm index. Every boundary the new
+ * lengths introduce is crossed here in one advance and in two, with strikes in
+ * flight, and must land on the same bytes.
+ */
+describe('split-advance determinism: per-realm road lengths', () => {
+  /** Parked three kills short of a zone boundary in `realm`, at ~`killSec` per kill. */
+  function nearZoneEnd(realm: number, zone: number, killSec: number): GameState {
+    const s = initialState(19);
+    s.realm = realm;
+    s.zone = zone;
+    s.gear.weapon = {
+      power: Math.max(1, enemyHp(realm, zone) / killSec - heroDps(s)),
+      rarity: 'rare',
+      realm,
+      zone,
+    };
+    s.killsInZone = killsPerZoneFor(realm) - 3;
+    s.nextActionAtSec = s.timeSec + killTime(s, 0);
+    return s;
+  }
+
+  const boundaries: Array<[string, number, number]> = [
+    ['realm 0, last mid-road zone', 0, zonesForRealm(0) - 2],
+    ['realm 1, zone 3', 1, 3],
+    ['realm 4, last zone before the full ladder', 4, zonesForRealm(4) - 2],
+    ['realm 5, zone 10', FULL_LENGTH_REALM, 10],
+  ];
+
+  for (const [label, realm, zone] of boundaries) {
+    it(`${label}: a zone boundary with strikes in flight, split three ways`, () => {
+      const strikes = strikesAt(0, 30, 3);
+      const single = nearZoneEnd(realm, zone, 0.4);
+      const evSingle = advance(single, 30, strikes);
+
+      const split = nearZoneEnd(realm, zone, 0.4);
+      const evSplit = advance(split, 0.9, strikes)
+        .concat(advance(split, 1.3, strikes))
+        .concat(advance(split, 27.8, strikes));
+
+      expect(evSingle.some((e) => e.type === 'zone')).toBe(true);
+      expect(single.zone).toBe(zone + 1);
+      expect(JSON.stringify(evSplit)).toBe(JSON.stringify(evSingle));
+      expect(serialize(split)).toBe(serialize(single));
+    });
+  }
+
+  it('realm 0 opens its portal on the same kill however the advance is split', () => {
+    const single = nearZoneEnd(0, zonesForRealm(0) - 1, 0.4);
+    const evSingle = advance(single, 10);
+    const split = nearZoneEnd(0, zonesForRealm(0) - 1, 0.4);
+    const evSplit = advance(split, 1.1).concat(advance(split, 8.9));
+    expect(single.portalReady).toBe(true);
+    expect(evSingle.filter((e) => e.type === 'portalReady')).toHaveLength(1);
+    expect(JSON.stringify(evSplit)).toBe(JSON.stringify(evSingle));
+    expect(serialize(split)).toBe(serialize(single));
+  });
+
+  for (const fromRealm of [0, FULL_LENGTH_REALM - 1]) {
+    it(`victory in realm ${fromRealm} then a zone of realm ${fromRealm + 1}, split across both`, () => {
+      /** Mid-fight in `fromRealm`, with a blade that ends it in ~120 s and walks the next road at the floor. */
+      const fighting = (): GameState => {
+        const s = initialState(61);
+        s.realm = fromRealm;
+        s.zone = zonesForRealm(fromRealm) - 1;
+        s.killsInZone = killsPerZoneFor(fromRealm) - 1;
+        s.portalReady = true;
+        s.gear.weapon = { power: bossHp(fromRealm) / 120, rarity: 'epic', realm: fromRealm, zone: s.zone };
+        s.nextActionAtSec = s.timeSec + killTime(s, 0);
+        expect(enterPortal(s).entered).toBe(true);
+        return s;
+      };
+      const span = 400 + killsPerZoneFor(fromRealm + 1) * 0.35;
+      const strikes = strikesAt(0, span, 2);
+
+      const single = fighting();
+      const evSingle = advance(single, span, strikes);
+
+      const split = fighting();
+      const evSplit = advance(split, 37.25, strikes)
+        .concat(advance(split, 300, strikes))
+        .concat(advance(split, span - 337.25, strikes));
+
+      expect(single.realm).toBe(fromRealm + 1);
+      expect(single.zone).toBeGreaterThanOrEqual(1);
+      expect(evSingle.some((e) => e.type === 'zone' && e.realm === fromRealm + 1)).toBe(true);
+      expect(JSON.stringify(evSplit)).toBe(JSON.stringify(evSingle));
+      expect(serialize(split)).toBe(serialize(single));
+    });
+  }
 });
 
 // Float seconds add non-associatively, so before the clock was quantized the

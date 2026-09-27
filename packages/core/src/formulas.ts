@@ -1,8 +1,10 @@
 // Pure formula helpers. No mutation, no RNG — just the ECONOMY.md math.
 
 import {
+  ARC_SPLIT_MAX,
+  ARC_SPLIT_MIN,
   ASC_BOSS_PAYOUT,
-  ASC_CATCHES_PER_ZONE,
+  ASC_CATCH_ZONE_BONUS,
   ASC_COST_STEP,
   ASC_NODES,
   ASC_NODE_IDS,
@@ -11,7 +13,6 @@ import {
   ASC_SPEED_DECAY,
   ASC_SPEED_MAX_BONUS,
   BOSS_REALM_GAIN,
-  bossHpMult,
   bossSwingSec,
   d0,
   EARNINGS_BONUS_PER_VICTORY,
@@ -31,10 +32,10 @@ import {
   SKILLS,
   SLOT_POWER,
   SPECIES,
-  zonesPerRealm,
 } from './constants';
 import type { SpeciesDef } from './constants';
 import { momentumMultiplier } from './momentum';
+import { bossHpMultFor, killsPerZoneFor, zonesForRealm } from './pacing';
 import type { AscendancyState, GameState, GearSlot, GearState, Rarity } from './types';
 
 export type AscNodeEffect = 'damage' | 'gearPower' | 'attackSpeed';
@@ -85,7 +86,9 @@ export function speciesFor(killIndex: number): SpeciesDef {
 /** Guardian HP for `realm`: a multiple of that realm's final-zone enemy. */
 export function bossHp(realm: number): number {
   return (
-    bossHpMult * enemyHp(realm, zonesPerRealm - 1) * Math.pow(BOSS_REALM_GAIN, realm)
+    bossHpMultFor(realm) *
+    enemyHp(realm, zonesForRealm(realm) - 1) *
+    Math.pow(BOSS_REALM_GAIN, realm)
   );
 }
 
@@ -254,9 +257,17 @@ export function ascendancyPerZone(realm: number): number {
   return ASC_PER_ZONE * (1 + ASC_REALM_GROWTH * realm);
 }
 
-/** Pending Ascendancy granted by catching one loot-arc coin in `realm`. */
+/** Coins one zone of `realm` throws, at the mean split. */
+export function coinsPerZone(realm: number): number {
+  return (killsPerZoneFor(realm) * (ARC_SPLIT_MIN + ARC_SPLIT_MAX)) / 2;
+}
+
+/**
+ * Pending Ascendancy granted by catching one loot-arc coin in `realm`: a
+ * fully caught zone pays ASC_CATCH_ZONE_BONUS of the zone's own grant.
+ */
 export function ascendancyPerCatch(realm: number): number {
-  return ascendancyPerZone(realm) / ASC_CATCHES_PER_ZONE;
+  return (ascendancyPerZone(realm) * ASC_CATCH_ZONE_BONUS) / coinsPerZone(realm);
 }
 
 /** Pending Ascendancy granted by felling `realm`'s guardian. */

@@ -25,7 +25,8 @@ import {
 import { clone, runPlayer } from './simulate';
 import { runCorrectness, runPacing } from './validators';
 import type { SeedResult, SimConfig } from './types';
-import { enterPortal, type GameState } from '@wanderblade/core';
+import { enterPortal, FULL_LENGTH_REALM, type GameState } from '@wanderblade/core';
+import type { PortalReach } from './types';
 
 /** Road snapshots spread across the run, for the windowed probes. */
 function roadSnapshots(samplesOwner: GameState[], want: number): GameState[] {
@@ -55,7 +56,7 @@ function unmeasuredResult(
     bossUplift: [],
     eightHourBuys: [],
     twentyFourHourZones: [],
-    portalReachSec: { idle: null, active: null },
+    portalReach: [],
     promptVsOverfarm: null,
     abandonProbe: null,
     frontierRealm: main.frontierRealm,
@@ -86,20 +87,34 @@ export function simulateSeed(seed: number, config: SimConfig): SeedResult {
     maxVictories: config.quick ? 1 : undefined,
   });
 
-  // Realm 0 start → portal available, measured separately per policy.
-  const idleReach = runPlayer(seed, config, {
-    policy: 'road-idle',
-    entry: 'prompt',
-    stopAtPortalReady: true,
-  });
-  // P5's "active" is hours of play, not hours of elapsed time, so the reach
-  // probe plays without pause.
-  const activeReach = runPlayer(seed, config, {
-    policy: 'road-active',
-    entry: 'prompt',
-    stopAtPortalReady: true,
-    continuous: true,
-  });
+  // Realm start → portal available, measured separately per policy, for the
+  // tutorial realm and the first full-length one. P5's "active" is hours of
+  // play, not hours of elapsed time, so that probe plays without pause; the
+  // idle one walks the sim's own schedule and buys only when it checks in.
+  const reachTo = (realm: number, policy: 'road-idle' | 'road-active') =>
+    runPlayer(seed, config, {
+      policy,
+      entry: 'prompt',
+      stopAtPortalReadyRealm: realm,
+      continuous: policy === 'road-active',
+    });
+  const roadOf = (run: ReturnType<typeof runPlayer>, realm: number): number | null => {
+    const r = run.realms.find((x) => x.realm === realm);
+    return r === undefined || r.portalReadySec === null ? null : r.portalReadySec - r.startSec;
+  };
+  const idleReach = reachTo(0, 'road-idle');
+  const activeReach = reachTo(0, 'road-active');
+  const portalReach: PortalReach[] = [
+    { realm: 0, idle: roadOf(idleReach, 0), active: roadOf(activeReach, 0) },
+  ];
+  if (!config.quick) {
+    const full = FULL_LENGTH_REALM;
+    portalReach.push({
+      realm: full,
+      idle: roadOf(reachTo(full, 'road-idle'), full),
+      active: roadOf(reachTo(full, 'road-active'), full),
+    });
+  }
 
   // A portal-ready Road state is the shared fixture for the boss experiments.
   const readyState = clone(activeReach.state);
@@ -126,10 +141,7 @@ export function simulateSeed(seed: number, config: SimConfig): SeedResult {
     roadUplift: roadUplift(roadStates),
     roadWindowUplift: roadWindowUplift(roadStates),
     bossUplift: bossUplift(entryStates),
-    portalReachSec: {
-      idle: idleReach.realms[0]?.portalReadySec ?? null,
-      active: activeReach.realms[0]?.portalReadySec ?? null,
-    },
+    portalReach,
   };
   const result: SeedResult = config.quick
     ? fast

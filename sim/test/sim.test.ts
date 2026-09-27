@@ -5,7 +5,9 @@ import {
   ARC_FLIGHT_SEC,
   initialState,
   SKILL_IDS,
-  zonesPerRealm,
+  bossBand,
+  portalBand,
+  zonesForRealm,
   type GameState,
   type LootArc,
 } from '@wanderblade/core';
@@ -17,7 +19,8 @@ import {
   deadTime,
   spendDepth,
   SPEND_GRACE_SEC,
-  SPEND_TARGET,
+  SPEND_LEAN_MAX,
+  SPEND_REACH_SEC,
   permanentUplift,
   twentyFourHourReturn,
   witnessedBeats,
@@ -205,7 +208,9 @@ describe('aimAtOldestArc', () => {
 
 /** How far down the whole run a state has come, across realm resets. */
 function progress(s: GameState): number {
-  return s.realm * zonesPerRealm + s.zone;
+  let zones = 0;
+  for (let r = 0; r < s.realm; r++) zones += zonesForRealm(r);
+  return zones + s.zone;
 }
 
 describe('runPlayer determinism and contract watching', () => {
@@ -242,7 +247,7 @@ describe('runPlayer determinism and contract watching', () => {
     const r = runPlayer(4, cfg({ days: 30 }), {
       policy: 'road-active',
       entry: 'prompt',
-      stopAtPortalReady: true,
+      stopAtPortalReadyRealm: 0,
     });
     expect(r.state.portalReady).toBe(true);
     expect(r.state.phase).toBe('road');
@@ -264,6 +269,29 @@ const weekRun = (): ReturnType<typeof runPlayer> =>
 
 const PASSED = { pass: true, detail: '' };
 
+/** A realm the run has only just entered; tests fill in what they measure. */
+function realmRecord(realm: number, startSec: number): RealmRecord {
+  return {
+    realm,
+    startSec,
+    portalReadySec: null,
+    portalEnterSec: null,
+    victorySec: null,
+    roadSec: null,
+    bossSec: 0,
+    activeSec: 0,
+    bossEtaAtEntrySec: null,
+    bossActiveEtaAtEntrySec: null,
+    gearPowerAtEntry: 0,
+    goldPeak: 0,
+    pendingAtVictory: null,
+    bankedAfter: null,
+    earningsMultAfter: null,
+    treePurchasesTotal: 0,
+    abandons: 0,
+  };
+}
+
 function stubResult(over: Partial<SeedResult> = {}): SeedResult {
   const main = (cachedRun ??= runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' }));
   return {
@@ -278,7 +306,7 @@ function stubResult(over: Partial<SeedResult> = {}): SeedResult {
     bossUplift: [],
     eightHourBuys: [],
     twentyFourHourZones: [],
-    portalReachSec: { idle: null, active: null },
+    portalReach: [],
     promptVsOverfarm: null,
     abandonProbe: null,
     frontierRealm: main.frontierRealm,
@@ -438,8 +466,9 @@ describe('a full message list cannot hide a breach', () => {
 
 describe('the idle-return probes measure a return, not a session', () => {
   it('makes no purchase inside the 24h window', () => {
+    // Ten minutes in: still walking realm 0, whose idle road is under an hour.
     const s = initialState(5);
-    for (let i = 0; i < 24; i++) advance(s, 300);
+    for (let i = 0; i < 2; i++) advance(s, 300);
     botTouch(s); // the last thing the player did before walking away
     const before = { level: s.hero.level, gold: s.gold, banked: s.ascendancy.banked };
 
@@ -455,88 +484,118 @@ describe('the idle-return probes measure a return, not a session', () => {
 describe('spendDepth', () => {
   const sample = (over: Partial<ShopSample>): ShopSample => ({
     timeSec: 0,
+    inSession: true,
     sinceRealmStartSec: SPEND_GRACE_SEC,
     realm: 0,
-    affordable: 5,
+    affordable: 1,
     priced: 6,
+    reachSec: 0,
     ...over,
   });
 
   it('ignores the post-ascension grace window, where gold is zero by design', () => {
     const d = spendDepth([
-      sample({ sinceRealmStartSec: 0, affordable: 0 }),
-      sample({ sinceRealmStartSec: SPEND_GRACE_SEC - 1, affordable: 0 }),
-      sample({ sinceRealmStartSec: SPEND_GRACE_SEC, affordable: 4 }),
+      sample({ sinceRealmStartSec: 0, affordable: 0, reachSec: Infinity }),
+      sample({ sinceRealmStartSec: SPEND_GRACE_SEC - 1, affordable: 0, reachSec: Infinity }),
+      sample({ sinceRealmStartSec: SPEND_GRACE_SEC, affordable: 1 }),
     ]);
     expect(d.counted).toBe(1);
-    expect(d.minAffordable).toBe(4);
+    expect(d.reachFraction).toBe(1);
   });
 
-  it('reports the minimum and the realm holding it, not an average', () => {
+  it('ignores idle slices, where nobody is looking', () => {
     const d = spendDepth([
-      sample({ realm: 1, affordable: 9 }),
-      sample({ realm: 2, affordable: 2 }),
-      sample({ realm: 3, affordable: 9 }),
+      sample({ inSession: false, affordable: 9 }),
+      sample({ inSession: true, affordable: 1 }),
     ]);
-    expect(d.minAffordable).toBe(2);
+    expect(d.counted).toBe(1);
+    expect(d.leanFraction).toBe(1);
+  });
+
+  it('reports the priced minimum, which gold cannot move', () => {
+    const d = spendDepth([sample({ priced: 6 }), sample({ priced: 5 }), sample({ priced: 8 })]);
+    expect(d.minPriced).toBe(5);
+  });
+
+  it('counts a look as lean at the cap and rich one row above it', () => {
+    const d = spendDepth([
+      sample({ affordable: SPEND_LEAN_MAX }),
+      sample({ affordable: SPEND_LEAN_MAX + 1 }),
+      sample({ affordable: 0, reachSec: 10 }),
+      sample({ affordable: 7 }),
+    ]);
+    expect(d.leanFraction).toBeCloseTo(0.5, 10);
+  });
+
+  it('counts a look as reached when a row is affordable or one is inside the window', () => {
+    const d = spendDepth([
+      sample({ affordable: 1, reachSec: 0 }),
+      sample({ affordable: 0, reachSec: SPEND_REACH_SEC }),
+      sample({ affordable: 0, reachSec: SPEND_REACH_SEC + 1 }),
+      sample({ affordable: 0, reachSec: Infinity }),
+    ]);
+    expect(d.reachFraction).toBeCloseTo(0.5, 10);
+  });
+
+  it('names the realm with the most looks that had nothing in reach', () => {
+    const d = spendDepth([
+      sample({ realm: 1, affordable: 0, reachSec: 999 }),
+      sample({ realm: 2, affordable: 0, reachSec: 999 }),
+      sample({ realm: 2, affordable: 0, reachSec: 999 }),
+      sample({ realm: 3, affordable: 3 }),
+    ]);
     expect(d.worstRealm).toBe(2);
   });
 
-  it('brackets a starved stretch by the window it sits inside', () => {
+  it('brackets a drought by the window it sits inside', () => {
     const d = spendDepth([
-      sample({ timeSec: 0, affordable: 5 }),
-      sample({ timeSec: 30, affordable: 1 }),
-      sample({ timeSec: 60, affordable: 1 }),
-      sample({ timeSec: 90, affordable: 5 }),
+      sample({ timeSec: 0, affordable: 1 }),
+      sample({ timeSec: 30, affordable: 0, reachSec: 500 }),
+      sample({ timeSec: 60, affordable: 0, reachSec: 500 }),
+      sample({ timeSec: 90, affordable: 1 }),
     ]);
-    // Starved at 30 and 60, healthy at 0 and 90: the drought began after 0 and
-    // ended before 90, so 90 is the honest bound — not the 30 a first-to-last
-    // starved-sample measure would report.
-    expect(d.longestStarvedSec).toBe(90);
-    expect(d.starvedFraction).toBeCloseTo(2 / 4, 10);
+    // Nothing in reach at 30 and 60, healthy at 0 and 90: the drought began
+    // after 0 and ended before 90, so 90 is the honest bound — not the 30 a
+    // first-to-last starved-sample measure would report.
+    expect(d.longestDroughtSec).toBe(90);
+    expect(d.reachFraction).toBeCloseTo(2 / 4, 10);
   });
 
   it('gives a drought seen once the interval it hides in, not zero', () => {
     const d = spendDepth([
-      sample({ timeSec: 0, affordable: 5 }),
-      sample({ timeSec: 30, affordable: 1 }),
-      sample({ timeSec: 60, affordable: 5 }),
-    ]);
-    expect(d.longestStarvedSec).toBe(60);
-  });
-
-  it('closes an unbroken starved run that reaches the end of the samples', () => {
-    const d = spendDepth([
-      sample({ timeSec: 0, affordable: 5 }),
-      sample({ timeSec: 30, affordable: 1 }),
+      sample({ timeSec: 0, affordable: 1 }),
+      sample({ timeSec: 30, affordable: 0, reachSec: 500 }),
       sample({ timeSec: 60, affordable: 1 }),
     ]);
-    expect(d.longestStarvedSec).toBe(60);
+    expect(d.longestDroughtSec).toBe(60);
   });
 
-  it('counts the rich share against the target, not against the minimum', () => {
+  it('closes an unbroken drought that reaches the end of the samples', () => {
     const d = spendDepth([
-      sample({ affordable: SPEND_TARGET }),
-      sample({ affordable: SPEND_TARGET + 3 }),
-      sample({ affordable: SPEND_TARGET - 1 }),
-      sample({ affordable: 0 }),
+      sample({ timeSec: 0, affordable: 1 }),
+      sample({ timeSec: 30, affordable: 0, reachSec: 500 }),
+      sample({ timeSec: 60, affordable: 0, reachSec: 500 }),
     ]);
-    expect(d.richFraction).toBeCloseTo(0.5, 10);
-    expect(d.minAffordable).toBe(0);
+    expect(d.longestDroughtSec).toBe(60);
   });
 
   it('treats no samples as the worst case rather than a silent pass', () => {
     const d = spendDepth([]);
     expect(d.counted).toBe(0);
-    expect(d.minAffordable).toBe(0);
-    expect(d.richFraction).toBe(0);
-    expect(d.starvedFraction).toBe(1);
+    expect(d.leanFraction).toBe(0);
+    expect(d.reachFraction).toBe(0);
+    expect(d.longestDroughtSec).toBe(Infinity);
   });
 
   it('is fed by real runs: a road run produces looks past the grace window', () => {
     const r = runPlayer(5, cfg({ days: 1 }), { policy: 'road-active', entry: 'prompt' });
     expect(r.shopSamples.length).toBeGreaterThan(0);
     expect(spendDepth(r.shopSamples).counted).toBeGreaterThan(0);
+    for (const x of r.shopSamples) {
+      expect(x.reachSec).toBeGreaterThanOrEqual(0);
+      // A reach of zero means a gold row is affordable; the converse can be a tree node.
+      if (x.reachSec === 0) expect(x.affordable).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -550,29 +609,115 @@ describe('the dead-time and starvation clauses bite', () => {
   const find = (r: SeedResult, id: string) =>
     runPacing(r).find((v) => v.id === id) as { id: string; pass: boolean; detail: string };
 
-  it('P8 fails on a panel that goes all grey, and passes on today', () => {
+  it('P8 fails on a panel where everything is green, and passes on a lean one', () => {
     const main = stubResult();
-    expect(find(main, 'P8').pass).toBe(true);
-    expect(main.spendDepth.minAffordable).toBeGreaterThanOrEqual(1);
-
-    // The capped-tree game: every row priced, none of them buyable.
-    const allGrey = stubResult({
-      spendDepth: { ...main.spendDepth, minAffordable: 0 },
-    });
-    expect(find(allGrey, 'P8').pass).toBe(false);
-  });
-
-  it('P8 fails on a long drought even when the panel is never fully grey', () => {
-    const main = stubResult();
-    const starved = stubResult({
+    const lean = stubResult({
       spendDepth: {
-        ...main.spendDepth,
-        minAffordable: 1,
-        starvedFraction: 0.2,
-        longestStarvedSec: 4 * 3600,
+        counted: 1000,
+        minPriced: 6,
+        leanFraction: 0.9,
+        reachFraction: 0.99,
+        worstRealm: -1,
+        longestDroughtSec: 90,
       },
     });
+    expect(find(lean, 'P8').pass).toBe(true);
+
+    // The pre-#63 game: every row affordable ninety seconds into the realm.
+    const allGreen = stubResult({
+      spendDepth: { ...lean.spendDepth, leanFraction: 0.001 },
+    });
+    expect(find(allGreen, 'P8').pass).toBe(false);
+    expect(main.spendDepth.counted).toBeGreaterThan(0);
+  });
+
+  it('P8 fails on a starved panel, whether as a share of looks or as one long drought', () => {
+    const lean = stubResult({
+      spendDepth: {
+        counted: 1000,
+        minPriced: 6,
+        leanFraction: 0.9,
+        reachFraction: 0.99,
+        worstRealm: -1,
+        longestDroughtSec: 90,
+      },
+    });
+    // The capped-tree game: every row priced, none of them within reach.
+    const starved = stubResult({ spendDepth: { ...lean.spendDepth, reachFraction: 0.8 } });
     expect(find(starved, 'P8').pass).toBe(false);
+    const drought = stubResult({
+      spendDepth: { ...lean.spendDepth, longestDroughtSec: 4 * 3600 },
+    });
+    expect(find(drought, 'P8').pass).toBe(false);
+    const fewRows = stubResult({ spendDepth: { ...lean.spendDepth, minPriced: 4 } });
+    expect(find(fewRows, 'P8').pass).toBe(false);
+  });
+
+  it('P5 judges every realm against its own band', () => {
+    const b0 = portalBand(0);
+    const b3 = portalBand(3);
+    const inBand = stubResult({
+      portalReach: [{ realm: 0, active: b0.active.minSec + 1, idle: b0.idle.maxSec - 1 }],
+      realms: [
+        { ...realmRecord(0, 0), portalReadySec: b0.active.minSec + 1 },
+        { ...realmRecord(3, 10_000), portalReadySec: 10_000 + b3.active.minSec + 60 },
+      ],
+    });
+    expect(find(inBand, 'P5').pass).toBe(true);
+
+    const tooFast = stubResult({
+      ...inBand,
+      portalReach: [{ realm: 0, active: b0.active.minSec - 1, idle: b0.idle.maxSec - 1 }],
+    });
+    expect(find(tooFast, 'P5').pass).toBe(false);
+
+    const b5 = portalBand(5);
+    const fullSlow = stubResult({
+      ...inBand,
+      portalReach: [...inBand.portalReach, { realm: 5, active: b5.active.maxSec + 1, idle: b5.idle.minSec }],
+    });
+    expect(find(fullSlow, 'P5').pass).toBe(false);
+
+    // Past the first full-length realm the bonuses compound by design: reported, not banded.
+    const deepFast = stubResult({
+      ...inBand,
+      realms: [...inBand.realms, { ...realmRecord(40, 50_000), portalReadySec: 50_000 + 600 }],
+    });
+    const deep = find(deepFast, 'P5');
+    expect(deep.pass).toBe(true);
+    expect(deep.detail).toContain('not banded');
+
+    const laterRealmSlow = stubResult({
+      ...inBand,
+      realms: [
+        inBand.realms[0]!,
+        { ...realmRecord(3, 10_000), portalReadySec: 10_000 + b3.idle.maxSec + 1 },
+      ],
+    });
+    const v = find(laterRealmSlow, 'P5');
+    expect(v.pass).toBe(false);
+    expect(v.detail).toContain('realm 3');
+  });
+
+  it('P6 judges every guardian against its own realm band', () => {
+    const fight = (realm: number, eta: number): RealmRecord => ({
+      ...realmRecord(realm, 0),
+      portalEnterSec: 100,
+      victorySec: 200,
+      bossActiveEtaAtEntrySec: eta,
+    });
+    const ok = stubResult({
+      realms: [fight(0, bossBand(0).minSec + 1), fight(6, bossBand(6).maxSec - 1)],
+    });
+    expect(find(ok, 'P6').pass).toBe(true);
+
+    // A realm-0 guardian that takes the realm-6 band's floor is far too long.
+    const slowOpener = stubResult({
+      realms: [fight(0, bossBand(6).minSec), fight(6, bossBand(6).maxSec - 1)],
+    });
+    const v = find(slowOpener, 'P6');
+    expect(v.pass).toBe(false);
+    expect(v.detail).toContain('realm 0');
   });
 
   it('P9 fails on the pre-fix dead time, and passes on today', () => {

@@ -11,7 +11,7 @@ import {
   heroDps,
   serialize,
   SKILL_IDS,
-  zonesPerRealm,
+  zonesForRealm,
   type GameState,
 } from '../src/index';
 import { clone, portalReady } from './helpers';
@@ -195,7 +195,7 @@ describe('pending Ascendancy accrual', () => {
     expect(s.portalReady).toBe(true);
     const atPortal = s.ascendancy.pending;
     expect(atPortal).toBeGreaterThan(0);
-    expect(s.collection.zonesCleared).toBe(zonesPerRealm);
+    expect(s.collection.zonesCleared).toBe(zonesForRealm(0));
 
     advance(s, 7 * 86_400); // a week of overfarming a ready realm
     expect(s.ascendancy.pending).toBe(atPortal);

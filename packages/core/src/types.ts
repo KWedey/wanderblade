@@ -144,9 +144,9 @@ export interface GameState {
   phase: Phase;
   /** Realm index (0-based). Increments on ascension only. */
   realm: number;
-  /** Zone within the current realm (0..zonesPerRealm-1). Resets on ascension. */
+  /** Zone within the current realm (0..zonesForRealm(realm)-1). Resets on ascension. */
   zone: number;
-  /** Kills completed in the current zone (0..killsPerZone). */
+  /** Kills completed in the current zone (0..killsPerZoneFor(realm)). */
   killsInZone: number;
   /** The realm's road is fully walked; the portal may be entered manually. */
   portalReady: boolean;
