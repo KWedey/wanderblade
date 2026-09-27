@@ -1001,7 +1001,12 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   function renderAscendancy(asc: AscendancyVM): void {
     // Real text, not a ::after. The bitmap layer reads textContent, so a
     // pseudo-element's mark stayed webfont and printed over the number.
-    setText(ascOpenBank, `${formatNumber(asc.banked)} A`);
+    // Pending rides the button too: a run that has earned 3 A and shows 0 A
+    // for two hours reads as a realm that pays nothing.
+    setText(
+      ascOpenBank,
+      asc.pending > 0 ? `${formatNumber(asc.banked)} A \u00b7 +${formatNumber(asc.pending)}` : `${formatNumber(asc.banked)} A`,
+    );
     setText(ascBanked, formatNumber(asc.banked));
     setText(ascPending, formatNumber(asc.pending));
     setText(ascVictories, formatNumber(asc.victories));

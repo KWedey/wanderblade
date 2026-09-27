@@ -401,6 +401,20 @@ function killMonster(w: World, input: WorldInput): void {
 
   const dead = w.queue.shift();
   if (dead) w.fallen.push({ sprite: dead.sprite, x, age: 0 });
+  // The kill's own gold, rising off the corpse. The coins carry the catch
+  // bonus; this is the base pay the log line names, so the two agree.
+  if (input.model.goldPerKill > 0) {
+    payout(w, input, {
+      x,
+      y: y - 34,
+      life: FLOATER_LIFE,
+      value: input.model.goldPerKill,
+      label: (v) => `+${formatShort(v)}`,
+      color: LOOT_GLOW,
+      tier: 'payout',
+      owned: false,
+    });
+  }
   // Damage numbers belong to the thing that took the hit; a corpse's number
   // left hanging in the air reads as unowned UI.
   for (let i = w.floaters.length - 1; i >= 0; i--) {

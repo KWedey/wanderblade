@@ -131,3 +131,27 @@ describe('a creature dies on screen instead of being swapped out', () => {
     expect(blits[0]!.y + blits[0]!.h).toBe(f.view.groundY);
   });
 });
+
+describe('a kill pays on screen', () => {
+  it('raises +gold off the corpse when the engine lands a kill', () => {
+    const { f } = road(3, { model: { goldPerKill: 7 } });
+    step(f.world, f, 1 / 60);
+    f.model.kills = 4;
+    step(f.world, f, 1 / 60);
+    const pay = f.world.floaters.find((fl) => fl.tier === 'payout' && fl.value > 0);
+    expect(pay).toBeDefined();
+    expect(pay!.text).toBe('+7.0');
+  });
+
+  it('grows one number rather than stacking a ladder when kills land fast', () => {
+    const { f } = road(3, { model: { goldPerKill: 7 } });
+    step(f.world, f, 1 / 60);
+    f.model.kills = 4;
+    step(f.world, f, 1 / 60);
+    f.model.kills = 5;
+    step(f.world, f, 1 / 60);
+    const pays = f.world.floaters.filter((fl) => fl.tier === 'payout' && fl.value > 0);
+    expect(pays).toHaveLength(1);
+    expect(pays[0]!.value).toBe(14);
+  });
+});
