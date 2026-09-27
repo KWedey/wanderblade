@@ -48,7 +48,7 @@ describe('writeSave / readSave round-trip', () => {
     // The first kill is not species 0, so a sparse Bestiary tally would carry
     // null holes here — and null is not a finite number to the validator.
     const s = initialState(7);
-    advance(s, 0.5);
+    advance(s, 1.2);
     expect(s.killIndex).toBe(1);
     writeSave(s);
 
