@@ -905,3 +905,22 @@ Judges named the result twice without naming the cause: *"flat stepped colour ca
 **Evidence:** `packages/core/test/determinism.test.ts` adds 0.1+0.2+0.3 bracketing, a sub-ms no-op, 20 seeded random-split trials from a fractional start with strikes, and a boundary strike via `clockAfter`. Gate at merge: 44 files / 826 tests, exit 0.
 
 **Amends #6:** the clock is still event-stepped against an absolute `nextActionAtSec`; it is now also quantized.
+
+## 63. Feel before content: realm 0 ends inside the first session, and the screen must show progress — 2026-09-27
+
+**Decision:** M3F, a feel milestone, precedes the rest of M3 and all of M4. It has two halves and both are binding.
+
+*Pacing.* Realm 0 (Greenwood) is a tutorial-length realm: portal ready in **12–20 min active, 40–80 min idle**, and its guardian falls in **3–6 min active**, so a new player ascends inside one 20–30-minute session. Realm length grows with realm index and reaches the old 2–4 h active band by realm 5; the guardian band grows the same way to the old 15–90 min. Upgrade prices grow fast enough that at most two rows are affordable most of the time; a starved panel is still forbidden.
+
+*Presentation.* The scene receives the zone index and shows every zone advance. A monster dies on screen instead of being swapped out. Coins launch from the kill, fly above the monster, and land on the road ahead where the hero collects them. A strike that misses is still seen and heard. Pending Ascendancy is visible on the Road HUD, not only inside the overlay.
+
+**Why:** A playthrough on 2026-09-27 found zone 1 and zone 49 of Greenwood draw the same frame, tapping at 3/s was not perceptible (×1.39 label, gold/s 2.5 → 4.0), every upgrade row was affordable after 90 s, and the first permanent reward was 2–4 hours away. The simulator proved the active-vs-idle ratios in `docs/ACTIVE-PLAY.md`; nobody had played the result, and `docs/ROADMAP.md` records no playtest. A ratio band measures fairness, not fun. Zone 1 and zone 49 looked the same because nothing in `app/src/scene/` reads the zone (`SceneModel` has `region` only), monsters are `queue.shift()`ed on death, and the arc origin is the hero's feet with the landing 15–46 px right of him, which is exactly where the monster stands.
+
+**Consequences:**
+- P5, P6 and P8 in `sim/src/validators.ts` are re-banded per realm, not deleted. The old bands survive as the realm ≥ 5 clause. P10's 14-day checkpoint keeps its 1.4–2.3× band and is re-measured.
+- Content end (#48) moves earlier because early realms are shorter; the new day is recorded when measured.
+- `killsPerZone` and `zonesPerRealm` stop being single constants and become functions of realm index.
+- Every constant change still lands with a full `npm run sim` quoted (seeds and PASS/FAIL).
+- Real-phone playtest notes become a required exit artifact for M3F, recorded in `docs/PLAYTESTS.md`.
+
+**Supersedes:** the realm-0 reading of the P5 band in #31/#39 and the fixed 50-zone realm in `constants.ts`. #34's realm-300 ceiling stands.

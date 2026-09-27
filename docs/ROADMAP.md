@@ -87,7 +87,21 @@ The former Phase 3–5 sequence is superseded. The scene renderer remains useful
 
 **Exit:** core, simulator, save, and controller tests prove the full Road → Boss → Ascension lifecycle before UI polish.
 
-## M3 — Active Road and portal-boss client *(current — built; phone playtests outstanding)*
+## M3F — Feel milestone *(current — ADR #63)*
+
+Verdict on 2026-09-27: the game is not fun. Nothing on screen changes between zone 1 and zone 49, a tap is imperceptible, every upgrade is affordable after 90 s, and the first ascension is hours away. This milestone fixes feel and pacing before any more content. Plan: `docs/superpowers/plans/2026-09-27-feel-milestone.md`.
+
+- [ ] Scene reads the zone index; each zone advance is visible (signpost, backdrop shift, banner)
+- [ ] Monsters die on screen; coins launch from the kill, fly above the monster, land ahead and are collected
+- [ ] A miss is seen and heard; momentum is legible at a glance; kill payout is shown
+- [ ] Pending Ascendancy on the Road HUD
+- [ ] Realm 0 portal-ready in 12–20 min active, guardian 3–6 min; realm length and boss band grow per realm
+- [ ] Upgrade scarcity: ≤ 2 affordable rows most of the time, never starved; P5/P6/P8 re-banded per realm, full sim quoted
+- [ ] Real-phone playtest recorded in `docs/PLAYTESTS.md`: first session reaches ascension
+
+**Exit:** a first-time player ascends inside one session and can say what tapping did.
+
+## M3 — Active Road and portal-boss client *(built; phone playtests outstanding; paused behind M3F)*
 
 - [x] Build the Road diorama scene spine with SRD-verified placeholder monster roster — `app/src/scene/`, 35 named species plus a fallback in `app/src/species.ts`
 - [x] Implement the approved active Road mechanics and session feedback — momentum, loot arcs, `feel.ts` audio/haptics, `scene/fx.ts`
