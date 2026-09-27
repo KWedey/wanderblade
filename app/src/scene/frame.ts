@@ -97,8 +97,6 @@ export const BLADE_REACH = 20;
 export const BOSS_SCALE = 2;
 /** How far an actor's shadow is stepped toward night, against the props' 0.52. */
 export const ACTOR_SHADOW = 0.74;
-/** Seconds a thrown coin stays in the air, and so stays catchable. */
-export const ARC_FLIGHT_SEC = 1.5;
 export const LOOT_GLOW = '#fbf236';
 /** Length of every scrolling prop track, in scene units. */
 export const PROP_SPAN = 1400;

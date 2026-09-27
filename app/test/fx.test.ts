@@ -9,7 +9,7 @@ import { HOLD_STRIKE_INTERVAL_SEC } from '../src/active';
 import { describe, expect, it } from 'vitest';
 import {
   ARC_GRAVITY,
-  arcApexHeight,
+  ARC_UNIT_PX,
   arcSpaceFromScene,
   sceneFromArcSpace,
   decayTo,
@@ -110,28 +110,23 @@ describe('wrap', () => {
   });
 });
 
-describe('arcApexHeight', () => {
-  it('is g*T^2/8', () => {
-    expect(arcApexHeight(1.5, 160)).toBeCloseTo((160 * 1.5 * 1.5) / 8);
+describe('ARC_UNIT_PX', () => {
+  // The apex is one arc unit up, and the widest road creature is 30 px tall:
+  // a coin that does not clear it flies through the thing it was thrown off.
+  it('lifts the apex clear of a 30 px creature', () => {
+    expect(ARC_UNIT_PX).toBeGreaterThan(30);
   });
 
-  it('never returns a degenerate scale', () => {
-    expect(arcApexHeight(0, 160)).toBe(1);
-  });
-
-  // The scale exists to put core's arc on the pixel grid, so core's arc is what
-  // it is measured against.
-  it('lands core\'s unit apex on exactly that many pixels', () => {
-    const apex = arcApexHeight(ARC_FLIGHT_SEC);
+  it("lands core's unit apex on exactly that many pixels", () => {
     const peak = arcPositionAt(coreArc(), ARC_FLIGHT_SEC / 2);
     const ground = 100;
-    const drawn = sceneFromArcSpace(peak!.x, peak!.y, 0, ground, apex);
-    expect(ground - drawn.y).toBeCloseTo(apex, 6);
+    const drawn = sceneFromArcSpace(peak!.x, peak!.y, 0, ground, ARC_UNIT_PX);
+    expect(ground - drawn.y).toBeCloseTo(ARC_UNIT_PX, 6);
   });
 });
 
 describe('arcSpaceFromScene', () => {
-  it('puts the hero at the origin', () => {
+  it('puts the origin at the origin', () => {
     expect(arcSpaceFromScene(50, 100, 50, 100, 40)).toEqual({ x: 0, y: 0 });
   });
 
@@ -158,7 +153,7 @@ describe('arcSpaceFromScene', () => {
 describe("core's arc drawn on the scene's pixel grid", () => {
   const ground = 120;
   const heroX = 40;
-  const apex = arcApexHeight(ARC_FLIGHT_SEC);
+  const apex = ARC_UNIT_PX;
 
   /** Where core says the arc is at `t`, in scene pixels. */
   function drawn(t: number) {
@@ -166,13 +161,13 @@ describe("core's arc drawn on the scene's pixel grid", () => {
     return sceneFromArcSpace(p.x, p.y, heroX, ground, apex);
   }
 
-  it('leaves the hero on the ground line', () => {
+  it('leaves the origin on the ground line', () => {
     const p = drawn(1e-6);
     expect(p.x).toBeCloseTo(heroX, 3);
     expect(p.y).toBeCloseTo(ground, 3);
   });
 
-  it('rises exactly arcApexHeight pixels at the half-way point', () => {
+  it('rises exactly ARC_UNIT_PX pixels at the half-way point', () => {
     expect(ground - drawn(ARC_FLIGHT_SEC / 2).y).toBeCloseTo(apex, 6);
   });
 

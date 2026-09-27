@@ -2,10 +2,9 @@
 // swing, particles, floaters, landed coins and the scroll of every parallax
 // band. Pure state and its step; nothing here touches a canvas.
 
-import { arcPositionAt, type ArcPoint } from '@wanderblade/core';
+import { arcPositionAt, type ArcPoint, type LootArc } from '@wanderblade/core';
 import { rosterAt, speciesIndexAt } from '../species';
 import {
-  ARC_FLIGHT_SEC,
   BLADE_REACH,
   BOSS_SCALE,
   LOOT_GLOW,
@@ -21,7 +20,7 @@ import {
   type SceneModel,
 } from './frame';
 import {
-  arcApexHeight,
+  ARC_UNIT_PX,
   arcSpaceFromScene,
   bodyPocket,
   decayTo,
@@ -79,6 +78,12 @@ const ZONE_BANNER_SEC = 1.6;
 const QUEUE_GAP = 55;
 /** Monsters visible at once: the one being fought, plus the queue behind it. */
 const QUEUE_DEPTH = 5;
+/** Half a road creature past the blade's reach: where the engaged one stands, and so where its coins fly from. */
+const KILL_INSET = 10;
+/** Landed coins on the road at once; the oldest is collected early past this. */
+const REST_CAP = 40;
+/** A coin that left the list this long after landing was seen to land; an older one was an offline return. */
+const LANDED_WINDOW_SEC = 1;
 
 /** The guardian is baked after the realm's roster, so it owns the last slot. */
 const bossSlot = (region: number): number => rosterAt(region).length;
@@ -170,6 +175,10 @@ export interface World {
   floaters: Floater[];
   rests: Rest[];
   streaks: Streak[];
+  /** Arcs the last frame drew, so a coin that leaves the list can be told landed from caught. */
+  seenArcs: readonly LootArc[];
+  /** Catches the engine reported that the arc list has not yet been seen without. */
+  catchesToAbsorb: number;
   /** Scene point loot streaks fly to — the HUD's gold readout. */
   collectAnchor: { x: number; y: number };
   /** Scene coords of the last aimed strike, so a catch pays out where it was earned. */
@@ -210,6 +219,8 @@ export function createWorld(): World {
     floaters: [],
     rests: [],
     streaks: [],
+    seenArcs: [],
+    catchesToAbsorb: 0,
     collectAnchor: { x: 0, y: 0 },
     lastAim: null,
     barSpans: [],
@@ -436,19 +447,28 @@ function swing(w: World, input: WorldInput, fromStrike: boolean): void {
   });
 }
 
-function toArcSpace(view: Viewport, px: number, py: number): ArcPoint {
-  return arcSpaceFromScene(px, py, view.heroX, view.arcBaseY, arcApexHeight(ARC_FLIGHT_SEC));
+/** Scene x the engaged creature is killed at: arcs launch here and the road ahead runs right of it. */
+export function killPointX(view: Viewport): number {
+  return view.heroX + BLADE_REACH + KILL_INSET;
+}
+
+/** A tap's scene point into core's arc space. The exact inverse of fromArcSpace, which is what draws the coins. */
+export function toArcSpace(view: Viewport, px: number, py: number): ArcPoint {
+  return arcSpaceFromScene(px, py, killPointX(view), view.arcBaseY, ARC_UNIT_PX);
+}
+
+export function fromArcSpace(view: Viewport, ax: number, ay: number): { x: number; y: number } {
+  return sceneFromArcSpace(ax, ay, killPointX(view), view.arcBaseY, ARC_UNIT_PX);
 }
 
 /** Every live arc's scene position, straight from core's trajectory. */
 export function arcScreenPoints(input: WorldInput): { x: number; y: number; spin: number }[] {
   const { model, view } = input;
-  const apex = arcApexHeight(ARC_FLIGHT_SEC);
   const out: { x: number; y: number; spin: number }[] = [];
   for (const arc of model.arcs) {
     const a = arcPositionAt(arc, model.timeSec);
     if (!a) continue;
-    const p = sceneFromArcSpace(a.x, a.y, view.heroX, view.arcBaseY, apex);
+    const p = fromArcSpace(view, a.x, a.y);
     out.push({ x: p.x, y: p.y, spin: arc.expiresAtSec * 9 });
   }
   return out;
@@ -486,7 +506,7 @@ export function strike(w: World, input: WorldInput, at: { x: number; y: number }
 
   if (!at) {
     const aim = autoAim(input);
-    if (aim) w.lastAim = sceneFromArcSpace(aim.x, aim.y, view.heroX, view.arcBaseY, arcApexHeight(ARC_FLIGHT_SEC));
+    if (aim) w.lastAim = fromArcSpace(view, aim.x, aim.y);
     return aim;
   }
   w.lastAim = at;
@@ -500,6 +520,7 @@ export function strike(w: World, input: WorldInput, at: { x: number; y: number }
  */
 export function catchArc(w: World, input: WorldInput, bonusGold: number, upgraded: boolean): void {
   const { skin, view } = input;
+  w.catchesToAbsorb++;
   const guard = pocket(input);
   const aim = w.lastAim ?? { x: view.heroX + 24, y: view.groundY - 30 };
   const at = nudgeFromPocket(guard, aim.x, aim.y);
@@ -543,6 +564,32 @@ function advanceScroll(w: World, input: WorldInput, speed: number, dtSec: number
   // Faster than the ground: the foreground is nearer than the road is.
   w.scrollFore = wrap(w.scrollFore + speed * 1.75 * dtSec, PROP_SPAN);
   w.scrollBirds = wrap(w.scrollBirds + (speed * 0.12 + 9) * dtSec, vw * 3);
+}
+
+/**
+ * Coins that left the engine's list since last frame. A catch was announced
+ * through catchArc and is absorbed; anything else landed, and sits on the road
+ * where core's trajectory put it down until the hero walks over it.
+ */
+function settleArcs(w: World, input: WorldInput): void {
+  const { model, view } = input;
+  const live = new Set(model.arcs);
+  for (const arc of w.seenArcs) {
+    if (live.has(arc)) continue;
+    if (w.catchesToAbsorb > 0) {
+      w.catchesToAbsorb--;
+      continue;
+    }
+    const since = model.timeSec - arc.expiresAtSec;
+    if (since < 0 || since > LANDED_WINDOW_SEC) continue;
+    const at = fromArcSpace(view, arc.landingX, 0);
+    if (w.rests.length >= REST_CAP) {
+      const oldest = w.rests.shift()!;
+      w.streaks.push({ x0: oldest.x, y0: oldest.y, age: 0, gold: oldest.gold, spin: oldest.spin });
+    }
+    w.rests.push({ x: at.x, y: at.y, age: 0, gold: arc.gear === null, spin: arc.expiresAtSec * 9 });
+  }
+  w.seenArcs = model.arcs;
 }
 
 /** A kill landed in the engine — the scene never decides this. Offline returns jump thousands of kills; play one death. */
@@ -723,6 +770,7 @@ export function step(w: World, input: WorldInput, dtSec: number): void {
 
   playKills(w, input);
   playZone(w, input);
+  settleArcs(w, input);
   fillQueue(w, input);
   placeQueue(w, input, dtSec);
   kickDust(w, input, dtSec);
