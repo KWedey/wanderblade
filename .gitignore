@@ -35,3 +35,4 @@ wb_probe*.ts
 
 # gate logs written by agents working in this checkout
 .gate/
+TASKS.md
