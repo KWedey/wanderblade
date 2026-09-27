@@ -62,6 +62,9 @@ export {
 } from './constants';
 export type { AscNodeDef, SkillDef, SpeciesDef } from './constants';
 
+// --- Clock ---------------------------------------------------------------
+export { CLOCK_MS_PER_SEC, clockAfter, clockMs } from './clock';
+
 // --- Types ---------------------------------------------------------------
 export type {
   ArcPoint,
@@ -93,6 +96,7 @@ export {
   arcHitIndex,
   arcLandingX,
   arcPositionAt,
+  arcProgress,
   arcsForKill,
   arcSpeedAt,
   arcSplitCount,
@@ -140,7 +144,7 @@ export {
 export type { AscNodeEffect } from './formulas';
 
 // --- Shop ----------------------------------------------------------------
-export { purchaseOptions, bestBuy, affordableCount, pricedCount } from './shop';
+export { purchaseOptions, bestBuy, nextBuy, affordableCount, pricedCount } from './shop';
 export type { PurchaseOption, PurchaseKind, PurchaseCurrency } from './shop';
 
 // --- Engine --------------------------------------------------------------
@@ -153,6 +157,7 @@ export {
   enterPortal,
   abandonBoss,
   advance,
+  pickRarity,
   serialize,
   deserialize,
   summarizeEvents,

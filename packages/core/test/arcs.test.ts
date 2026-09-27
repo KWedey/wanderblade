@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   advance,
   arcPositionAt,
+  arcProgress,
+  arcSpeedAt,
   ARC_CATCH_MULT,
+  CLOCK_MS_PER_SEC,
+  clockAfter,
   ARC_CATCH_PERP,
   arcCatchRadius,
   arcHeadingAt,
@@ -19,6 +23,7 @@ import {
   initialState,
   serialize,
   summarizeEvents,
+  type GameEvent,
   type LootArc,
 } from '../src/index';
 import {
@@ -43,7 +48,7 @@ describe('loot arcs', () => {
   it('leaves idle gold untouched — uncaught arcs still pay in full', () => {
     const s = initialState(31);
     advance(s, ROAD_KILL0_SEC + 1e-6); // one kill at the walking pace
-    expect(s.lifetime.kills).toBe(1);
+    expect(s.killIndex).toBe(1);
     // enemyGold(0, 0) = 1, scaled by what this kill happened to be
     expect(s.gold).toBeCloseTo(speciesFor(s.killIndex).goldMult, 10);
     expect(s.arcs).toHaveLength(arcSplitCount(s.killIndex));
@@ -85,7 +90,9 @@ describe('loot arcs', () => {
     expect(coins).toBeGreaterThan(1);
     const target = s.arcs[0] as LootArc;
 
-    const at = 1.5 * ROAD_KILL0_SEC;
+    // The strike sits exactly on the advance target, so it is stamped the way
+    // the clock will reach it rather than by a float sum an ulp past it.
+    const at = clockAfter(s.timeSec, ROAD_KILL0_SEC / 2);
     const events = advance(s, ROAD_KILL0_SEC / 2, [
       { atSec: at, aim: aimAt(target, at) },
     ]);
@@ -104,12 +111,13 @@ describe('loot arcs', () => {
     const coins = [...s.arcs];
     expect(coins.length).toBeGreaterThan(1);
 
-    let events: ReturnType<typeof advance> = [];
+    let events: GameEvent[] = [];
     for (const coin of coins) {
       const at = coin.expiresAtSec - ARC_FLIGHT_SEC / 2;
-      events = events.concat(advance(s, Math.max(1e-9, at - s.timeSec + 1e-9), [
-        { atSec: at, aim: aimAt(coin, at) },
-      ]));
+      // Whole milliseconds, one past the strike, so the clock grid never
+      // rounds the target back to before it.
+      const dt = Math.ceil((at - s.timeSec) * CLOCK_MS_PER_SEC + 1) / CLOCK_MS_PER_SEC;
+      events = events.concat(advance(s, dt, [{ atSec: at, aim: aimAt(coin, at) }]));
     }
     expect(events.filter((e) => e.type === 'arcCatch')).toHaveLength(coins.length);
     const kill = coins.reduce((t, a) => t + a.gold, 0);
@@ -140,7 +148,7 @@ describe('loot arcs', () => {
   it('counts catch gold in the recap', () => {
     const s = initialState(33);
     const goldBefore = s.gold;
-    const events: ReturnType<typeof advance> = [];
+    const events: GameEvent[] = [];
     const end = 900;
     const step = 0.25;
     for (let t = step; t <= end + 1e-9; t += step) {
@@ -182,6 +190,35 @@ describe('loot arcs', () => {
 });
 
 // Position, not order, decides a catch (docs/DECISIONS.md #25).
+describe('arcProgress is the one reading of where a coin is in its flight', () => {
+  const arc: LootArc = { gold: 1, expiresAtSec: 10 + ARC_FLIGHT_SEC, landingX: 1.2, gear: null };
+
+  it('runs from 0 at launch to just under 1 at landing, and is null outside the flight', () => {
+    expect(arcProgress(arc, 10)).toBe(0);
+    expect(arcProgress(arc, 10 + ARC_FLIGHT_SEC / 2)).toBeCloseTo(0.5, 12);
+    expect(arcProgress(arc, 10 + ARC_FLIGHT_SEC - 1e-9)).toBeLessThan(1);
+    expect(arcProgress(arc, 10 - 1e-9)).toBeNull();
+    expect(arcProgress(arc, 10 + ARC_FLIGHT_SEC)).toBeNull();
+    expect(arcProgress({ ...arc, landingX: NaN }, 10.5)).toBeNull();
+  });
+
+  it('is the progress position, speed and heading all agree on', () => {
+    for (const at of [10, 10.3, 10 + ARC_FLIGHT_SEC / 2, 10 + ARC_FLIGHT_SEC - 0.01]) {
+      const p = arcProgress(arc, at);
+      expect(p).not.toBeNull();
+      expect(arcPositionAt(arc, at)).toEqual({ x: arc.landingX * p!, y: 4 * p! * (1 - p!) });
+      const dy = 4 - 8 * p!;
+      expect(arcSpeedAt(arc, at)).toBeCloseTo(Math.hypot(arc.landingX, dy) / ARC_FLIGHT_SEC, 12);
+      const heading = arcHeadingAt(arc, at)!;
+      expect(heading.y / heading.x).toBeCloseTo(dy / arc.landingX, 12);
+    }
+    const down = 10 + ARC_FLIGHT_SEC;
+    expect(arcPositionAt(arc, down)).toBeNull();
+    expect(arcSpeedAt(arc, down)).toBe(0);
+    expect(arcHeadingAt(arc, down)).toBeNull();
+  });
+});
+
 describe('a catch is a hit test, not a queue', () => {
   it('catches the arc the strike is aimed at, not the oldest one', () => {
     const s = initialState(31);

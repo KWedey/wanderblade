@@ -32,3 +32,6 @@ wb_probe*.ts
 # Gate and sim logs live in the worktree, never in /tmp: agents share /tmp
 # and the names collide.
 *.log
+
+# gate logs written by agents working in this checkout
+.gate/

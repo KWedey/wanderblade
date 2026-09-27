@@ -45,6 +45,13 @@ import {
   zonesPerRealm,
 } from '../src/index';
 
+/** The compounding factor of a damage or gear node; the speed node has none. */
+function perRankOf(id: string): number {
+  const def = ASC_NODES[id];
+  if (!def || def.effect === 'attackSpeed') throw new Error(`${id} does not compound`);
+  return def.perRank;
+}
+
 describe('realm scaling', () => {
   it('multiplies every gold and power quantity by REALM_STEP^realm', () => {
     expect(realmScale(0)).toBe(1);
@@ -204,16 +211,16 @@ describe('hero damage model', () => {
     s.gear.weapon = { power: 40, rarity: 'common', realm: 0, zone: 0 };
     s.ascendancy.nodes.edge = 2;
     s.ascendancy.nodes.heft = 1;
-    const edge = (1 + ASC_NODES.edge!.perRank) ** 2;
-    const heft = (1 + ASC_NODES.heft!.perRank) ** 1;
+    const edge = (1 + perRankOf('edge')) ** 2;
+    const heft = (1 + perRankOf('heft')) ** 1;
     const expected = (d0 * 1.12 ** 3 * edge + 40 * heft) * skillRankMult('cleave', 2);
     expect(heroDps(s)).toBeCloseTo(expected, 8);
   });
 
   it('ascMultiplier compounds only the nodes with the asked-for effect', () => {
     const asc = { pending: 0, banked: 0, nodes: { edge: 3, heft: 2, fury: 1 }, victories: 0 };
-    expect(ascMultiplier(asc, 'damage')).toBeCloseTo((1 + ASC_NODES.edge!.perRank) ** 3, 10);
-    expect(ascMultiplier(asc, 'gearPower')).toBeCloseTo((1 + ASC_NODES.heft!.perRank) ** 2, 10);
+    expect(ascMultiplier(asc, 'damage')).toBeCloseTo((1 + perRankOf('edge')) ** 3, 10);
+    expect(ascMultiplier(asc, 'gearPower')).toBeCloseTo((1 + perRankOf('heft')) ** 2, 10);
     expect(ascSpeedMultiplier(asc)).toBeCloseTo(
       1 + ASC_SPEED_MAX_BONUS * (1 - ASC_SPEED_DECAY),
       10,

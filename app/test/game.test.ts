@@ -482,7 +482,7 @@ describe('a cold load after time away', () => {
     expect(recap).not.toBeNull();
     expect(elapsed).toBeGreaterThanOrEqual(8 * 3600);
     expect(recap!.kills).toBeGreaterThan(0);
-    expect(recap!.kills).toBe(state.lifetime.kills);
+    expect(recap!.kills).toBe(state.killIndex);
     expect(state.timeSec).toBeGreaterThanOrEqual(8 * 3600);
   });
 

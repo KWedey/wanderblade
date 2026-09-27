@@ -124,7 +124,7 @@ describe('the engine stays finite at the magnitudes late realms actually reach',
     expect(Number.isFinite(s.gold)).toBe(true);
     expect(Number.isFinite(s.leagues)).toBe(true);
     expect(Number.isFinite(s.lifetime.goldEarned)).toBe(true);
-    expect(Number.isInteger(s.lifetime.kills)).toBe(true);
+    expect(Number.isInteger(s.killIndex)).toBe(true);
   });
 
   /**

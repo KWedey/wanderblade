@@ -64,7 +64,6 @@ function vm(over: Partial<ViewModel> = {}): ViewModel {
       level: 0,
       cost: 200,
       unlocked: true,
-      atMax: false,
       unlockLevel: 0,
       canAfford: false,
       etaSec: 75,

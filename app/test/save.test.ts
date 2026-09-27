@@ -200,7 +200,8 @@ describe('a save older than the schema still loads', () => {
     'gear',
     'ascendancy.pending',
     'collection.zonesCleared',
-    'lifetime.ascensions',
+    'lifetime.abandons',
+    'lifetime.bossDamage',
     'hero.skills',
   ];
 

@@ -10,11 +10,13 @@ import {
   buyAscendancyNode,
   bestBuy,
   enterPortal,
+  nextBuy,
   heroDps,
   initialState,
   levelCost,
   pricedCount,
   purchaseOptions,
+  serialize,
   SKILLS,
   SKILL_IDS,
   skillCost,
@@ -40,11 +42,9 @@ describe('purchaseOptions', () => {
     expect(rows.length).toBe(1 + SKILL_IDS.length + ASC_NODE_IDS.length);
   });
 
-  it('reports the hero level as uncapped and priced by the engine formula', () => {
+  it('prices the hero level by the engine formula', () => {
     const s = initialState(1);
     const hero = purchaseOptions(s).find((r) => r.kind === 'hero');
-    expect(hero?.maxRank).toBeNull();
-    expect(hero?.atMax).toBe(false);
     expect(hero?.cost).toBeCloseTo(levelCost(s.hero.level, s.realm), 9);
   });
 
@@ -53,7 +53,7 @@ describe('purchaseOptions', () => {
     s.hero.level = 999;
     s.gold = Infinity;
     for (const row of purchaseOptions(s)) {
-      if (row.kind !== 'skill' || row.atMax) continue;
+      if (row.kind !== 'skill') continue;
       expect(row.cost).toBeCloseTo(skillCost(row.id, row.rank, s.realm), 9);
     }
   });
@@ -68,7 +68,7 @@ describe('purchaseOptions', () => {
 
   it('marks a skill locked below its unlock level and unlocked at it', () => {
     const gated = SKILL_IDS.map((id) => SKILLS[id]).filter((d) => d && d.unlockLevel > 0);
-    if (gated.length === 0) return;
+    expect(gated.length).toBeGreaterThan(0);
     const def = gated[0]!;
     const s = initialState(1);
     s.hero.level = def.unlockLevel - 1;
@@ -100,30 +100,23 @@ describe('purchaseOptions', () => {
     }
   });
 
-  it('never reports a tree node as maxed, however deep it is bought', () => {
+  it('still prices a tree node, however deep it is bought', () => {
     const s = initialState(1);
     s.ascendancy.banked = 1e12;
     for (const id of ASC_NODE_IDS) s.ascendancy.nodes[id] = 5_000;
     for (const row of purchaseOptions(s)) {
       if (row.kind !== 'node') continue;
-      expect(row.atMax).toBe(false);
-      expect(row.maxRank).toBeNull();
+      expect(row.unlocked).toBe(true);
+      expect(row.affordable).toBe(true);
       expect(Number.isFinite(row.cost)).toBe(true);
     }
+    expect(bestBuy(s, 'ascendancy')).not.toBeNull();
   });
 
-  it('never reports a skill as maxed, however many ranks are bought', () => {
+  it('still prices a skill at every rank a realm can actually reach', () => {
     const s = initialState(1);
     s.hero.level = 999;
-    for (const id of SKILL_IDS) s.hero.skills[id] = 5_000;
-    for (const row of purchaseOptions(s)) {
-      if (row.kind !== 'skill') continue;
-      expect(row.atMax).toBe(false);
-      expect(row.maxRank).toBeNull();
-    }
-
-    // Priced, too, at every rank a realm can actually reach. Where each price
-    // curve overflows is pinned in magnitude.test.ts.
+    // Where each price curve overflows is pinned in magnitude.test.ts.
     for (const id of SKILL_IDS) s.hero.skills[id] = 500;
     for (const row of purchaseOptions(s)) {
       if (row.kind !== 'skill') continue;
@@ -261,5 +254,72 @@ describe('valuePerCost is the one ranking of what to buy', () => {
     const s = portalReady(1, 0);
     enterPortal(s);
     expect(bestBuy(s, 'gold')).toBeNull();
+  });
+});
+
+describe('nextBuy is bestBuy with the wallet ignored', () => {
+  it('names the same row as bestBuy whenever that row is affordable', () => {
+    for (const seed of [1, 7, 23]) {
+      for (const seconds of [60, 3600, 86_400]) {
+        const s = initialState(seed);
+        advance(s, seconds);
+        s.ascendancy.banked = 200;
+        for (const currency of ['gold', 'ascendancy'] as const) {
+          const best = bestBuy(s, currency);
+          const next = nextBuy(s, currency);
+          expect(next).not.toBeNull();
+          expect(next?.currency).toBe(currency);
+          expect(next?.unlocked).toBe(true);
+          if (best && best.valuePerCost === next?.valuePerCost) {
+            expect(next?.id).toBe(best.id);
+          }
+        }
+      }
+    }
+  });
+
+  it('still names a goal with an empty purse, and it is the row an unlimited purse would buy', () => {
+    const s = initialState(3);
+    advance(s, 3600);
+    s.gold = 0;
+    s.ascendancy.banked = 0;
+    expect(bestBuy(s, 'gold')).toBeNull();
+    for (const currency of ['gold', 'ascendancy'] as const) {
+      const rich = clone(s);
+      rich.gold = Infinity;
+      rich.ascendancy.banked = Infinity;
+      expect(nextBuy(s, currency)?.id).toBe(bestBuy(rich, currency)?.id);
+      expect(nextBuy(s, currency)?.affordable).toBe(false);
+    }
+  });
+
+  it('never names a locked skill, however much it would be worth', () => {
+    const s = initialState(3);
+    s.hero.level = 0;
+    const next = nextBuy(s, 'gold');
+    expect(next?.unlocked).toBe(true);
+    for (const row of purchaseOptions(s)) {
+      if (row.kind === 'skill' && !row.unlocked) expect(next?.id).not.toBe(row.id);
+    }
+  });
+
+  it('keeps naming a goal during a guardian attempt, when nothing is buyable', () => {
+    const s = portalReady(1, 0);
+    s.gold = 1e12;
+    enterPortal(s);
+    expect(bestBuy(s, 'gold')).toBeNull();
+    expect(nextBuy(s, 'gold')).not.toBeNull();
+  });
+
+  // Pure over state: no RNG draw, no clock read, so the same state names the
+  // same goal on every call and on both sides of a save.
+  it('is a pure function of state', () => {
+    const s = initialState(5);
+    advance(s, 7200);
+    const before = serialize(s);
+    const a = nextBuy(s, 'gold');
+    const b = nextBuy(clone(s), 'gold');
+    expect(serialize(s)).toBe(before);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

@@ -34,6 +34,7 @@ import {
   swingInterval,
 } from './formulas';
 import { arcHitIndex, arcsForKill } from './arcs';
+import { CLOCK_MS_PER_SEC, clockMs } from './clock';
 import { addMomentum, momentumAt } from './momentum';
 import { createRng, type Rng } from './rng';
 import type {
@@ -84,8 +85,8 @@ export function initialState(seed: number): GameState {
     ascendancy: { pending: 0, banked: 0, nodes: zeroRanks(ASC_NODE_IDS), victories: 0 },
     momentum: { value: 0, atSec: 0 },
     arcs: [],
-    collection: { bossTrophies: 0, gearFound: 0, zonesCleared: 0, speciesKills: [] },
-    lifetime: { kills: 0, goldEarned: 0, ascensions: 0, abandons: 0, bossDamage: 0 },
+    collection: { gearFound: 0, zonesCleared: 0, speciesKills: [] },
+    lifetime: { goldEarned: 0, abandons: 0, bossDamage: 0 },
   };
   state.nextActionAtSec = state.timeSec + killTime(state, 0);
   return state;
@@ -188,14 +189,17 @@ function pickSlot(r: number): GearSlot {
   return GEAR_SLOTS[idx] as GearSlot;
 }
 
-function pickRarity(r: number): Rarity {
-  const x = r * 100; // weights sum to 100
+const RARITY_WEIGHT_TOTAL = RARITIES.reduce((sum, rarity) => sum + RARITY_WEIGHTS[rarity], 0);
+
+/** The rarity a unit roll `r` in [0, 1) lands on, walking the weights low to high. */
+export function pickRarity(r: number): Rarity {
+  const x = r * RARITY_WEIGHT_TOTAL;
   let acc = 0;
   for (const rarity of RARITIES) {
     acc += RARITY_WEIGHTS[rarity];
     if (x < acc) return rarity;
   }
-  return 'epic';
+  return RARITIES[RARITIES.length - 1] as Rarity;
 }
 
 /** One tier up the rarity ladder; the top tier stays put. */
@@ -226,6 +230,26 @@ function emit(events: GameEvent[], e: GameEvent): void {
   if (events.length < EVENT_CAP) events.push(e);
 }
 
+function beatsWorn(state: GameState, slot: GearSlot, power: number): boolean {
+  const current = state.gear[slot];
+  return current === null || power > current.power;
+}
+
+function equip(
+  state: GameState,
+  events: GameEvent[],
+  recap: Recap,
+  clock: number,
+  slot: GearSlot,
+  rarity: Rarity,
+  power: number,
+): void {
+  const previousPower = state.gear[slot]?.power ?? 0;
+  state.gear[slot] = { power, rarity, realm: state.realm, zone: state.zone };
+  recap.equips += 1;
+  emit(events, { type: 'equip', timeSec: clock, slot, power, rarity, previousPower });
+}
+
 /** Equip `power` in `slot` if it beats what is worn. */
 function tryEquip(
   state: GameState,
@@ -236,12 +260,8 @@ function tryEquip(
   rarity: Rarity,
   power: number,
 ): boolean {
-  const current = state.gear[slot];
-  if (current !== null && !(power > current.power)) return false;
-  const previousPower = current ? current.power : 0;
-  state.gear[slot] = { power, rarity, realm: state.realm, zone: state.zone };
-  recap.equips += 1;
-  emit(events, { type: 'equip', timeSec: clock, slot, power, rarity, previousPower });
+  if (!beatsWorn(state, slot, power)) return false;
+  equip(state, events, recap, clock, slot, rarity, power);
   return true;
 }
 
@@ -282,7 +302,6 @@ function processKill(
   state.gold += gold;
   state.collection.speciesKills[species] =
     (state.collection.speciesKills[species] ?? 0) + 1;
-  state.lifetime.kills += 1;
   state.lifetime.goldEarned += gold;
   recap.kills += 1;
   recap.goldEarned += gold;
@@ -309,8 +328,9 @@ function processKill(
     const power = gearPower(realm, z, rarity, slot);
     recap.drops += 1;
     state.collection.gearFound += 1;
-    const equipped = tryEquip(state, events, recap, clock, slot, rarity, power);
+    const equipped = beatsWorn(state, slot, power);
     emit(events, { type: 'drop', timeSec: clock, realm, zone: z, slot, rarity, power, equipped });
+    if (equipped) equip(state, events, recap, clock, slot, rarity, power);
     arcGear = { slot, rarity, realm, zone: z };
   }
 
@@ -370,9 +390,6 @@ function ascend(state: GameState, events: GameEvent[], recap: Recap, clock: numb
   state.ascendancy.banked += pendingBanked;
   state.ascendancy.pending = 0;
   state.ascendancy.victories += 1;
-
-  state.collection.bossTrophies += 1;
-  state.lifetime.ascensions += 1;
   recap.victories += 1;
   emit(events, { type: 'bossVictory', timeSec: clock, realm: fromRealm, payout, pendingBanked });
 
@@ -424,8 +441,8 @@ function processStrike(
   events: GameEvent[],
   recap: Recap,
   strike: Strike,
+  clock: number,
 ): void {
-  const clock = strike.atSec;
   state.momentum = addMomentum(state.momentum, clock, MOMENTUM_PER_STRIKE);
   if (state.phase !== 'road') return;
 
@@ -486,39 +503,40 @@ function scheduleNext(state: GameState, clock: number): void {
 
 /**
  * THE engine, event-stepped per kill or swing with `strikes` merged in by
- * timestamp. `strikes` must be sorted ascending; timestamps outside
- * `(timeSec, timeSec + seconds]` are ignored, so splitting an interval hands
- * each strike to exactly one half. Ties resolve strike-first.
+ * timestamp. `seconds` and every strike instant are taken to the nearest
+ * millisecond (see clock.ts). `strikes` must be sorted ascending; instants
+ * outside `(timeSec, timeSec + seconds]` are ignored, so splitting an interval
+ * hands each strike to exactly one half. Ties resolve strike-first.
  */
 export function advance(
   state: GameState,
   seconds: number,
   strikes: readonly Strike[] = [],
-): GameEvent[] {
-  const events: EventLog = [];
-  const recap = emptyRecap(Math.max(0, seconds));
+): EventLog {
+  const deltaMs = clockMs(seconds);
+  const recap = emptyRecap(Math.max(0, deltaMs) / CLOCK_MS_PER_SEC);
+  const events: EventLog = Object.assign([], { recap });
 
-  if (!(seconds > 0)) {
-    events.recap = recap;
-    return events;
-  }
+  if (!(deltaMs > 0)) return events;
 
   const rng = createRng(state.rngState);
-  const start = state.timeSec;
-  const target = start + seconds;
+  const startMs = clockMs(state.timeSec);
+  const targetMs = startMs + deltaMs;
+  const target = targetMs / CLOCK_MS_PER_SEC;
 
   let si = 0;
-  while (si < strikes.length && (strikes[si] as Strike).atSec <= start) si += 1;
+  while (si < strikes.length && clockMs((strikes[si] as Strike).atSec) <= startMs) si += 1;
 
   for (;;) {
     const strike = si < strikes.length ? (strikes[si] as Strike) : null;
-    const nextStrike = strike ? strike.atSec : Infinity;
-    const strikeDue = nextStrike <= target;
+    const nextStrikeMs = strike ? clockMs(strike.atSec) : Infinity;
+    const strikeDue = nextStrikeMs <= targetMs;
     const actionDue = state.nextActionAtSec <= target;
     if (!strikeDue && !actionDue) break;
 
-    if (strike && strikeDue && (!actionDue || nextStrike <= state.nextActionAtSec)) {
-      processStrike(state, events, recap, strike);
+    const strikeClock = nextStrikeMs / CLOCK_MS_PER_SEC;
+    if (strike && strikeDue && (!actionDue || strikeClock <= state.nextActionAtSec)) {
+      processStrike(state, events, recap, strike, strikeClock);
       si += 1;
       continue;
     }
@@ -540,7 +558,6 @@ export function advance(
 
   state.timeSec = target;
   state.rngState = rng.getState();
-  events.recap = recap;
   return events;
 }
 
@@ -551,12 +568,30 @@ export function serialize(state: GameState): string {
   return JSON.stringify(state);
 }
 
+/** Counters older saves stored twice; the kept copy is `killIndex` / `victories`. */
+interface LegacyCounters {
+  lifetime?: { kills?: number; ascensions?: number };
+  collection?: { bossTrophies?: number };
+}
+
 /** Parse a state produced by `serialize`. */
 export function deserialize(json: string): GameState {
   const state = JSON.parse(json) as GameState;
+  const legacy = state as LegacyCounters;
   // A save older than the whole collection block must survive to the app's
   // backfill; throwing here discards the run instead.
   if (state.collection) state.collection.speciesKills ??= [];
+  if (legacy.collection) delete legacy.collection.bossTrophies;
+  if (legacy.lifetime) {
+    const ascensions = legacy.lifetime.ascensions ?? 0;
+    if (state.ascendancy === undefined) {
+      state.ascendancy = { pending: 0, banked: 0, nodes: {}, victories: ascensions };
+    } else {
+      state.ascendancy.victories ??= ascensions;
+    }
+    delete legacy.lifetime.kills;
+    delete legacy.lifetime.ascensions;
+  }
   return state;
 }
 
@@ -565,15 +600,17 @@ export function deserialize(json: string): GameState {
 /**
  * Aggregate a stretch of events into a Recap. Prefers the exact recap attached
  * by `advance` (accurate even when the raw event array was capped); falls back
- * to counting from the events for hand-assembled arrays.
+ * to counting from the events for hand-assembled arrays. Swings emit no event,
+ * so recounted boss damage covers only attempts entered within the stretch.
  */
-export function summarizeEvents(events: GameEvent[]): Recap {
-  const attached = (events as EventLog).recap;
+export function summarizeEvents(events: readonly GameEvent[]): Recap {
+  const attached = (events as Partial<EventLog>).recap;
   if (attached) return { ...attached };
 
   const recap = emptyRecap(0);
   let minTime = Infinity;
   let maxTime = -Infinity;
+  let hpAtEntry: number | null = null;
   for (const e of events) {
     if (e.timeSec < minTime) minTime = e.timeSec;
     if (e.timeSec > maxTime) maxTime = e.timeSec;
@@ -592,16 +629,25 @@ export function summarizeEvents(events: GameEvent[]): Recap {
       case 'arcCatch':
         recap.arcCatches += 1;
         recap.goldEarned += e.bonusGold;
+        recap.pendingAscendancyEarned += e.ascendancy;
         break;
       case 'zone':
+      case 'portalReady':
         recap.zonesCleared += 1;
+        recap.pendingAscendancyEarned += ascendancyPerZone(e.realm);
+        break;
+      case 'portalEnter':
+        hpAtEntry = e.bossHp;
+        break;
+      case 'abandon':
+        if (hpAtEntry !== null) recap.bossDamage += hpAtEntry - e.hpRemaining;
+        hpAtEntry = null;
         break;
       case 'bossVictory':
         recap.victories += 1;
+        if (hpAtEntry !== null) recap.bossDamage += hpAtEntry;
+        hpAtEntry = null;
         break;
-      case 'portalReady':
-      case 'portalEnter':
-      case 'abandon':
       case 'ascend':
         break;
     }

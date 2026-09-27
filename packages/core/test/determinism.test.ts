@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { advance, enterPortal, initialState, serialize } from '../src/index';
+import {
+  advance,
+  CLOCK_MS_PER_SEC,
+  clockAfter,
+  clockMs,
+  createRng,
+  enterPortal,
+  initialState,
+  serialize,
+  type GameEvent,
+} from '../src/index';
 import { clone, portalReady, ROAD_KILL0_SEC, strikesAt } from './helpers';
 
 // The load-bearing invariant (docs/DECISIONS.md #6):
@@ -187,7 +197,7 @@ describe('split-advance determinism: ascension', () => {
       enterPortal(split);
       const evSplit = advance(split, a).concat(advance(split, b));
 
-      expect(single.lifetime.ascensions).toBe(1);
+      expect(single.ascendancy.victories).toBe(1);
       expect(JSON.stringify(evSplit)).toBe(JSON.stringify(evSingle));
       expect(serialize(split)).toBe(serialize(single));
     });
@@ -212,9 +222,74 @@ describe('split-advance determinism: ascension', () => {
     const killIndexAtEntry = s.killIndex;
     enterPortal(s);
     advance(s, 7200);
-    expect(s.lifetime.ascensions).toBe(1);
+    expect(s.ascendancy.victories).toBe(1);
     // Road kills after ascension advanced the stream; it never rewound.
     expect(s.killIndex).toBeGreaterThan(killIndexAtEntry);
     expect(s.rngState).not.toBe(rngAtEntry);
+  });
+});
+
+// Float seconds add non-associatively, so before the clock was quantized the
+// contract above held only for exactly-representable inputs. On the
+// millisecond grid every sum is an integer sum.
+describe('split-advance determinism: the millisecond clock grid', () => {
+  it('0.1 + 0.2 + 0.3 lands on the same instant however it is bracketed', () => {
+    const left = initialState(3);
+    advance(left, 0.1);
+    advance(left, 0.2);
+    advance(left, 0.3);
+    const right = initialState(3);
+    advance(right, 0.1);
+    advance(right, 0.5);
+    expect(left.timeSec).toBe(0.6);
+    expect(serialize(left)).toBe(serialize(right));
+  });
+
+  it('rounds the requested seconds to the grid and keeps timeSec on it', () => {
+    const s = initialState(3);
+    expect(advance(s, 0.0004)).toHaveLength(0);
+    expect(s.timeSec).toBe(0);
+    advance(s, 0.0006);
+    expect(s.timeSec).toBe(0.001);
+    advance(s, 1234.5678);
+    expect(s.timeSec).toBe(1234.569);
+    expect(clockMs(s.timeSec)).toBe(1234569);
+  });
+
+  it('survives many seeded random fractional splits from a fractional start, with strikes', () => {
+    const START_SEC = 987.654;
+    const SPAN_MS = 600_000;
+    const strikes = strikesAt(START_SEC, SPAN_MS / CLOCK_MS_PER_SEC, 1.7, { x: 0.5, y: 1 });
+
+    const single = initialState(21);
+    advance(single, START_SEC);
+    const evSingle = advance(single, SPAN_MS / CLOCK_MS_PER_SEC, strikes);
+
+    const rng = createRng(0xc0ffee);
+    for (let trial = 0; trial < 20; trial++) {
+      const split = initialState(21);
+      advance(split, START_SEC);
+      let evSplit: GameEvent[] = [];
+      let leftMs = SPAN_MS;
+      while (leftMs > 0) {
+        const pieceMs = Math.min(leftMs, 1 + Math.floor(rng.next() * 45_000));
+        evSplit = evSplit.concat(advance(split, pieceMs / CLOCK_MS_PER_SEC, strikes));
+        leftMs -= pieceMs;
+      }
+      expect(JSON.stringify(evSplit), `trial ${trial}`).toBe(JSON.stringify(evSingle));
+      expect(serialize(split), `trial ${trial}`).toBe(serialize(single));
+    }
+    expect(evSingle.filter((e) => e.type === 'arcCatch').length).toBeGreaterThan(0);
+  });
+
+  it('a strike stamped through clockAfter at the tick boundary is never lost', () => {
+    const s = initialState(3);
+    advance(s, 4095.999);
+    const atSec = clockAfter(s.timeSec, 0.001);
+    const events = advance(s, 0.001, [{ atSec, aim: null }]);
+    expect(s.timeSec).toBe(atSec);
+    expect(s.momentum.atSec).toBe(atSec);
+    expect(events).toHaveLength(0);
+    expect(s.momentum.value).toBeGreaterThan(0);
   });
 });

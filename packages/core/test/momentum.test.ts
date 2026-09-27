@@ -88,7 +88,7 @@ describe('strikes are inputs into advance', () => {
     const active = initialState(21);
     advance(active, 1200, strikesAt(0, 1200, sustainStrikeRate()));
 
-    expect(active.lifetime.kills).toBeGreaterThan(idle.lifetime.kills);
+    expect(active.killIndex).toBeGreaterThan(idle.killIndex);
     expect(active.gold).toBeGreaterThan(idle.gold);
   });
 

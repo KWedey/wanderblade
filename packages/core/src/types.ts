@@ -95,9 +95,11 @@ export interface AscendancyState {
   victories: number;
 }
 
-/** Persistent records. Survive ascension; grant no hidden combat power. */
+/**
+ * Persistent records. Survive ascension; grant no hidden combat power. Boss
+ * trophies are `ascendancy.victories`; total kills are `killIndex`.
+ */
 export interface CollectionState {
-  bossTrophies: number;
   gearFound: number;
   zonesCleared: number;
   /** Lifetime kills per species index — the Bestiary's substrate. */
@@ -105,9 +107,7 @@ export interface CollectionState {
 }
 
 export interface LifetimeStats {
-  kills: number;
   goldEarned: number;
-  ascensions: number;
   abandons: number;
   bossDamage: number;
 }
@@ -243,9 +243,9 @@ export type GameEvent =
     };
 
 /**
- * `advance` returns a plain `GameEvent[]`, but also attaches the exact aggregate
- * `recap` for this stretch. The attachment guarantees recap counters stay
- * accurate even when the raw event array is capped for huge offline advances
- * (see `EVENT_CAP` in engine.ts). `summarizeEvents` prefers this attached recap.
+ * What `advance` returns: the event stream with the exact aggregate `recap`
+ * for the stretch attached. The attachment keeps recap counters accurate even
+ * when the raw array is capped for huge offline advances (see `EVENT_CAP` in
+ * engine.ts). `summarizeEvents` prefers it over recounting.
  */
-export type EventLog = GameEvent[] & { recap?: Recap };
+export type EventLog = GameEvent[] & { recap: Recap };

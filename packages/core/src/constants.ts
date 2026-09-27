@@ -69,7 +69,7 @@ export const SPECIES: readonly SpeciesDef[] = [
   { goldMult: 1.3, dropMult: 0.4 },
 ];
 
-/** Rarity roll weights (sum = 100). */
+/** Rarity roll weights; the roll is scaled by their sum, so they need not total 100. */
 export const RARITY_WEIGHTS: Record<Rarity, number> = {
   common: 70,
   uncommon: 23,
@@ -261,18 +261,21 @@ export const ASC_COST_STEP = 0.5;
 export const ASC_SPEED_MAX_BONUS = 0.6;
 export const ASC_SPEED_DECAY = 0.9;
 
-export interface AscNodeDef {
+interface AscNodeBase {
   id: string;
   name: string;
   /** Rank r costs costBase * (1 + ASC_COST_STEP * r) banked Ascendancy. */
   costBase: number;
-  effect: 'damage' | 'gearPower' | 'attackSpeed';
-  /**
-   * Each rank multiplies its effect by (1 + this). Compounding, not additive —
-   * except on `attackSpeed`, whose curve is ASC_SPEED_MAX_BONUS/DECAY instead.
-   */
-  perRank: number;
 }
+
+/**
+ * Damage and gear power compound: each rank multiplies its effect by
+ * (1 + perRank). Attack speed follows the bounded ASC_SPEED_MAX_BONUS/DECAY
+ * curve instead and so carries no per-rank factor.
+ */
+export type AscNodeDef =
+  | (AscNodeBase & { effect: 'damage' | 'gearPower'; perRank: number })
+  | (AscNodeBase & { effect: 'attackSpeed' });
 
 /**
  * The persistent combat tree — the only source of persistent combat power, and
@@ -298,8 +301,6 @@ export const ASC_NODES: Record<string, AscNodeDef> = {
     name: 'Relentless',
     costBase: 34,
     effect: 'attackSpeed',
-    // Unused: the bounded speed curve above sets this node's value.
-    perRank: 0.037,
   },
 };
 

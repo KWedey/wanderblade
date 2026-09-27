@@ -171,7 +171,7 @@ function watched(s: GameState): Watched {
     pending: s.ascendancy.pending,
     leagues: s.leagues,
     zone: s.zone,
-    kills: s.lifetime.kills,
+    kills: s.killIndex,
     gearFound: s.collection.gearFound,
     zonesCleared: s.collection.zonesCleared,
     killIndex: s.killIndex,

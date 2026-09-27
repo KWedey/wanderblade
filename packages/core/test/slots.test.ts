@@ -4,7 +4,9 @@ import {
   gearPower,
   gearPowerTotal,
   GEAR_SLOTS,
+  pickRarity,
   RARITIES,
+  RARITY_WEIGHTS,
   SLOT_POWER,
   type GearState,
   type Rarity,
@@ -110,5 +112,46 @@ describe('a slot says something about the item in it', () => {
     advance(halves, 1900);
     expect(gearPowerTotal(halves.gear)).toBe(gearPowerTotal(whole.gear));
     expect(halves.collection.gearFound).toBe(whole.collection.gearFound);
+  });
+});
+
+describe('pickRarity', () => {
+  const total = RARITIES.reduce((sum, r) => sum + RARITY_WEIGHTS[r], 0);
+  /** The unit roll at which the cumulative weight reaches `rarity`'s band. */
+  const bandStart = (rarity: Rarity): number => {
+    let acc = 0;
+    for (const r of RARITIES) {
+      if (r === rarity) return acc / total;
+      acc += RARITY_WEIGHTS[r];
+    }
+    throw new Error(`unknown rarity ${rarity}`);
+  };
+
+  it('opens each band exactly at its cumulative weight and closes it a hair before the next', () => {
+    for (const [i, rarity] of RARITIES.entries()) {
+      const start = bandStart(rarity);
+      expect(pickRarity(start), `${rarity} at ${start}`).toBe(rarity);
+      const next = RARITIES[i + 1];
+      const end = next ? bandStart(next) : 1;
+      expect(pickRarity(end - 1e-12), `${rarity} just under ${end}`).toBe(rarity);
+    }
+  });
+
+  it('maps the ends of the unit interval to the lowest and highest tiers', () => {
+    expect(pickRarity(0)).toBe(RARITIES[0]);
+    expect(pickRarity(1 - Number.EPSILON)).toBe(RARITIES[RARITIES.length - 1]);
+    expect(pickRarity(1)).toBe(RARITIES[RARITIES.length - 1]);
+  });
+
+  it('spreads a uniform roll in proportion to the weights, whatever they sum to', () => {
+    const n = 200_000;
+    const counts: Record<string, number> = {};
+    for (let i = 0; i < n; i++) {
+      const r = pickRarity((i + 0.5) / n);
+      counts[r] = (counts[r] ?? 0) + 1;
+    }
+    for (const rarity of RARITIES) {
+      expect((counts[rarity] ?? 0) / n).toBeCloseTo(RARITY_WEIGHTS[rarity] / total, 4);
+    }
   });
 });

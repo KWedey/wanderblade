@@ -3,6 +3,7 @@
 
 import {
   advance,
+  clockAfter,
   arcPositionAt,
   sustainStrikeRate,
   type ArcPoint,
@@ -107,9 +108,11 @@ export function strikeThrough(
   rate: number,
   onEvents?: (events: GameEvent[]) => void,
 ): void {
-  const end = state.timeSec + seconds;
+  // On the clock grid: a sub-millisecond residual is an advance that cannot
+  // move the clock, and a loop that waits for it never ends.
+  const end = clockAfter(state.timeSec, seconds);
   if (!(rate > 0)) {
-    while (state.timeSec < end - 1e-9) {
+    while (state.timeSec < end) {
       const events = advance(state, Math.min(IDLE_SLICE_SEC, end - state.timeSec));
       onEvents?.(events);
     }
@@ -118,7 +121,7 @@ export function strikeThrough(
 
   const step = 1 / rate;
   let next = state.timeSec + step;
-  while (state.timeSec < end - 1e-9) {
+  while (state.timeSec < end) {
     const at = Math.min(next, end);
     const dt = at - state.timeSec;
     if (!(dt > 0)) break;

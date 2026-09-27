@@ -16,6 +16,8 @@ import {
   buyAscendancyNode as coreBuyAscendancyNode,
   buySkill as coreBuySkill,
   bossEtaSec,
+  CLOCK_MS_PER_SEC,
+  clockAfter,
   goldPerKill,
   enterPortal as coreEnterPortal,
   heroDps,
@@ -25,6 +27,7 @@ import {
   momentumAt,
   momentumMultiplier,
   bestBuy,
+  nextBuy,
   purchaseOptions,
   summarizeEvents,
   zonesPerRealm,
@@ -68,8 +71,8 @@ const SUSPEND_TICK_SEC = 90;
 const BOSS_RESULT_MS = 2600;
 /** How long a refused action explains itself in the panel. */
 const REFUSAL_MS = 4000;
-/** Smallest gap between two strike stamps, so a burst stays strictly ordered. */
-const STRIKE_EPSILON_SEC = 1e-4;
+/** Smallest gap between two strike stamps: one clock tick, so a burst stays strictly ordered. */
+const STRIKE_EPSILON_SEC = 1 / CLOCK_MS_PER_SEC;
 /**
  * Gold count-up smoothing rate in 1/s, applied as `1 - exp(-rate * dt)` per
  * frame so the counter converges identically on 60Hz and 120Hz displays.
@@ -174,8 +177,11 @@ export class Game {
       return;
     }
 
-    const dtSec = (now - this.lastTickMs) / 1000;
-    this.lastTickMs = now;
+    // Whole milliseconds, so the engine clock never sees a fraction it would
+    // round and the remainder of the wall clock carries to the next tick.
+    const dtMs = Math.floor(now - this.lastTickMs);
+    const dtSec = dtMs / 1000;
+    this.lastTickMs += dtMs;
 
     if (dtSec > 0) {
       const strikes = this.drainStrikes();
@@ -241,7 +247,7 @@ export class Game {
   /** Display-clock overshoot past the last engine tick; zero while paused. */
   private sinceTickSec(): number {
     if (this.view.isRecapOpen()) return 0;
-    return Math.min((performance.now() - this.lastTickMs) / 1000, MAX_EXTRAPOLATE_SEC);
+    return Math.min(Math.floor(performance.now() - this.lastTickMs) / 1000, MAX_EXTRAPOLATE_SEC);
   }
 
   /** Momentum extrapolated to the display clock; core owns the value itself. */
@@ -253,7 +259,7 @@ export class Game {
     const momentum = this.liveMomentum();
     return {
       region: this.state.realm,
-      kills: this.state.lifetime.kills,
+      kills: this.state.killIndex,
       killProgress: progress,
       goldPerKill: this.goldPerKill,
       dps: this.dps,
@@ -298,11 +304,11 @@ export class Game {
    */
   strike(aim: ArcPoint | null): void {
     this.cue('strike');
-    const floor = this.state.timeSec + STRIKE_EPSILON_SEC;
+    const floor = clockAfter(this.state.timeSec, STRIKE_EPSILON_SEC);
     const last = this.pendingStrikes[this.pendingStrikes.length - 1];
     const atSec = Math.max(
-      this.state.timeSec + this.sinceTickSec(),
-      last ? last.atSec + STRIKE_EPSILON_SEC : floor,
+      clockAfter(this.state.timeSec, this.sinceTickSec()),
+      last ? clockAfter(last.atSec, STRIKE_EPSILON_SEC) : floor,
     );
     this.pendingStrikes.push({ atSec, aim });
   }
@@ -544,7 +550,6 @@ export class Game {
         level: r.rank,
         cost: r.cost,
         unlocked: r.unlocked,
-        atMax: r.atMax,
         unlockLevel: r.unlockLevel,
         canAfford: r.affordable,
         etaSec: waitFor(r.cost),
@@ -602,9 +607,9 @@ export class Game {
       ? { id: top.id, name: top.name, cost: top.cost, dpsGain: top.valuePerCost * top.cost }
       : null;
 
-    // …and the same ranking's answer to "what next": core's pick for a purse
-    // with no limit, so the chip never holds an opinion of its own about value.
-    const next = top ?? bestBuy({ ...s, gold: Infinity, phase: 'road' }, 'gold');
+    // …and the same ranking's answer to "what next", so the chip never holds
+    // an opinion of its own about value.
+    const next = top ?? nextBuy(s, 'gold');
     const purchaseReady = top !== null;
     let purchaseGoal = '';
     if (next) {

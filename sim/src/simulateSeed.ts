@@ -64,7 +64,7 @@ function unmeasuredResult(
     deadTime: deadTime(main.realms),
     permanentUplift: null,
     witnessed: witnessedBeats(config, main.realms),
-    totalKills: main.state.lifetime.kills,
+    totalKills: main.state.killIndex,
     finalRealm: main.state.realm,
     victories: main.state.ascendancy.victories,
     correctnessBreaches: main.breaches,

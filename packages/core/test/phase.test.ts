@@ -36,7 +36,7 @@ describe('phase exclusivity and manual entry', () => {
     advance(s, 7 * 86_400);
     expect(s.portalReady).toBe(true);
     expect(s.phase).toBe('road');
-    expect(s.lifetime.ascensions).toBe(0);
+    expect(s.ascendancy.victories).toBe(0);
   });
 
   it('never enters the portal on its own while the player is striking, either', () => {
@@ -68,9 +68,9 @@ describe('phase exclusivity and manual entry', () => {
     advance(s, 3600);
     expect(s.portalReady).toBe(true);
     expect(s.zone).toBe(zonesPerRealm - 1);
-    const killsBefore = s.lifetime.kills;
+    const killsBefore = s.killIndex;
     advance(s, 3600);
-    expect(s.lifetime.kills).toBeGreaterThan(killsBefore);
+    expect(s.killIndex).toBeGreaterThan(killsBefore);
     expect(s.zone).toBe(zonesPerRealm - 1);
     expect(s.realm).toBe(0);
   });
@@ -85,7 +85,7 @@ describe('the boss phase pays nothing', () => {
       pending: s.ascendancy.pending,
       zone: s.zone,
       leagues: s.leagues,
-      kills: s.lifetime.kills,
+      kills: s.killIndex,
       gearFound: s.collection.gearFound,
       zonesCleared: s.collection.zonesCleared,
       weapon: s.gear.weapon?.power,
@@ -98,7 +98,7 @@ describe('the boss phase pays nothing', () => {
     expect(s.ascendancy.pending).toBe(before.pending);
     expect(s.zone).toBe(before.zone);
     expect(s.leagues).toBe(before.leagues);
-    expect(s.lifetime.kills).toBe(before.kills);
+    expect(s.killIndex).toBe(before.kills);
     expect(s.collection.gearFound).toBe(before.gearFound);
     expect(s.collection.zonesCleared).toBe(before.zonesCleared);
     expect(s.gear.weapon?.power).toBe(before.weapon);
@@ -169,7 +169,7 @@ describe('abandonment', () => {
     expect(s.ascendancy.pending).toBe(pendingBefore);
     expect(s.hero.level).toBe(levelBefore);
     expect(s.ascendancy.banked).toBe(0); // abandonment never banks
-    expect(s.lifetime.ascensions).toBe(0);
+    expect(s.ascendancy.victories).toBe(0);
   });
 
   it('restores full guardian HP on re-entry', () => {

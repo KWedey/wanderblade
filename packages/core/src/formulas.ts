@@ -151,7 +151,7 @@ export function ascMultiplier(asc: AscendancyState, effect: AscNodeEffect): numb
     if (!def || def.effect !== effect) continue;
     const rank = asc.nodes[id] ?? 0;
     ranks += rank;
-    m *= Math.pow(1 + def.perRank, rank);
+    if (def.effect !== 'attackSpeed') m *= Math.pow(1 + def.perRank, rank);
   }
   if (effect !== 'attackSpeed') return m;
   return ranks > 0 ? 1 + ASC_SPEED_MAX_BONUS * (1 - Math.pow(ASC_SPEED_DECAY, ranks)) : 1;

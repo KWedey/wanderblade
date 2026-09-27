@@ -40,7 +40,7 @@ function expectArcsWithinOneWindow(s: GameState): void {
     expect(arc.expiresAtSec).toBeGreaterThan(s.timeSec);
     expect(arc.expiresAtSec - s.timeSec).toBeLessThanOrEqual(ARC_MAX_LIFE_SEC);
   }
-  const killsPerSec = s.lifetime.kills / s.timeSec;
+  const killsPerSec = s.killIndex / s.timeSec;
   const cap = (Math.ceil(killsPerSec * ARC_MAX_LIFE_SEC) + 1) * ARC_SPLIT_MAX;
   expect(s.arcs.length).toBeLessThanOrEqual(cap);
 }
@@ -55,8 +55,8 @@ describe('offline reconciliation scales with the length of the gap', () => {
 
     // Position and build are frozen, so kills are exactly linear in time. A
     // super-linear step count would show up here before it showed up in a clock.
-    expect(b.lifetime.kills / a.lifetime.kills).toBeGreaterThan(1.99);
-    expect(b.lifetime.kills / a.lifetime.kills).toBeLessThan(2.01);
+    expect(b.killIndex / a.killIndex).toBeGreaterThan(1.99);
+    expect(b.killIndex / a.killIndex).toBeLessThan(2.01);
   });
 
   it('holds the live arc list to a bound no length of gap can grow', () => {
@@ -106,14 +106,14 @@ describe('offline reconciliation scales with the length of the gap', () => {
     expectArcsWithinOneWindow(struck);
     // And striking is still the same simulation underneath it.
     expect(struck.timeSec).toBe(idle.timeSec);
-    expect(struck.lifetime.kills).toBeGreaterThanOrEqual(idle.lifetime.kills);
+    expect(struck.killIndex).toBeGreaterThanOrEqual(idle.killIndex);
   });
 
   it('still reconciles a ten-day gap correctly, whatever the clock says', () => {
     const s = initialState(7);
     advance(s, 10 * 86_400);
     expect(s.timeSec).toBe(10 * 86_400);
-    expect(s.lifetime.kills).toBeGreaterThan(100_000);
+    expect(s.killIndex).toBeGreaterThan(100_000);
     expect(s.collection.zonesCleared).toBeGreaterThan(0);
   });
 });

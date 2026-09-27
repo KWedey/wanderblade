@@ -775,17 +775,17 @@ body {
 /* Unaffordable, not invisible. Fading parchment on brown to 55% left the row
    brown-on-brown - four separate reports of the same fault. It keeps full
    contrast and says what it is with a dimmer *hue*, not a dimmer alpha. */
-.upgrade-btn:disabled:not(.locked):not(.maxed) {
+.upgrade-btn:disabled:not(.locked) {
   background: var(--panel-sunk);
   border-color: #2b1a17;
   color: var(--parchment);
 }
 
-.upgrade-btn:disabled:not(.locked):not(.maxed) .upgrade-cost {
+.upgrade-btn:disabled:not(.locked) .upgrade-cost {
   color: #d9a066;
 }
 
-.upgrade-btn:disabled:not(.locked):not(.maxed) .upgrade-detail {
+.upgrade-btn:disabled:not(.locked) .upgrade-detail {
   color: #d9a066;
 }
 
@@ -806,8 +806,7 @@ body {
 }
 
 .upgrade-btn.affordable .upgrade-fill,
-.upgrade-btn.locked .upgrade-fill,
-.upgrade-btn.maxed .upgrade-fill {
+.upgrade-btn.locked .upgrade-fill {
   display: none;
 }
 
@@ -831,15 +830,6 @@ body {
 
 .upgrade-btn.locked .upgrade-detail {
   text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
-}
-
-/* Skill at its rank cap — reads as earned/complete, not merely disabled. */
-.upgrade-btn.maxed {
-  border-color: var(--rarity-epic);
-}
-
-.upgrade-btn.maxed .upgrade-detail {
-  color: var(--rarity-epic);
 }
 
 /* --- Gear ------------------------------------------------------------- */
