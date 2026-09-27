@@ -6,17 +6,20 @@ import {
   bossBand,
   bossEtaSec,
   enterPortal,
-  goldPerKill,
   initialState,
-  killTime,
-  momentumAt,
   purchaseOptions,
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
 import { CAP_RATE, runActive, runIdle, SEC_PER_DAY } from './policy';
-import { SPEND_GRACE_SEC, SPEND_LEAN_MAX, SPEND_REACH_SEC } from './probes';
-import { reachSec } from './simulate';
+import {
+  isLean,
+  SPEND_GRACE_SEC,
+  SPEND_LEAN_MAX,
+  SPEND_REACH_SEC,
+  withinReach,
+} from './probes';
+import { goldPerSec, reachSec } from './simulate';
 
 interface Look {
   timeSec: number;
@@ -33,13 +36,16 @@ interface Look {
 
 function flag(argv: string[], name: string, fallback: number): number {
   const i = argv.indexOf(`--${name}`);
-  return i === -1 ? fallback : Number(argv[i + 1]);
+  if (i === -1) return fallback;
+  const n = Number(argv[i + 1]);
+  if (!Number.isFinite(n)) throw new Error(`Flag --${name} requires a numeric value`);
+  return n;
 }
 
 function look(s: GameState, realmStart: number): Look | null {
   if (s.phase !== 'road' || s.timeSec - realmStart < SPEND_GRACE_SEC) return null;
   const rows = purchaseOptions(s).filter((o) => o.currency === 'gold' && o.unlocked);
-  const income = goldPerKill(s) / killTime(s, momentumAt(s.momentum, s.timeSec));
+  const income = goldPerSec(s);
   return {
     timeSec: s.timeSec,
     realm: s.realm,
@@ -91,8 +97,8 @@ function main(): void {
   const n = looks.length;
   const hist = new Map<number, number>();
   for (const l of looks) hist.set(l.affordable, (hist.get(l.affordable) ?? 0) + 1);
-  const lean = looks.filter((l) => l.affordable <= SPEND_LEAN_MAX).length / n;
-  const reach = looks.filter((l) => l.affordable >= 1 || l.reachSec <= SPEND_REACH_SEC).length / n;
+  const lean = looks.filter(isLean).length / n;
+  const reach = looks.filter(withinReach).length / n;
   const out: string[] = [];
   out.push(`shop looks: ${n} over ${days}d, seed ${seed}, realm ${state.realm} reached`);
   out.push(`  lean (≤${SPEND_LEAN_MAX} affordable): ${(lean * 100).toFixed(1)}%   reach (≤${SPEND_REACH_SEC}s): ${(reach * 100).toFixed(1)}%`);
@@ -100,8 +106,8 @@ function main(): void {
   const byRealm = new Map<number, Look[]>();
   for (const l of looks) byRealm.set(l.realm, [...(byRealm.get(l.realm) ?? []), l]);
   out.push('  per realm: ' + [...byRealm.entries()].map(([r, ls]) => {
-    const lf = ls.filter((l) => l.affordable <= SPEND_LEAN_MAX).length / ls.length;
-    const rf = ls.filter((l) => l.affordable >= 1 || l.reachSec <= SPEND_REACH_SEC).length / ls.length;
+    const lf = ls.filter(isLean).length / ls.length;
+    const rf = ls.filter(withinReach).length / ls.length;
     return `r${r} lean ${(lf * 100).toFixed(0)}% reach ${(rf * 100).toFixed(0)}% (${ls.length})`;
   }).join(' | '));
   out.push('  sample looks (prices in minutes of current income; wallet likewise):');

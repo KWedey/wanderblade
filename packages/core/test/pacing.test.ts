@@ -4,10 +4,13 @@ import {
   BOSS_BAND_FULL_SEC,
   BOSS_BAND_REALM0_SEC,
   bossBand,
+  bossEtaSec,
+  bossHp,
   bossHpMultFor,
   bossHpMultFull,
   bossHpMultRealm0,
   deserialize,
+  enterPortal,
   FULL_LENGTH_REALM,
   initialState,
   KILLS_PER_ZONE_FULL,
@@ -200,5 +203,30 @@ describe('a save from a longer road loads onto today\'s', () => {
     const b = advance(walked, 600);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
     expect(clamped.zone).toBe(zonesForRealm(0) - 1);
+  });
+
+  it('resizes a mid-fight guardian from the longer road, keeping its fraction of HP', () => {
+    const s = initialState(21);
+    s.zone = 49;
+    s.portalReady = true;
+    expect(enterPortal(s).entered).toBe(true);
+    const oldHp = bossHp(0) * 1e8;
+    s.boss = { hpRemaining: oldHp * 0.4, hpMax: oldHp, enteredAtSec: s.timeSec };
+    const loaded = deserialize(serialize(s));
+    expect(loaded.phase).toBe('boss');
+    expect(loaded.zone).toBe(zonesForRealm(0) - 1);
+    expect(loaded.boss.hpMax).toBe(bossHp(0));
+    expect(loaded.boss.hpRemaining).toBeCloseTo(bossHp(0) * 0.4, 6);
+    expect(bossEtaSec(loaded, 1)).toBeLessThan(bossEtaSec(s, 1) / 1e7);
+  });
+
+  it("leaves a fight on today's road byte-identical through a reload", () => {
+    const s = initialState(21);
+    s.zone = zonesForRealm(0) - 1;
+    s.portalReady = true;
+    expect(enterPortal(s).entered).toBe(true);
+    advance(s, 30);
+    const json = serialize(s);
+    expect(serialize(deserialize(json))).toBe(json);
   });
 });

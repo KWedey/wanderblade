@@ -12,7 +12,14 @@ import {
   type GameState,
 } from '@wanderblade/core';
 import { botTouch } from './bot';
-import { CAP_RATE, IDLE_SLICE_SEC, SEC_PER_DAY, SEC_PER_HOUR, strikeThrough } from './policy';
+import {
+  CAP_RATE,
+  IDLE_SLICE_SEC,
+  SEC_PER_DAY,
+  SEC_PER_HOUR,
+  strikeThrough,
+  TOUCH_INTERVAL_SEC,
+} from './policy';
 import { clone, runPlayer, timeToKill, totalEarned, type RunOptions } from './simulate';
 import type {
   DeadTime,
@@ -284,11 +291,27 @@ export const PERMANENT_HORIZON_SEC = 14 * SEC_PER_DAY;
  */
 export const HORIZON_SWEEP_DAYS = [3, 7, 14, 21, 30, 45, 60, 75, 90];
 
+/** The scarcity clause: a look with at most SPEND_LEAN_MAX affordable rows. */
+export function isLean(x: Pick<ShopSample, 'affordable'>): boolean {
+  return x.affordable <= SPEND_LEAN_MAX;
+}
+
+/** The floor clause: a row is affordable or the income covers one within SPEND_REACH_SEC. */
+export function withinReach(x: Pick<ShopSample, 'affordable' | 'reachSec'>): boolean {
+  return x.affordable >= 1 || x.reachSec <= SPEND_REACH_SEC;
+}
+
+/**
+ * Consecutive in-session looks further apart than this had something other
+ * than a look between them — an idle gap, a guardian, a realm's grace window —
+ * so a drought closes there rather than spanning time nobody spent at the panel.
+ */
+const LOOK_GAP_SEC = 2 * TOUCH_INTERVAL_SEC;
+
 /**
  * Summarise every in-session look at the upgrade panel taken past the grace
  * window. Idle slices are excluded: nobody is looking and nothing is bought,
- * so their wallets balloon and say nothing about the panel a player sees. The
- * return after a gap is P3's question, not this one.
+ * so their wallets balloon and say nothing about the panel a player sees.
  */
 export function spendDepth(samples: ShopSample[]): SpendDepth {
   const counted = samples.filter(
@@ -312,30 +335,34 @@ export function spendDepth(samples: ShopSample[]): SpendDepth {
   let longestDroughtSec = 0;
   let runStartSec: number | null = null;
   let prevSec: number | null = null;
+  const record = (endSec: number): void => {
+    if (runStartSec !== null && endSec - runStartSec > longestDroughtSec) {
+      longestDroughtSec = endSec - runStartSec;
+    }
+  };
 
   for (const x of counted) {
     if (x.priced < minPriced) minPriced = x.priced;
-    if (x.affordable <= SPEND_LEAN_MAX) lean += 1;
-    const within = x.affordable >= 1 || x.reachSec <= SPEND_REACH_SEC;
+    if (isLean(x)) lean += 1;
+    if (prevSec !== null && x.timeSec - prevSec > LOOK_GAP_SEC) {
+      record(prevSec + LOOK_GAP_SEC);
+      runStartSec = null;
+      prevSec = null;
+    }
 
     // Bracket the drought rather than measure sample-to-sample: it began some
     // time after the last healthy look and ended some time before the next, so
-    // the honest figure is the whole window it sits inside. Measuring first-to-
-    // last starved sample reads 0s for a drought seen once and understates
-    // every other by up to one sampling interval — the wrong direction for a
-    // number a validator leans on.
-    if (within) {
+    // the honest figure is the whole window it sits inside. First-to-last
+    // starved sample reads 0s for a drought seen once and understates every
+    // other by up to one interval — the wrong direction for a validator.
+    if (withinReach(x)) {
       reached += 1;
-      if (runStartSec !== null) {
-        const span = x.timeSec - runStartSec;
-        if (span > longestDroughtSec) longestDroughtSec = span;
-      }
+      record(x.timeSec);
       runStartSec = null;
     } else {
       unreachedByRealm.set(x.realm, (unreachedByRealm.get(x.realm) ?? 0) + 1);
-      if (runStartSec === null) runStartSec = prevSec ?? x.timeSec;
-      const span = x.timeSec - runStartSec;
-      if (span > longestDroughtSec) longestDroughtSec = span;
+      runStartSec ??= prevSec ?? x.timeSec;
+      record(x.timeSec);
     }
     prevSec = x.timeSec;
   }

@@ -206,13 +206,10 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
     ),
   );
 
-  // The tutorial realm and the first full-length realm are each walked by two
-  // dedicated reach runs: one that never stops striking and one that never
-  // starts. The realms between them come from the headline run, whose mixed
-  // schedule must land between its own realm's continuous-active floor and
-  // pure-idle ceiling. Deeper realms are reported, not banded: the earnings
-  // bonus and the tree are designed to compound (docs/DECISIONS.md #21), so a
-  // realm runs faster the more of them the player has, down to the kill floor.
+  // Realm 0 and the first full-length realm each get two dedicated reach runs
+  // (always striking, never striking); realms 1–5 on the headline run's mixed
+  // schedule must land between their active floor and idle ceiling. Deeper
+  // realms compound by design (docs/DECISIONS.md #21): reported, not banded.
   const reachOut = r.portalReach.filter((x) => {
     const b = portalBand(x.realm);
     return (
@@ -290,15 +287,10 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
     ),
   );
 
-  // Scarcity, on both edges (docs/DECISIONS.md #63). `priced` is the critic's
-  // actual complaint — five rows with prices on them, always, whatever the
-  // wallet says — and gold cannot move it, so it is asserted on the minimum.
-  // `lean` is the decision: a panel where every row is green offers none, so
-  // most looks must show at most SPEND_LEAN_MAX affordable rows. `reach` is the
-  // floor under that: a row is affordable or the current income covers the
-  // cheapest one inside SPEND_REACH_SEC at nearly every look, and no drought
-  // outlasts SPEND_MAX_DROUGHT_SEC. Looks are taken before the purchase loop
-  // runs, so they show what the player sees, not what the greedy bot leaves.
+  // Scarcity on both edges (docs/DECISIONS.md #63): `priced` on the minimum,
+  // since gold cannot move it; `lean` because an all-green panel offers no
+  // decision; `reach` and the drought cap because a starved one offers none.
+  // Looks are taken before the purchase loop, so they show what the player sees.
   const sd = r.spendDepth;
   const pricedOk = sd.counted > 0 && sd.minPriced >= SPEND_PRICED_FLOOR;
   const leanOk = sd.counted > 0 && sd.leanFraction >= SPEND_LEAN_MIN_FRACTION;

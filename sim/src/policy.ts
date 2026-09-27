@@ -52,7 +52,7 @@ export function aimAtOldestArc(state: GameState, atSec: number): ArcPoint | null
 }
 
 /** How often the player re-runs the purchase loop while a session is live. */
-const TOUCH_INTERVAL_SEC = 30;
+export const TOUCH_INTERVAL_SEC = 30;
 /** Granularity of an idle stretch. Coarse enough to be fast, fine enough to log. */
 export const IDLE_SLICE_SEC = 60;
 

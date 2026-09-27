@@ -308,8 +308,8 @@ describe('the window separates being late from aiming badly', () => {
    * rewards having particular reflexes rather than aiming. A generous
    * along-path axis is flat across the whole human range instead: 1.00 up to
    * 250 ms, 0.78 at 350–450 ms, where the aimed coin is often still mid-flight
-   * and only the landing widens the window past `ARC_CATCH_SEC`. The 0.7 s
-   * kill floor took the neighbour catches a denser road used to hand out.
+   * and only the landing widens the window past `ARC_CATCH_SEC`; at the 0.7 s
+   * kill floor too few coins share the air for a neighbour to pad the rate.
    */
   it('does not reward one particular reaction time', () => {
     const rates = [0.1, 0.15, 0.25, 0.35, 0.45].map(rateAtLatency);

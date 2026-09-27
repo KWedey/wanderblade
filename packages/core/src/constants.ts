@@ -20,12 +20,9 @@ export const rH = 1.55;
 
 /**
  * Enemy gold: gold(realm, z) = g0 * REALM_STEP^realm * rG^z.
- *
- * `rG` is `rH^(ln rC / ln rD)`: the zone's gold grows exactly as fast as the
- * levels needed to keep pace with its HP cost, so a hero who reinvests keeps
- * the same kill time on every zone. Income then answers purchases instead of
- * the zone index, which is what keeps the upgrade panel scarce rather than
- * all-green (docs/DECISIONS.md #64).
+ * `rG` = `rH^(ln rC / ln rD)`: a zone's gold grows exactly as fast as the levels
+ * its HP demands cost, so a reinvesting hero keeps one kill time across the realm
+ * and income answers purchases, not the zone index (docs/DECISIONS.md #64).
  */
 export const g0 = 1;
 export const rG = 1.75;
@@ -33,7 +30,7 @@ export const rG = 1.75;
 // --- Hero ----------------------------------------------------------------
 /**
  * Hero base damage: base(level) = d0 * rD^level, scaled by the realm.
- * A level is a big, rare buy — two per zone, not four — so the hero row costs
+ * A level is a big, rare buy — about two per zone — so the hero row costs
  * more than one glance's income and is not green at every look (#64).
  */
 export const d0 = 10;
@@ -51,10 +48,8 @@ export const rC = 1.33;
 // --- Gear (the idle half of realm-local power) ---------------------------
 /**
  * Drop power: gearPowerBase * REALM_STEP^realm * gearPowerRate^z * rarityMult.
- * Gear tracks enemy HP zone for zone, so a hero who buys nothing still walks:
- * it is what idle progress runs on. Bought damage is the other half, so a
- * purchase still moves the kill time and the panel stays scarce
- * (docs/DECISIONS.md #64).
+ * Gear tracks enemy HP zone for zone, so a hero who buys nothing still walks;
+ * bought damage is the other half, so a purchase still moves the kill time (#64).
  */
 export const gearPowerBase = 1.2;
 /** Gear power grows on the same base as enemy HP, so it tracks difficulty. */
@@ -63,9 +58,8 @@ export const gearPowerRate = rH;
 /**
  * Gear drops per zone, whatever the zone's length. Kept scarce: gear power
  * grows on enemy HP's base, so frequent drops make the equipped set track the
- * frontier exactly and every boss becomes the same fight. Stated per zone
- * rather than per kill because zone length is a function of the realm
- * (`killsPerZoneFor`), and the kit's lag behind the frontier is what matters.
+ * frontier exactly and every boss becomes the same fight. Per zone rather than
+ * per kill because zone length is a function of the realm (`killsPerZoneFor`).
  */
 export const DROPS_PER_ZONE = 10;
 
@@ -186,10 +180,10 @@ export const ARC_FLIGHT_SEC = 1.5;
  * not the whole kill. The kill already credited 1.0x in full, so a catch pays
  * only the increment and idle loses nothing.
  *
- * Kills are slower than strikes now that the hero is damage-bound rather than
- * floor-bound (docs/DECISIONS.md #64), so the reference player catches most
- * coins and the multiple, not the strike rate, sets the Road-active band.
- * Momentum's x1.75 times a full catch caps at 1.75 * this; P1 bands 1.8–2.2.
+ * Kills are slower than strikes on a damage-bound road (docs/DECISIONS.md #64),
+ * so the reference player catches most coins and the multiple, not the strike
+ * rate, sets the Road-active band. Momentum's x1.75 times a full catch caps at
+ * 1.75 * this; P1 bands 1.8–2.2.
  */
 export const ARC_CATCH_MULT = 1.25;
 /**
@@ -277,15 +271,9 @@ export const ASC_PER_ZONE = 1;
 export const ASC_BOSS_PAYOUT = 8;
 /**
  * Catching every coin a zone throws pays this multiple of the zone's own
- * Ascendancy on top of it; one coin pays its share of that. Stated against the
- * zone rather than as a flat number so it inherits realm scaling and zone
- * length (`killsPerZoneFor`) for free.
- *
- * Active play has to buy the *permanent* currency, not a bigger pile of the
- * temporary one: no multiplier on gold can beat a night of idle, because idle
- * has all night. Ascendancy per realm is bounded — its zones and one guardian,
- * and a portal-ready realm pays nothing — so catches are the only way to raise
- * a realm's yield, and waiting cannot substitute for them.
+ * Ascendancy on top of it, so it inherits realm scaling and zone length for free.
+ * Active play has to buy the *permanent* currency: no gold multiplier beats a
+ * night of idle, and a realm's Ascendancy is bounded, so only catches raise it.
  */
 export const ASC_CATCH_ZONE_BONUS = 16;
 /** Both accruals grow linearly per realm: amount * (1 + this * realm). */

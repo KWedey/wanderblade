@@ -595,10 +595,9 @@ export function deserialize(json: string): GameState {
 }
 
 /**
- * A save written when realms were longer may sit past the end of today's road.
- * That hero has walked at least the whole realm, so it lands on the last zone
- * with the portal open — the state the road would have reached — rather than on
- * a zone that no longer exists.
+ * A save from a longer road than its realm has today lands on the last zone
+ * with the portal open — the state that road would have reached. A guardian
+ * sized for the old road keeps its fraction of HP against today's.
  */
 function clampToRealm(state: GameState): void {
   if (!Number.isFinite(state.realm) || !Number.isFinite(state.zone)) return;
@@ -614,6 +613,11 @@ function clampToRealm(state: GameState): void {
   } else if (state.killsInZone >= kills) {
     state.killsInZone = kills - 1;
   }
+  if (state.phase !== 'boss' || !(state.boss.hpMax > 0)) return;
+  const hp = bossHp(state.realm);
+  if (!Number.isFinite(hp) || hp <= 0 || hp === state.boss.hpMax) return;
+  state.boss.hpRemaining = hp * (state.boss.hpRemaining / state.boss.hpMax);
+  state.boss.hpMax = hp;
 }
 
 // --- Recap ---------------------------------------------------------------

@@ -97,7 +97,7 @@ session and eight hours of sleep are actually comparable.
 | 24 h idle return | ≥ 1 zone of road progress | P4 |
 | Realm start → portal available, realm 0 | **12 – 20 min active, 40 – 80 min idle** | P5 |
 | Realm start → portal available, realm ≥ 5 | 2 – 4 h active, 8 – 16 h idle | P5 |
-| Realms 1 – 4 | between their own ramped active floor and idle ceiling | P5 |
+| Realms 1 – 5, on the mixed schedule | between their own ramped active floor and idle ceiling | P5 |
 | Portal boss duration (prepared build), realm 0 | **3 – 6 min active** | P6 |
 | Portal boss duration (prepared build), realm ≥ 5 | **15 – 90 min active** | P6 |
 | Ascend promptly vs farm a ready realm 2× longer | prompt ascension wins | P7 |

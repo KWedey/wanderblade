@@ -9,6 +9,7 @@ import {
   initialState,
   ZONES_FULL,
   zonesForRealm,
+  type GameEvent,
   type GameState,
 } from '../src/index';
 
@@ -29,28 +30,28 @@ function readyIn(realm: number, gearZone = zonesForRealm(realm) - 1): GameState 
   return s;
 }
 
-/** The fight is walked in steps this long, so it ends on one of their edges. */
-const FIGHT_STEP_SEC = 30;
-
-/** Fight to the death at `momentum`, in small steps, and return the elapsed time. */
+/** Fight to the death at `momentum`, in small steps, and return the fight's exact length. */
 function fightOut(s: GameState, momentum: number, capSec: number): number | null {
   const start = s.timeSec;
   const rate = momentum > 0 ? 4 : 0;
   let next = s.timeSec;
   while (s.phase === 'boss' && s.timeSec - start < capSec) {
-    const step = Math.min(FIGHT_STEP_SEC, capSec - (s.timeSec - start));
+    const step = Math.min(30, capSec - (s.timeSec - start));
+    let events: GameEvent[];
     if (rate > 0) {
       const strikes = [];
       for (let t = next; t < s.timeSec + step; t += 1 / rate) {
         strikes.push({ atSec: t, aim: null });
       }
       next = s.timeSec + step;
-      advance(s, step, strikes);
+      events = advance(s, step, strikes);
     } else {
-      advance(s, step);
+      events = advance(s, step);
     }
+    const victory = events.find((e) => e.type === 'bossVictory');
+    if (victory) return victory.timeSec - start;
   }
-  return s.phase === 'boss' ? null : s.timeSec - start;
+  return null;
 }
 
 describe('the portal preview is the number the player commits on', () => {
@@ -85,9 +86,9 @@ describe('the portal preview is the number the player commits on', () => {
 
       const actual = fightOut(s, 0, idlePreview * 4 + 600);
       expect(actual).not.toBeNull();
-      // The harness walks in steps, so the measured end lands on the next edge.
+      // Swings are discrete, so the last one overshoots by less than one swing.
       expect(actual as number).toBeGreaterThan(idlePreview * 0.95);
-      expect(actual as number).toBeLessThan(idlePreview * 1.05 + FIGHT_STEP_SEC);
+      expect(actual as number).toBeLessThan(idlePreview * 1.05 + 2);
     }
   });
 

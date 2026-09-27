@@ -25,7 +25,7 @@ import {
   twentyFourHourReturn,
   witnessedBeats,
 } from '../src/probes';
-import { runPlayer } from '../src/simulate';
+import { blankRealm, runPlayer } from '../src/simulate';
 import { runCorrectness, runPacing } from '../src/validators';
 import { PERMANENT_HORIZON_SEC } from '../src/probes';
 import type {
@@ -268,29 +268,6 @@ const weekRun = (): ReturnType<typeof runPlayer> =>
   (cachedWeek ??= runPlayer(1, cfg(WEEK), { policy: 'road-active', entry: 'prompt' }));
 
 const PASSED = { pass: true, detail: '' };
-
-/** A realm the run has only just entered; tests fill in what they measure. */
-function realmRecord(realm: number, startSec: number): RealmRecord {
-  return {
-    realm,
-    startSec,
-    portalReadySec: null,
-    portalEnterSec: null,
-    victorySec: null,
-    roadSec: null,
-    bossSec: 0,
-    activeSec: 0,
-    bossEtaAtEntrySec: null,
-    bossActiveEtaAtEntrySec: null,
-    gearPowerAtEntry: 0,
-    goldPeak: 0,
-    pendingAtVictory: null,
-    bankedAfter: null,
-    earningsMultAfter: null,
-    treePurchasesTotal: 0,
-    abandons: 0,
-  };
-}
 
 function stubResult(over: Partial<SeedResult> = {}): SeedResult {
   const main = (cachedRun ??= runPlayer(1, cfg(), { policy: 'road-active', entry: 'prompt' }));
@@ -579,6 +556,20 @@ describe('spendDepth', () => {
     expect(d.longestDroughtSec).toBe(60);
   });
 
+  it('does not stretch a drought across a gap nobody spent at the panel', () => {
+    // Session one ends starved at 30; session two opens starved ten thousand
+    // seconds later. The first drought is bracketed by the healthy look at 0
+    // and one look-gap past its last sighting; neither one is the gap between.
+    const d = spendDepth([
+      sample({ timeSec: 0, affordable: 1 }),
+      sample({ timeSec: 30, affordable: 0, reachSec: 500 }),
+      sample({ timeSec: 10_000, affordable: 0, reachSec: 500 }),
+      sample({ timeSec: 10_030, affordable: 1 }),
+    ]);
+    expect(d.longestDroughtSec).toBe(90);
+    expect(d.reachFraction).toBeCloseTo(0.5, 10);
+  });
+
   it('treats no samples as the worst case rather than a silent pass', () => {
     const d = spendDepth([]);
     expect(d.counted).toBe(0);
@@ -623,7 +614,7 @@ describe('the dead-time and starvation clauses bite', () => {
     });
     expect(find(lean, 'P8').pass).toBe(true);
 
-    // The pre-#63 game: every row affordable ninety seconds into the realm.
+    // Every row green at nearly every look: a panel with no decision on it.
     const allGreen = stubResult({
       spendDepth: { ...lean.spendDepth, leanFraction: 0.001 },
     });
@@ -659,8 +650,8 @@ describe('the dead-time and starvation clauses bite', () => {
     const inBand = stubResult({
       portalReach: [{ realm: 0, active: b0.active.minSec + 1, idle: b0.idle.maxSec - 1 }],
       realms: [
-        { ...realmRecord(0, 0), portalReadySec: b0.active.minSec + 1 },
-        { ...realmRecord(3, 10_000), portalReadySec: 10_000 + b3.active.minSec + 60 },
+        { ...blankRealm(0, 0), portalReadySec: b0.active.minSec + 1 },
+        { ...blankRealm(3, 10_000), portalReadySec: 10_000 + b3.active.minSec + 60 },
       ],
     });
     expect(find(inBand, 'P5').pass).toBe(true);
@@ -681,7 +672,7 @@ describe('the dead-time and starvation clauses bite', () => {
     // Past the first full-length realm the bonuses compound by design: reported, not banded.
     const deepFast = stubResult({
       ...inBand,
-      realms: [...inBand.realms, { ...realmRecord(40, 50_000), portalReadySec: 50_000 + 600 }],
+      realms: [...inBand.realms, { ...blankRealm(40, 50_000), portalReadySec: 50_000 + 600 }],
     });
     const deep = find(deepFast, 'P5');
     expect(deep.pass).toBe(true);
@@ -691,7 +682,7 @@ describe('the dead-time and starvation clauses bite', () => {
       ...inBand,
       realms: [
         inBand.realms[0]!,
-        { ...realmRecord(3, 10_000), portalReadySec: 10_000 + b3.idle.maxSec + 1 },
+        { ...blankRealm(3, 10_000), portalReadySec: 10_000 + b3.idle.maxSec + 1 },
       ],
     });
     const v = find(laterRealmSlow, 'P5');
@@ -701,7 +692,7 @@ describe('the dead-time and starvation clauses bite', () => {
 
   it('P6 judges every guardian against its own realm band', () => {
     const fight = (realm: number, eta: number): RealmRecord => ({
-      ...realmRecord(realm, 0),
+      ...blankRealm(realm, 0),
       portalEnterSec: 100,
       victorySec: 200,
       bossActiveEtaAtEntrySec: eta,

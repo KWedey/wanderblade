@@ -56,6 +56,11 @@ export function previewEtaSec(state: GameState): number {
   return bossEtaSec(state, 1);
 }
 
+/** Road gold per second at the current momentum, catches left out. */
+export function goldPerSec(s: GameState): number {
+  return goldPerKill(s) / killTime(s, momentumAt(s.momentum, s.timeSec));
+}
+
 /**
  * Seconds of the current Road income until the cheapest priced gold row is
  * affordable; 0 when one already is. Catches are left out, so an active
@@ -69,7 +74,7 @@ export function reachSec(s: GameState): number {
     if (o.cost < cheapest) cheapest = o.cost;
   }
   if (!Number.isFinite(cheapest)) return Infinity;
-  const income = goldPerKill(s) / killTime(s, momentumAt(s.momentum, s.timeSec));
+  const income = goldPerSec(s);
   return income > 0 ? (cheapest - s.gold) / income : Infinity;
 }
 
@@ -125,7 +130,7 @@ export function totalEarned(s: GameState): number {
   return s.ascendancy.banked + s.ascendancy.pending + ascSpent(s.ascendancy);
 }
 
-function blankRealm(realm: number, startSec: number): RealmRecord {
+export function blankRealm(realm: number, startSec: number): RealmRecord {
   return {
     realm,
     startSec,
