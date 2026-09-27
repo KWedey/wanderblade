@@ -88,6 +88,18 @@ try {
     }
     steps.push('portal opened');
 
+    // A prepared build is a spent one. The bot buys before it enters; so does
+    // a player who reads the panel. Buy every green row until none is left.
+    let bought = 0;
+    for (let pass = 0; pass < 200; pass++) {
+      const btn = page.locator('.upgrades .upgrade-btn:not([disabled]):not(.asc-node)').first();
+      if (!(await btn.isVisible().catch(() => false))) break;
+      await btn.click();
+      bought += 1;
+      await page.waitForTimeout(120);
+    }
+    steps.push(`bought ${bought} upgrades before entering`);
+
     await enter.click();
     steps.push('entered the portal');
 
