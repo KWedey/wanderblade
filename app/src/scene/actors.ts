@@ -7,7 +7,7 @@ import { OUTLINE_INK, glowRingRadii, lighten, momentumLift } from './palette';
 import { drawShadow } from './road';
 import { drawSprite, drawSpriteRotated } from './sprites';
 import { LANE_COUNT, lanesTouching, type LaneSpan } from './textlane';
-import { arcScreenPoints, leadScale, pockets } from './world';
+import { DEATH_SEC, arcScreenPoints, leadScale, pockets } from './world';
 
 /**
  * Concentric hard rings, not a dither: one world pixel is a 36px block at
@@ -111,11 +111,36 @@ export function drawHero(f: Frame): void {
   }
 }
 
+/**
+ * The death phase: the corpse flattens into the ground over DEATH_SEC, lit
+ * white as it goes. It is drawn behind the queue so the next creature walking
+ * in is never hidden behind the one that just fell.
+ */
+function drawFallen(f: Frame): void {
+  const { ctx, model, view, world } = f;
+  const sprites = f.sprites.skinned;
+  const scale = leadScale(model);
+  for (const c of world.fallen) {
+    const sprite = sprites.monsters[c.sprite] ?? sprites.monsters[0]!;
+    const t = Math.min(1, c.age / DEATH_SEC);
+    const w = sprite.width * scale;
+    const h = Math.max(1, Math.round(sprite.height * scale * (1 - t)));
+    const px = Math.floor(c.x - w / 2);
+    const py = view.groundY - h;
+    drawShadow(f, c.x, (sprite.width - 2) * scale, ACTOR_SHADOW);
+    ctx.drawImage(sprite.image, px, py, w, h);
+    ctx.globalAlpha = 0.55 * (1 - t);
+    ctx.drawImage(sprite.flash, px, py, w, h);
+    ctx.globalAlpha = 1;
+  }
+}
+
 /** Draws the queue back to front and returns the lanes the engaged creature's health bar covers. */
 export function drawMonsters(f: Frame): LaneSpan[] {
   const { ctx, model, view, world } = f;
   const sprites = f.sprites.skinned;
   let barSpans: LaneSpan[] = [];
+  drawFallen(f);
   // Back to front, so the one being fought overlaps the line behind it.
   for (let i = world.queue.length - 1; i >= 0; i--) {
     const m = world.queue[i]!;

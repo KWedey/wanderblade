@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { dayFraction, realmSkin, zoneSkin } from '../src/scene/palette';
 import { drawSignposts, propsFor } from '../src/scene/road';
-import { step } from '../src/scene/world';
+import { drawMonsters } from '../src/scene/actors';
+import { DEATH_SEC, step } from '../src/scene/world';
 import { frame } from './helpers/frame';
 
 function road(zone: number, extra: Parameters<typeof frame>[0] = {}) {
@@ -91,5 +92,42 @@ describe('the backdrop drifts across the realm', () => {
     const b = propsFor(1);
     expect(propsFor(0)).toBe(a);
     expect(a.length === b.length && a.every((p, i) => p.at === b[i]!.at)).toBe(false);
+  });
+});
+
+describe('a creature dies on screen instead of being swapped out', () => {
+  it('keeps the corpse drawn for the death phase, then drops it', () => {
+    const { f } = road(3);
+    step(f.world, f, 1 / 60);
+    f.model.kills = 4;
+    step(f.world, f, 1 / 60);
+    expect(f.world.fallen).toHaveLength(1);
+    expect(f.world.queue[0]!.sprite).toBeDefined();
+    step(f.world, f, DEATH_SEC / 2);
+    expect(f.world.fallen).toHaveLength(1);
+    step(f.world, f, DEATH_SEC);
+    expect(f.world.fallen).toHaveLength(0);
+  });
+
+  it('plays one death for an offline return of a thousand kills', () => {
+    const { f } = road(3);
+    step(f.world, f, 1 / 60);
+    f.model.kills = 1003;
+    step(f.world, f, 1 / 60);
+    expect(f.world.fallen).toHaveLength(1);
+  });
+
+  it('fits the death phase inside the engine kill floor', () => {
+    expect(DEATH_SEC).toBeLessThanOrEqual(0.15);
+  });
+
+  it('flattens the corpse toward the ground line as it ages', () => {
+    const { f, calls } = road(3);
+    f.world.fallen.push({ sprite: 0, x: 120, age: DEATH_SEC * 0.5 });
+    drawMonsters(f);
+    const blits = calls.filter((c) => c.op === 'drawImage');
+    expect(blits.length).toBeGreaterThan(0);
+    expect(blits[0]!.h).toBeLessThan(10);
+    expect(blits[0]!.y + blits[0]!.h).toBe(f.view.groundY);
   });
 });

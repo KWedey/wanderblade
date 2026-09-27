@@ -111,6 +111,16 @@ export interface Signpost {
   zone: number;
 }
 
+/** A creature in its death phase: still drawn, no longer fought. */
+export interface Fallen {
+  sprite: number;
+  x: number;
+  age: number;
+}
+
+/** Seconds a corpse takes to go down — inside core's 0.35 s kill floor, so the next duel is never hidden behind the last. */
+export const DEATH_SEC = 0.14;
+
 export interface Monster {
   /** Slot in the realm's baked roster; the last slot is the Portal guardian. */
   sprite: number;
@@ -151,6 +161,7 @@ export interface World {
    * road looked like before, and it read as a paused screen.
    */
   queue: Monster[];
+  fallen: Fallen[];
   signposts: Signpost[];
   lastZone: number;
   lastKills: number;
@@ -190,6 +201,7 @@ export function createWorld(): World {
     damageTextCooldown: 0,
     bossEnteredAtSec: 0,
     queue: [],
+    fallen: [],
     signposts: [],
     lastZone: -1,
     lastKills: -1,
@@ -369,7 +381,8 @@ function killMonster(w: World, input: WorldInput): void {
   burst(w, x, y - 12, 10, ['#ffffff', ...SPARK_COLORS], 62);
   w.shake = Math.min(MAX_SHAKE, w.shake + 2.1);
 
-  w.queue.shift();
+  const dead = w.queue.shift();
+  if (dead) w.fallen.push({ sprite: dead.sprite, x, age: 0 });
   // Damage numbers belong to the thing that took the hit; a corpse's number
   // left hanging in the air reads as unowned UI.
   for (let i = w.floaters.length - 1; i >= 0; i--) {
@@ -670,6 +683,12 @@ function ageEffects(w: World, heroX: number, speed: number, dtSec: number): void
       streaks.push({ x0: r.x, y0: r.y, age: 0, gold: r.gold, spin: r.spin });
       rests.splice(i, 1);
     }
+  }
+
+  for (let i = w.fallen.length - 1; i >= 0; i--) {
+    const c = w.fallen[i]!;
+    c.age += dtSec;
+    if (c.age >= DEATH_SEC) w.fallen.splice(i, 1);
   }
 
   for (let i = w.signposts.length - 1; i >= 0; i--) {
