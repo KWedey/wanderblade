@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { affordableCount, initialState, serialize } from '@wanderblade/core';
+import {
+  affordableCount,
+  FULL_LENGTH_REALM,
+  initialState,
+  serialize,
+  zonesForRealm,
+} from '@wanderblade/core';
 
 import { spendDown, STAGE_PRESETS, stageFromQuery, stageState } from '../src/devstage';
 import { readSave, writeSave } from '../src/save';
@@ -34,9 +40,25 @@ describe('stageState', () => {
   });
 
   it('reaches a stronger build than banking every coin to the end', () => {
-    const reinvested = stageState({ seed: 7, totalSec: 6 * 3600, rounds: 40 });
-    const banked = stageState({ seed: 7, totalSec: 6 * 3600, rounds: 1 });
+    const mid = STAGE_PRESETS['mid']!;
+    const reinvested = stageState({ ...mid, seed: 7 });
+    const banked = stageState({ ...mid, seed: 7, rounds: 1 });
     expect(reinvested.hero.level).toBeGreaterThan(banked.hero.level);
+  });
+
+  it('keeps mid deep in realm 0, short of its portal', () => {
+    const s = stageState({ ...STAGE_PRESETS['mid']!, seed: 7 });
+    expect(s.realm).toBe(0);
+    expect(s.phase).toBe('road');
+    expect(s.portalReady).toBe(false);
+    expect(s.zone).toBeGreaterThanOrEqual(Math.floor(zonesForRealm(0) / 2));
+  });
+
+  it('takes late through several realms and leaves it on the Road', () => {
+    const s = stageState({ ...STAGE_PRESETS['late']!, seed: 7 });
+    expect(s.realm).toBeGreaterThan(FULL_LENGTH_REALM);
+    expect(s.ascendancy.victories).toBe(s.realm);
+    expect(s.phase).toBe('road');
   });
 
   it('advances real engine time', () => {

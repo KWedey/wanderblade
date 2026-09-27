@@ -6,16 +6,12 @@ import {
   ARC_CATCH_MULT,
   ASC_NODE_IDS,
   ASC_NODES,
-  dropChance,
   GEAR_SLOTS,
-  killsPerZone,
-  leaguePerKill,
   MOMENTUM_PER_STRIKE,
   RARITIES,
   RARITY_WEIGHTS,
   SKILL_IDS,
   SKILLS,
-  zonesPerRealm,
 } from './constants';
 import {
   ascendancyBossPayout,
@@ -36,6 +32,7 @@ import {
 import { arcHitIndex, arcsForKill } from './arcs';
 import { CLOCK_MS_PER_SEC, clockMs } from './clock';
 import { addMomentum, momentumAt } from './momentum';
+import { dropChanceFor, killsPerZoneFor, leaguesPerKillFor, zonesForRealm } from './pacing';
 import { createRng, type Rng } from './rng';
 import type {
   PortalEntry,
@@ -324,7 +321,7 @@ function processKill(
   // One RNG draw every kill keeps the stream keyed to killIndex; two more only
   // when a drop actually occurs.
   let arcGear: LootArc['gear'] = null;
-  if (rng.next() < dropChance * kind.dropMult) {
+  if (rng.next() < dropChanceFor(realm) * kind.dropMult) {
     const slot = pickSlot(rng.next());
     const rarity = pickRarity(rng.next());
     const power = gearPower(realm, z, rarity, slot);
@@ -338,10 +335,11 @@ function processKill(
 
   state.arcs.push(...arcsForKill(state.killIndex, gold, clock, arcGear));
 
-  state.leagues += leaguePerKill;
-  recap.leaguesTraveled += leaguePerKill;
+  const leagues = leaguesPerKillFor(realm);
+  state.leagues += leagues;
+  recap.leaguesTraveled += leagues;
   state.killsInZone += 1;
-  if (state.killsInZone >= killsPerZone) {
+  if (state.killsInZone >= killsPerZoneFor(realm)) {
     completeZone(state, events, recap, clock);
   }
 }
@@ -368,7 +366,7 @@ function completeZone(
   state.ascendancy.pending += asc;
   recap.pendingAscendancyEarned += asc;
 
-  if (state.zone >= zonesPerRealm - 1) {
+  if (state.zone >= zonesForRealm(state.realm) - 1) {
     state.portalReady = true;
     emit(events, { type: 'portalReady', timeSec: clock, realm: state.realm });
     return;
@@ -598,7 +596,34 @@ export function deserialize(json: string): GameState {
     delete legacy.lifetime.kills;
     delete legacy.lifetime.ascensions;
   }
+  clampToRealm(state);
   return state;
+}
+
+/**
+ * A save from a longer road than its realm has today lands on the last zone
+ * with the portal open — the state that road would have reached. A guardian
+ * sized for the old road keeps its fraction of HP against today's.
+ */
+function clampToRealm(state: GameState): void {
+  if (!Number.isFinite(state.realm) || !Number.isFinite(state.zone)) return;
+  const lastZone = zonesForRealm(state.realm) - 1;
+  const kills = killsPerZoneFor(state.realm);
+  if (state.zone > lastZone) {
+    state.zone = lastZone;
+    state.killsInZone = 0;
+    state.portalReady = true;
+  } else if (state.zone === lastZone && state.killsInZone >= kills) {
+    state.killsInZone = 0;
+    state.portalReady = true;
+  } else if (state.killsInZone >= kills) {
+    state.killsInZone = kills - 1;
+  }
+  if (state.phase !== 'boss' || !(state.boss.hpMax > 0)) return;
+  const hp = bossHp(state.realm);
+  if (!Number.isFinite(hp) || hp <= 0 || hp === state.boss.hpMax) return;
+  state.boss.hpRemaining = hp * (state.boss.hpRemaining / state.boss.hpMax);
+  state.boss.hpMax = hp;
 }
 
 // --- Recap ---------------------------------------------------------------
@@ -624,7 +649,7 @@ export function summarizeEvents(events: readonly GameEvent[]): Recap {
       case 'kill':
         recap.kills += 1;
         recap.goldEarned += e.gold;
-        recap.leaguesTraveled += leaguePerKill;
+        recap.leaguesTraveled += leaguesPerKillFor(e.realm);
         break;
       case 'drop':
         recap.drops += 1;

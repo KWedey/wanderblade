@@ -19,14 +19,20 @@ export {
   rC,
   gearPowerBase,
   gearPowerRate,
-  dropChance,
+  DROPS_PER_ZONE,
   RARITY_WEIGHTS,
   RARITY_MULTIPLIERS,
   RARITIES,
   GEAR_SLOTS,
-  killsPerZone,
-  zonesPerRealm,
-  leaguePerKill,
+  FULL_LENGTH_REALM,
+  ZONES_REALM0,
+  ZONES_FULL,
+  KILLS_PER_ZONE_REALM0,
+  KILLS_PER_ZONE_FULL,
+  PORTAL_BAND_REALM0_SEC,
+  PORTAL_BAND_FULL_SEC,
+  BOSS_BAND_REALM0_SEC,
+  BOSS_BAND_FULL_SEC,
   minKillTimeSec,
   bossSwingSec,
   MOMENTUM_PER_STRIKE,
@@ -42,14 +48,15 @@ export {
   ARC_MAX_REACH,
   ARC_CATCH_SEC,
   ARC_CATCH_PERP,
-  bossHpMult,
+  bossHpMultRealm0,
+  bossHpMultFull,
   BOSS_REALM_GAIN,
   ASC_COST_STEP,
   ASC_SPEED_MAX_BONUS,
   ASC_SPEED_DECAY,
   ASC_PER_ZONE,
   ASC_BOSS_PAYOUT,
-  ASC_CATCHES_PER_ZONE,
+  ASC_CATCH_ZONE_BONUS,
   ASC_REALM_GROWTH,
   EARNINGS_BONUS_PER_VICTORY,
   ASC_NODES,
@@ -61,6 +68,19 @@ export {
   SKILL_MULT_CEILING,
 } from './constants';
 export type { AscNodeDef, SkillDef, SpeciesDef } from './constants';
+
+// --- Pacing --------------------------------------------------------------
+export {
+  realmRamp,
+  zonesForRealm,
+  killsPerZoneFor,
+  leaguesPerKillFor,
+  dropChanceFor,
+  bossHpMultFor,
+  portalBand,
+  bossBand,
+} from './pacing';
+export type { PaceBand } from './pacing';
 
 // --- Clock ---------------------------------------------------------------
 export { CLOCK_MS_PER_SEC, clockAfter, clockMs } from './clock';
@@ -138,6 +158,7 @@ export {
   damagePerSwing,
   bossEtaSec,
   ascendancyPerZone,
+  coinsPerZone,
   ascendancyPerCatch,
   ascendancyBossPayout,
 } from './formulas';

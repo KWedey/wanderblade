@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   advance,
   deserialize,
-  dropChance,
+  dropChanceFor,
   goldPerKill,
   initialState,
   serialize,
@@ -61,7 +61,7 @@ describe('a zone is monsters, not one monster repeated', () => {
     const byDrop = [...SPECIES].sort((x, y) => x.dropMult - y.dropMult);
     // The richest monster is deliberately not the most generous one.
     expect(byGold.map((s) => s.dropMult)).not.toEqual(byDrop.map((s) => s.dropMult));
-    for (const s of SPECIES) expect(dropChance * s.dropMult).toBeGreaterThan(0);
+    for (const s of SPECIES) expect(dropChanceFor(0) * s.dropMult).toBeGreaterThan(0);
   });
 
   it('records a Bestiary count per species that adds up to every kill', () => {

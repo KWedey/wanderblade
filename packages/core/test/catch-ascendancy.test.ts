@@ -3,8 +3,10 @@ import {
   advance,
   ascendancyPerCatch,
   ascendancyPerZone,
-  ASC_CATCHES_PER_ZONE,
+  ASC_CATCH_ZONE_BONUS,
+  coinsPerZone,
   enterPortal,
+  minKillTimeSec,
   summarizeEvents,
   type GameEvent,
   type GameState,
@@ -30,13 +32,14 @@ function playAimed(s: GameState, seconds: number, rate: number): GameEvent[] {
 }
 
 describe('catching a coin buys permanent power, not just gold', () => {
-  it('credits pending Ascendancy worth a fraction of a zone clear', () => {
+  it('credits pending Ascendancy so a fully caught zone pays its bonus share', () => {
     for (const realm of [0, 1, 5, 20]) {
-      expect(ascendancyPerCatch(realm)).toBeCloseTo(
-        ascendancyPerZone(realm) / ASC_CATCHES_PER_ZONE,
-        12,
+      expect(ascendancyPerCatch(realm) * coinsPerZone(realm)).toBeCloseTo(
+        ascendancyPerZone(realm) * ASC_CATCH_ZONE_BONUS,
+        9,
       );
       expect(ascendancyPerCatch(realm)).toBeGreaterThan(0);
+      expect(ascendancyPerCatch(realm)).toBeLessThan(ascendancyPerZone(realm) / 10);
     }
   });
 
@@ -118,8 +121,8 @@ describe('catching a coin buys permanent power, not just gold', () => {
   });
 
   it('counts into the recap, so a capped event stream still reports it', () => {
-    const s = roadAt(11, 5, 0.4);
-    advance(s, 0.45); // one kill, so there are coins in the air to aim at
+    const s = roadAt(11, 5, minKillTimeSec);
+    advance(s, minKillTimeSec + 0.05); // one kill, so there are coins in the air to aim at
     expect(s.arcs.length).toBeGreaterThan(0);
 
     const at = s.timeSec + 0.05;

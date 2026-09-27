@@ -7,6 +7,7 @@ import {
   advance,
   buyHeroLevel,
   buySkill,
+  enterPortal,
   initialState,
   SKILL_IDS,
   type GameState,
@@ -20,8 +21,13 @@ export interface StagePlan {
   rounds: number;
 }
 
+/**
+ * `mid` sits deep in realm 0's road, short of its portal (idle-ready at 40–80
+ * min, ADR #63); `late` lives through weeks of realms, taking each portal as it
+ * opens, and ends on a Road the way a returning player finds one.
+ */
 export const STAGE_PRESETS: Record<string, Omit<StagePlan, 'seed'>> = {
-  mid: { totalSec: 6 * 3600, rounds: 40 },
+  mid: { totalSec: 25 * 60, rounds: 40 },
   late: { totalSec: 21 * 24 * 3600, rounds: 220 },
 };
 
@@ -55,6 +61,8 @@ export function spendDown(state: GameState, maxPasses = 40): number {
  * Live a run forward. Time is advanced in chunks with a spend pass between
  * them, because a player who banks everything to the end reaches a weaker
  * build than one who reinvests, and the capture should show the real one.
+ * An open portal is taken at the next pass; the settle never opens one, so
+ * a fight begun in the last chunk has ended and the run is back on the Road.
  */
 export function stageState(plan: StagePlan): GameState {
   const state = initialState(plan.seed);
@@ -66,6 +74,7 @@ export function stageState(plan: StagePlan): GameState {
   for (let i = 0; i < rounds; i++) {
     advance(state, chunk);
     spendDown(state);
+    if (state.phase === 'road' && state.portalReady) enterPortal(state);
   }
   advance(state, settle);
   return state;

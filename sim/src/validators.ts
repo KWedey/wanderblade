@@ -2,7 +2,17 @@
 // docs/ECONOMY.md "Redesigned simulator contract"; P-validators are the pacing
 // bands in docs/ACTIVE-PLAY.md. Both are pure functions of a SeedResult.
 
-import { BOSS_MAX_SEC, BOSS_MIN_SEC, SEC_PER_DAY, SEC_PER_HOUR } from './policy';
+import {
+  bossBand,
+  BOSS_BAND_FULL_SEC,
+  BOSS_BAND_REALM0_SEC,
+  FULL_LENGTH_REALM,
+  PORTAL_BAND_FULL_SEC,
+  PORTAL_BAND_REALM0_SEC,
+  portalBand,
+  type PaceBand,
+} from '@wanderblade/core';
+import { SEC_PER_DAY, SEC_PER_HOUR } from './policy';
 import {
   MAX_PORTAL_WAIT_FRACTION,
   MAX_PORTAL_WAIT_SEC,
@@ -11,12 +21,14 @@ import {
   PERMANENT_RATIO_MAX,
   PERMANENT_RATIO_MIN,
   PERMANENT_SOONER_MIN,
+  SPEND_LEAN_MAX,
+  SPEND_LEAN_MIN_FRACTION,
   SPEND_MAX_DROUGHT_SEC,
-  SPEND_MAX_STARVED_FRACTION,
   SPEND_PRICED_FLOOR,
-  SPEND_TARGET,
+  SPEND_REACH_MIN_FRACTION,
+  SPEND_REACH_SEC,
 } from './probes';
-import type { BreachKind, Check, SeedResult, Uplift, ValidatorResult } from './types';
+import type { BreachKind, Check, RealmRecord, SeedResult, Uplift, ValidatorResult } from './types';
 
 export function fmtTime(sec: number | null): string {
   if (sec === null || !Number.isFinite(sec)) return 'never';
@@ -54,6 +66,19 @@ function range(xs: number[]): string {
 
 function inBand(xs: number[], lo: number, hi: number): boolean {
   return xs.length > 0 && xs.every((x) => x >= lo && x <= hi);
+}
+
+function within(sec: number, band: PaceBand): boolean {
+  return sec >= band.minSec && sec <= band.maxSec;
+}
+
+function fmtBand(band: PaceBand): string {
+  return `${fmtTime(band.minSec)}–${fmtTime(band.maxSec)}`;
+}
+
+/** The two ends of a ramped band, for a validator title. */
+function fmtRamp(realm0: PaceBand, full: PaceBand): string {
+  return `realm 0 ${fmtBand(realm0)}, realm ${FULL_LENGTH_REALM}+ ${fmtBand(full)}`;
 }
 
 // --- Correctness ---------------------------------------------------------
@@ -181,33 +206,70 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
     ),
   );
 
-  const activeH = r.portalReachSec.active === null ? null : r.portalReachSec.active / SEC_PER_HOUR;
-  const idleH = r.portalReachSec.idle === null ? null : r.portalReachSec.idle / SEC_PER_HOUR;
+  // Realm 0 and the first full-length realm each get two dedicated reach runs
+  // (always striking, never striking); realms 1–5 on the headline run's mixed
+  // schedule must land between their active floor and idle ceiling. Deeper
+  // realms compound by design (docs/DECISIONS.md #21): reported, not banded.
+  const reachOut = r.portalReach.filter((x) => {
+    const b = portalBand(x.realm);
+    return (
+      x.active === null || x.idle === null || !within(x.active, b.active) || !within(x.idle, b.idle)
+    );
+  });
+  const reachNote = r.portalReach
+    .map((x) => `realm ${x.realm}: active ${fmtTime(x.active)}, idle ${fmtTime(x.idle)}`)
+    .join('; ');
+  const walked = r.realms.filter(
+    (x): x is RealmRecord & { portalReadySec: number } => x.portalReadySec !== null && x.realm > 0,
+  );
+  const banded = walked.filter((x) => x.realm <= FULL_LENGTH_REALM);
+  const roadOut = banded.filter((x) => {
+    const b = portalBand(x.realm);
+    const road = x.portalReadySec - x.startSec;
+    return road < b.active.minSec || road > b.idle.maxSec;
+  });
+  const deeper = walked.filter((x) => x.realm > FULL_LENGTH_REALM).map((x) => x.portalReadySec - x.startSec);
+  const deeperNote =
+    deeper.length === 0
+      ? ''
+      : `; realms past ${FULL_LENGTH_REALM} run ${fmtTime(Math.min(...deeper))}–${fmtTime(Math.max(...deeper))} (reported, not banded)`;
   out.push(
     ok(
       'P5',
-      'Realm start → portal: 2–4h active, 8–16h idle',
-      activeH !== null && idleH !== null && activeH >= 2 && activeH <= 4 && idleH >= 8 && idleH <= 16,
-      `active ${activeH === null ? 'never' : activeH.toFixed(2) + 'h'}, idle ${idleH === null ? 'never' : idleH.toFixed(2) + 'h'}`,
+      `Realm start → portal: active ${fmtRamp(PORTAL_BAND_REALM0_SEC.active, PORTAL_BAND_FULL_SEC.active)}; ` +
+        `idle ${fmtRamp(PORTAL_BAND_REALM0_SEC.idle, PORTAL_BAND_FULL_SEC.idle)}`,
+      r.portalReach.length > 0 && reachOut.length === 0 && roadOut.length === 0,
+      `${reachNote}; ` +
+        `${banded.length - roadOut.length}/${banded.length} realms 1–${FULL_LENGTH_REALM} on the mixed schedule between their active floor and idle ceiling` +
+        (roadOut.length === 0
+          ? ''
+          : ` (out: ${roadOut
+              .map((x) => `realm ${x.realm} ${fmtTime(x.portalReadySec - x.startSec)}`)
+              .join(', ')})`) +
+        deeperNote,
     ),
   );
 
   // The band is in *active* minutes, so it is measured as the fight's length
   // at sustained momentum — the number the portal preview shows. Wall-clock
-  // elapsed is longer for anyone who is not striking the whole time.
-  const durations = r.realms
-    .filter((x) => x.victorySec !== null && x.bossActiveEtaAtEntrySec !== null)
-    .map((x) => x.bossActiveEtaAtEntrySec as number);
-  const outOfBand = durations.filter((d) => d < BOSS_MIN_SEC || d > BOSS_MAX_SEC);
+  // elapsed is longer for anyone who is not striking the whole time. Each
+  // realm is judged against its own band.
+  const fought = r.realms.filter(
+    (x): x is RealmRecord & { bossActiveEtaAtEntrySec: number } =>
+      x.victorySec !== null && x.bossActiveEtaAtEntrySec !== null,
+  );
+  const bossOut = fought.filter((x) => !within(x.bossActiveEtaAtEntrySec, bossBand(x.realm)));
   out.push(
     ok(
       'P6',
-      `Portal boss duration, prepared build: ${BOSS_MIN_SEC / 60}–${BOSS_MAX_SEC / 60} min active`,
-      durations.length > 0 && outOfBand.length === 0,
-      durations.length === 0
+      `Portal boss duration, prepared build: ${fmtRamp(BOSS_BAND_REALM0_SEC, BOSS_BAND_FULL_SEC)} active`,
+      fought.length > 0 && bossOut.length === 0,
+      fought.length === 0
         ? 'no completed attempt'
-        : `${durations.length - outOfBand.length}/${durations.length} realms in band: ` +
-          durations.map((d) => fmtTime(d)).join(', '),
+        : `${fought.length - bossOut.length}/${fought.length} realms in band: ` +
+          fought
+            .map((x) => `${fmtTime(x.bossActiveEtaAtEntrySec)}${within(x.bossActiveEtaAtEntrySec, bossBand(x.realm)) ? '' : `⚠(realm ${x.realm}, band ${fmtBand(bossBand(x.realm))})`}`)
+            .join(', '),
     ),
   );
 
@@ -225,42 +287,29 @@ export function runPacing(r: SeedResult): ValidatorResult[] {
     ),
   );
 
-  // Three claims, because one number cannot carry this honestly.
-  //
-  // `priced` is the critic's actual complaint — five rows with prices on them,
-  // always, whatever the wallet says. Gold cannot move it, so nothing can blip
-  // it, and it is asserted on the strict minimum.
-  //
-  // `affordable` is what the player can act on, and it dips to zero for one
-  // sample whenever the purchase loop has just spent everything. That is the
-  // spend policy, not an empty shop, so it is asserted at 95% of looks rather
-  // than on the minimum, with the starvation floor below catching a real drought.
+  // Scarcity on both edges (docs/DECISIONS.md #63): `priced` on the minimum,
+  // since gold cannot move it; `lean` because an all-green panel offers no
+  // decision; `reach` and the drought cap because a starved one offers none.
+  // Looks are taken before the purchase loop, so they show what the player sees.
   const sd = r.spendDepth;
-  const richPct = sd.richFraction * 100;
   const pricedOk = sd.counted > 0 && sd.minPriced >= SPEND_PRICED_FLOOR;
-  const richOk = sd.counted > 0 && sd.richFraction >= 0.95;
-  // An all-greyed panel is the one state the shop may never render: the answer
-  // to "what do I spend on next" cannot be "nothing". Staggered skill prices
-  // are what hold this — the cheapest track is affordable long before the
-  // dearest one is (docs/DECISIONS.md #33).
-  const neverGreyOk = sd.counted > 0 && sd.minAffordable >= 1;
-  const droughtOk =
-    sd.counted > 0 &&
-    sd.starvedFraction <= SPEND_MAX_STARVED_FRACTION &&
-    sd.longestStarvedSec <= SPEND_MAX_DROUGHT_SEC;
+  const leanOk = sd.counted > 0 && sd.leanFraction >= SPEND_LEAN_MIN_FRACTION;
+  const reachOk = sd.counted > 0 && sd.reachFraction >= SPEND_REACH_MIN_FRACTION;
+  const droughtOk = sd.counted > 0 && sd.longestDroughtSec <= SPEND_MAX_DROUGHT_SEC;
   out.push(
     ok(
       'P8',
-      `Upgrade panel: ≥${SPEND_PRICED_FLOOR} priced and ≥1 affordable always, ` +
-        `≥${SPEND_TARGET} affordable at 95% of looks`,
-      pricedOk && neverGreyOk && richOk && droughtOk,
+      `Upgrade panel: ≥${SPEND_PRICED_FLOOR} priced always, ≤${SPEND_LEAN_MAX} affordable at ` +
+        `${SPEND_LEAN_MIN_FRACTION * 100}% of looks, a row affordable or ≤${SPEND_REACH_SEC}s away at ` +
+        `${SPEND_REACH_MIN_FRACTION * 100}%`,
+      pricedOk && leanOk && reachOk && droughtOk,
       sd.counted === 0
         ? 'no samples'
-        : `${sd.minPriced} priced and ${sd.minAffordable} affordable at the leanest look; ` +
-          `≥${SPEND_TARGET} affordable at ${richPct.toFixed(1)}% of ${sd.counted} looks ` +
-          `(worst realm ${sd.worstRealm}); ` +
-          `under 2 affordable for ${(sd.starvedFraction * 100).toFixed(2)}% of looks, ` +
-          `longest stretch ${fmtTime(sd.longestStarvedSec)}`,
+        : `${sd.minPriced} priced at the leanest look; ` +
+          `≤${SPEND_LEAN_MAX} affordable at ${(sd.leanFraction * 100).toFixed(1)}% of ${sd.counted} looks; ` +
+          `a row affordable or ≤${SPEND_REACH_SEC}s away at ${(sd.reachFraction * 100).toFixed(1)}%` +
+          (sd.worstRealm < 0 ? '' : ` (worst realm ${sd.worstRealm})`) +
+          `; longest drought ${fmtTime(sd.longestDroughtSec)}`,
     ),
   );
 

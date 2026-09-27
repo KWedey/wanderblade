@@ -7,18 +7,20 @@ import {
   gearPower,
   GEAR_SLOTS,
   initialState,
-  zonesPerRealm,
+  ZONES_FULL,
+  zonesForRealm,
+  type GameEvent,
   type GameState,
 } from '../src/index';
 
 /** A portal-ready Road state in `realm` whose build can actually fell the guardian. */
-function readyIn(realm: number, gearZone = zonesPerRealm - 1): GameState {
+function readyIn(realm: number, gearZone = zonesForRealm(realm) - 1): GameState {
   const s = initialState(9);
   s.realm = realm;
-  s.zone = zonesPerRealm - 1;
+  s.zone = zonesForRealm(realm) - 1;
   s.killsInZone = 0;
   s.portalReady = true;
-  s.hero.level = 120;
+  s.hero.level = Math.round((120 * zonesForRealm(realm)) / ZONES_FULL);
   for (const slot of GEAR_SLOTS) {
     const power = gearPower(realm, gearZone, 'epic', slot);
     s.gear[slot] = { power, rarity: 'epic', realm, zone: gearZone };
@@ -28,25 +30,28 @@ function readyIn(realm: number, gearZone = zonesPerRealm - 1): GameState {
   return s;
 }
 
-/** Fight to the death at `momentum`, in small steps, and return the elapsed time. */
+/** Fight to the death at `momentum`, in small steps, and return the fight's exact length. */
 function fightOut(s: GameState, momentum: number, capSec: number): number | null {
   const start = s.timeSec;
   const rate = momentum > 0 ? 4 : 0;
   let next = s.timeSec;
   while (s.phase === 'boss' && s.timeSec - start < capSec) {
     const step = Math.min(30, capSec - (s.timeSec - start));
+    let events: GameEvent[];
     if (rate > 0) {
       const strikes = [];
       for (let t = next; t < s.timeSec + step; t += 1 / rate) {
         strikes.push({ atSec: t, aim: null });
       }
       next = s.timeSec + step;
-      advance(s, step, strikes);
+      events = advance(s, step, strikes);
     } else {
-      advance(s, step);
+      events = advance(s, step);
     }
+    const victory = events.find((e) => e.type === 'bossVictory');
+    if (victory) return victory.timeSec - start;
   }
-  return s.phase === 'boss' ? null : s.timeSec - start;
+  return null;
 }
 
 describe('the portal preview is the number the player commits on', () => {

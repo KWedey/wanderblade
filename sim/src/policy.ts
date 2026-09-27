@@ -23,15 +23,6 @@ export const SEC_PER_DAY = 86_400;
  */
 export const CAP_RATE = sustainStrikeRate();
 
-/**
- * The guardian band, in active minutes. The floor is 15 rather than 20 so the
- * opening realm's guardian fits inside one session: a first ascension a new
- * player can finish in a sitting beats a rounder number. The ceiling doubles as
- * the entry rule — the modelled player farms on past it (docs/DECISIONS.md #24).
- */
-export const BOSS_MIN_SEC = 15 * 60;
-export const BOSS_MAX_SEC = 90 * 60;
-
 /** Evenly spaced strikes in (from, from + seconds], all aimed at `aim`. */
 export function strikeTimes(
   from: number,
@@ -61,7 +52,7 @@ export function aimAtOldestArc(state: GameState, atSec: number): ArcPoint | null
 }
 
 /** How often the player re-runs the purchase loop while a session is live. */
-const TOUCH_INTERVAL_SEC = 30;
+export const TOUCH_INTERVAL_SEC = 30;
 /** Granularity of an idle stretch. Coarse enough to be fast, fine enough to log. */
 export const IDLE_SLICE_SEC = 60;
 
@@ -74,9 +65,10 @@ export interface RunHooks {
   /**
    * Fired when the player would be looking at the upgrade panel — always
    * before a purchase loop runs, because the greedy bot drains the gold that
-   * decides what is affordable.
+   * decides what is affordable. `inSession` is false for the idle slices,
+   * where nobody is looking and nothing is bought.
    */
-  onShop?: (state: GameState) => void;
+  onShop?: (state: GameState, inSession: boolean) => void;
 }
 
 // `f?.(advance(...))` never calls advance when f is undefined — optional
@@ -91,7 +83,7 @@ export function runIdle(state: GameState, seconds: number, hooks: RunHooks = {})
     const dt = Math.min(IDLE_SLICE_SEC, left);
     const events = advance(state, dt);
     hooks.onEvents?.(events);
-    hooks.onShop?.(state);
+    hooks.onShop?.(state, false);
     hooks.onSlice?.(state);
     left -= dt;
   }
@@ -149,7 +141,7 @@ export function runActive(
   while (left > 1e-9) {
     const dt = Math.min(TOUCH_INTERVAL_SEC, left);
     strikeThrough(state, dt, rate, hooks.onEvents);
-    hooks.onShop?.(state);
+    hooks.onShop?.(state, true);
     hooks.onPurchases?.(botTouch(state));
     hooks.onSlice?.(state);
     left -= dt;

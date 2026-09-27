@@ -104,7 +104,7 @@ Required correctness validators:
 - Persistent earnings bonuses affect the documented income paths and never DPS.
 - Guardian HP never regenerates: it is monotonic across every attempt, online and offline, until abandonment resets it to full (**C10**).
 - The four player policies meet the approved pacing bands across multiple seeds and multi-realm runs.
-- The upgrade panel offers at least five priced rows at every look and four affordable at 95% of them (**P8**), so "the number and value of decisions within a 15–30 minute active session" is a measured quantity rather than an intention. Measured on the minimum for priced rows, which gold cannot move, and at 95% for affordable ones, because the greedy purchase policy empties the wallet the instant it can (`docs/DECISIONS.md` #26).
+- The upgrade panel is **scarce but never starved** (**P8**, `docs/DECISIONS.md` #64): at least five priced rows at every look; at most two affordable at 80% of looks; a row affordable, or at most 60 s of current income away, at 95% of looks; no in-session drought past 5 min. Only looks taken inside an active session and after the 60 s realm-start grace count — an idle slice is a look nobody takes, and its wallet balloons while nobody buys. The greedy purchase policy empties the wallet the instant it can (#26), so the lean clause is really a test of price steps against one glance's income.
 - The portal never sits open on a finished Road for longer than 24 hours, no realm takes longer than 3 days, and the share of Road time spent waiting rather than progressing is reported (**P9**). This is what catches a guardian curve the Road cannot reach: before `docs/DECISIONS.md` #32 the bot farmed a cleared realm for 14.7 hours — 56% of its Road time — because the guardian was ~34× beyond the build the Road delivered.
 - Active play earns 1.4–2.3× the Ascendancy of an idle player at the **14-day checkpoint** and reaches its first ascension at least 1.20× sooner (**P10**). The checkpoint is fixed rather than taken at the run length, so every run reports the same comparable number and the default `npm run sim` evaluates the band it prints. The ratio holds across the playable ladder — 1.84× at 14 days, 1.91× at 30. Past **content end** it stops being a pacing number at all: the active run stops at the realm-300 ceiling around day 76 with its earned total frozen, so any later reading divides a constant by a growing one and falls away as a hyperbola. `npm run sim -- --days 90 --seeds 1` prints the multiple at every checkpoint and blanks the ones past content end rather than carrying a frozen value forward (`docs/DECISIONS.md` #48). The band is in the currency that survives an ascension; the ceiling protects idle-only play (VISION pillar 4) as much as the floor protects active play (`docs/DECISIONS.md` #31).
 
@@ -125,14 +125,19 @@ These are the shipped values, each carrying a passing sim run (`docs/DECISIONS.m
 |---|---|
 | Realm scale | `REALM_STEP^realm`, `REALM_STEP` = 8 |
 | Enemy HP | `10 · realmScale · 1.55^z` |
-| Enemy gold | `1 · realmScale · 1.48^z · SPECIES[i].goldMult` — roster mean exactly 1 |
+| Enemy gold | `1 · realmScale · rG^z · SPECIES[i].goldMult` — roster mean exactly 1; `rG` = 1.75 = `rH^(ln rC / ln rD)`, the zero-drift rate (#64) |
 | Coin share | `gold · coinWeight(i) / Σ coinWeight` over the kill's coins, `COIN_SHARE_SPREAD` 0.45 — the kill total is exactly unchanged |
-| Gear power | `2 · realmScale · 1.55^z · RARITY_MULTIPLIERS[rarity] · SLOT_POWER[slot]` — weapon 1.15 / armor 1.00 / trinket 0.85, mean exactly 1 |
-| Hero base damage | `25 · 1.12^level · realmScale` |
-| Hero level cost | `10 · 1.15^level · realmScale` |
-| Skill rank cost | `def.costBase · def.costRate^rank · realmScale` — **per skill**: 35/1.12, 60/1.19, 110/1.15, 190/1.13, 300/1.21 |
+| Gear power | `1.2 · realmScale · 1.55^z · RARITY_MULTIPLIERS[rarity] · SLOT_POWER[slot]` — weapon 1.15 / armor 1.00 / trinket 0.85, mean exactly 1 |
+| Realm length | `zonesForRealm(realm)`: 10 zones at realm 0 → 50 at realm ≥ 5, linear between; `killsPerZoneFor(realm)`: 250 → 500 the same way (`pacing.ts`, #63) |
+| Drop chance | `DROPS_PER_ZONE / killsPerZoneFor(realm)`, 10 drops per zone in every realm |
+| Hero base damage | `10 · 1.25^level · realmScale` — about two levels per zone |
+| Hero level cost | `100 · 1.33^level · realmScale` — elasticity ln 1.25 / ln 1.33 = 0.78 |
+| Skill rank cost | `def.costBase · def.costRate^rank · realmScale` — **per skill**: 60/×4, 120/×12, 250/×36, 500/×108, 1000/×324; unlock at hero level 0/0/2/6/12 |
 | Skill value | `skillRankMult(id, rank) = 1 + def.maxBonus · (1 − def.decay^rank)` — **per skill**: 0.12/0.78, 0.23/0.93, 0.17/0.86, 0.27/0.95, 0.10/0.72. Ceilings multiply to 2.25× |
-| Guardian HP | `bossHpMult · enemyHp(realm, 49) · BOSS_REALM_GAIN^realm`, 5600 / 1.19 |
+| Guardian HP | `bossHpMultFor(realm) · enemyHp(realm, zonesForRealm(realm) − 1) · BOSS_REALM_GAIN^realm` — multiple ramps 1300 → 16000 over realms 0–5, gain 1.19 |
+| Idle kill floor | `minKillTimeSec` = 0.7 s; momentum divides through it |
+| Catch Ascendancy | `ascendancyPerZone(realm) · 16 / coinsPerZone(realm)` — a zone's coins, all caught, are worth 16 zone clears |
+| Pacing bands | `portalBand(realm)` 12–20 min / 40–80 min → 2–4 h / 8–16 h; `bossBand(realm)` 3–6 min → 15–90 min; both linear over realms 0–5 |
 | Ascendancy node cost | `costBase · (1 + ASC_COST_STEP · rank)`, `ASC_COST_STEP` = 0.5 — **linear, uncapped** |
 | Ascendancy damage / gear effect | `(1 + perRank)^rank`, perRank 0.037 — compounding, unbounded |
 | Ascendancy speed effect | `1 + ASC_SPEED_MAX_BONUS · (1 − ASC_SPEED_DECAY^rank)`, 0.6 / 0.9 — **bounded** |
@@ -145,13 +150,13 @@ Two of those shapes are load-bearing rather than tuning, and `docs/DECISIONS.md`
 
 ### Numerical frontier
 
-**The current hard horizon is realm 300.** It is the last realm whose guardian has finite HP; at realm 301 `bossHp` is `Infinity` and `enterPortal` refuses with `reason: 'unwinnable'` rather than opening a fight no build can end (`docs/DECISIONS.md` #34). A steady active player reaches it on **day 74.8–78.9** (seeds 1–3: 76.31, 78.90, 74.80) and an idle player on **day 91.5–92.1** — a boundary a real player meets at roughly two and a half months, not a theoretical one. Reaching it ends the run: there is no reward at the end of that Road, so the simulator stops rather than sampling it as play (`docs/DECISIONS.md` #48).
+**The current hard horizon is realm 300.** It is the last realm whose guardian has finite HP; at realm 301 `bossHp` is `Infinity` and `enterPortal` refuses with `reason: 'unwinnable'` rather than opening a fight no build can end (`docs/DECISIONS.md` #34). Since the per-realm roads of #63/#64 a steady active player reaches it on **day 51.2–51.7** (seeds 1–3 at 90 days: 51.15, 51.62, 51.65; the earlier ladder read 74.8–78.9), a boundary a real player meets inside two months, not a theoretical one. Reaching it ends the run: there is no reward at the end of that Road, so the simulator stops rather than sampling it as play (`docs/DECISIONS.md` #48).
 
 ⚠️ **This is an arithmetic wall, not a designed ending, and the game must reach a designed ending or a defined endless mode before it reaches this.** That is M4 realm-sequence work — `docs/VISION.md` sells "World's Edge" as the long-horizon destination — and it is recorded here so nobody rediscovers the wall by accident.
 
-The rest of the economy follows close behind: `enemyHp` overflows at realm 330, `gearPower` at 330, `enemyGold` at 333, `levelCost` at 341. Carrying `bossHp` alone in a wider representation buys 30 realms and leaves the wall standing, so a representation that survives means a big-number layer through the whole economy with its own determinism contract.
+The rest of the economy follows close behind: `enemyHp` overflows at realm 330, `gearPower` at 331, `enemyGold` at 329, `levelCost` at 340. Carrying `bossHp` alone in a wider representation buys 30 realms and leaves the wall standing, so a representation that survives means a big-number layer through the whole economy with its own determinism contract.
 
-Every client-facing scalar is finite and exact at realm 199, and the hero level ladder tops out at 2102 at realm 199 and 659 at realm 296. `packages/core/test/magnitude.test.ts` pins every frontier above — including entry succeeding at realm 300 and refusing at 301 — so a constant change cannot quietly move them.
+Every client-facing scalar is finite and exact at realm 199, the hero level ladder tops out at 1022 at realm 199 and 315 at realm 296 (a realm's ladder is about 100 + realm/2 levels, so it stays clear), and the steepest skill track keeps twice the ranks a realm's whole gold could buy at realm 300. `packages/core/test/magnitude.test.ts` pins every frontier above — including entry succeeding at realm 300 and refusing at 301 — so a constant change cannot quietly move them.
 
 ## Implemented legacy baseline (historical reference)
 

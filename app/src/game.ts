@@ -21,7 +21,7 @@ import {
   enterPortal as coreEnterPortal,
   heroDps,
   initialState,
-  killsPerZone,
+  killsPerZoneFor,
   killTime,
   momentumAt,
   momentumMultiplier,
@@ -29,7 +29,7 @@ import {
   nextBuy,
   purchaseOptions,
   summarizeEvents,
-  zonesPerRealm,
+  zonesForRealm,
   type GameEvent,
   type ArcPoint,
   type GameState,
@@ -113,8 +113,8 @@ export class Game {
 
   /**
    * A staged run must never reach localStorage. Without this the autosave
-   * writes realm 199 over a real save the moment a capture is taken, and the
-   * next plain load comes back staged.
+   * writes the staged deep run over a real save the moment a capture is taken,
+   * and the next plain load comes back staged.
    */
   private staged = false;
 
@@ -235,7 +235,12 @@ export class Game {
 
     this.view.renderFrame(
       this.displayGold,
-      zoneSweep(this.state.portalReady, this.state.killsInZone, p, killsPerZone),
+      zoneSweep(
+        this.state.portalReady,
+        this.state.killsInZone,
+        p,
+        killsPerZoneFor(this.state.realm),
+      ),
     );
     // The scene reads the same kill progress the counter does, so the monster
     // dies on the frame the engine's kill lands.
@@ -607,8 +612,9 @@ export class Game {
       marchGoal = `${guardian} awaits`;
       marchProgress = 1;
     } else {
+      const killsPerZone = killsPerZoneFor(s.realm);
       const killsLeft = killsPerZone - s.killsInZone;
-      const lastZone = s.zone >= zonesPerRealm - 1;
+      const lastZone = s.zone >= zonesForRealm(s.realm) - 1;
       const where = lastZone ? 'the Portal' : `Zone ${s.zone + 2}`;
       marchProgress = clamp01(s.killsInZone / killsPerZone);
       marchGoal = `${where} in ~${formatDuration(killsLeft * killTime(s, momentum))}`;
@@ -638,7 +644,7 @@ export class Game {
     return {
       regionName: regionName(s.realm),
       zoneInRegion: s.zone + 1,
-      zonesPerRegion: zonesPerRealm,
+      zonesPerRegion: zonesForRealm(s.realm),
       leagues: s.leagues,
       dps: this.dps,
       heroLevel: s.hero.level,

@@ -12,12 +12,13 @@ const argv = process.argv.slice(2);
 if (argv.includes('--help') || argv.includes('-h')) {
   console.log(`Wanderblade loop probe — plays Road -> Portal -> Boss through the DOM
 
-  npm run qa:loop -- [--port <n>] [--stage <name>] [--seed <n>] [--budget <sec>] [--sample <sec>]
+  npm run qa:loop -- [--port <n>] [--stage <name>] [--seed <n>] [--budget <sec>] [--sample <sec>] [--band-min <min>] [--band-max <min>]
 
 Plays the Road until the portal opens, enters it, and measures how fast the
 guardian's health falls. Exits non-zero if any step is unreachable through the
 DOM, if the guardian takes no damage, or if the projected fight lands outside
-the 15-90 minute band. It never waits out a real fight.`);
+the guardian band for the staged realm (--band-min/--band-max, minutes; the default
+is realm 0's 3-6, which is where ?stage=mid sits). It never waits out a real fight.`);
   process.exit(0);
 }
 const flag = (name, fallback) => {
@@ -92,13 +93,12 @@ try {
 
     // The guardian never resets and has no failure timer, so the only way out is
     // through: strike until the realm name changes, which is what ascension does.
-    // The guardian is designed to take 15-90 minutes (BOSS_MIN_SEC/BOSS_MAX_SEC),
-    // so waiting for it to die is not a check, it is a stopwatch — the first draft
-    // of this probe called a 7-minute budget a failure and nearly reported a bug
-    // that was the band working as designed. Measure the rate instead: sample the
-    // health bar, project time-to-zero, and require it inside the band.
-    const BOSS_MIN_SEC = 15 * 60;
-    const BOSS_MAX_SEC = 90 * 60;
+    // The guardian is designed to take minutes (core's bossBand(realm): 3-6 in
+    // realm 0, 15-90 from realm 5), so waiting for it to die is not a check, it
+    // is a stopwatch. Measure the rate instead: sample the health bar, project
+    // time-to-zero, and require it inside the band for the staged realm.
+    const BOSS_MIN_SEC = Number(flag('band-min', '3')) * 60;
+    const BOSS_MAX_SEC = Number(flag('band-max', '6')) * 60;
     const hpFraction = () =>
       page.evaluate(() => {
         const t = document.querySelector('[data-role="boss-hp-fill"]')?.style.transform ?? '';

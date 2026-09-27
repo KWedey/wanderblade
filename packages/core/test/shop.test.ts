@@ -116,8 +116,9 @@ describe('purchaseOptions', () => {
   it('still prices a skill at every rank a realm can actually reach', () => {
     const s = initialState(1);
     s.hero.level = 999;
-    // Where each price curve overflows is pinned in magnitude.test.ts.
-    for (const id of SKILL_IDS) s.hero.skills[id] = 500;
+    // Twice the ranks a realm's whole gold could buy on one track; where each
+    // price curve overflows is pinned in magnitude.test.ts.
+    for (const id of SKILL_IDS) s.hero.skills[id] = 48;
     for (const row of purchaseOptions(s)) {
       if (row.kind !== 'skill') continue;
       expect(Number.isFinite(row.cost)).toBe(true);

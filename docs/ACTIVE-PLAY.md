@@ -95,11 +95,21 @@ session and eight hours of sleep are actually comparable.
 | Boss active vs zero-tap, same build | 1.4× – 1.8× faster | P2 |
 | 8 h idle return | ≥ 1 meaningful upgrade affordable | P3 |
 | 24 h idle return | ≥ 1 zone of road progress | P4 |
-| Realm start → portal available | 2 – 4 h active, 8 – 16 h idle | P5 |
-| Portal boss duration (prepared build) | **15 – 90 min active** | P6 |
+| Realm start → portal available, realm 0 | **12 – 20 min active, 40 – 80 min idle** | P5 |
+| Realm start → portal available, realm ≥ 5 | 2 – 4 h active, 8 – 16 h idle | P5 |
+| Realms 1 – 5, on the mixed schedule | between their own ramped active floor and idle ceiling | P5 |
+| Portal boss duration (prepared build), realm 0 | **3 – 6 min active** | P6 |
+| Portal boss duration (prepared build), realm ≥ 5 | **15 – 90 min active** | P6 |
 | Ascend promptly vs farm a ready realm 2× longer | prompt ascension wins | P7 |
-| Upgrade panel, any moment of Road play | ≥5 priced rows, ≥4 affordable at 95% of looks | P8 |
+| Upgrade panel, in-session looks after the 60 s grace | ≥5 priced rows always; ≤2 affordable at 80% of looks; a row affordable or ≤60 s of income away at 95% | P8 |
 | Portal-ready dead time / realm cadence | ≤ 24 h waiting, ≤ 3 days per realm | P9 |
+
+Realm length and both bands are functions of the realm index (`zonesForRealm`, `killsPerZoneFor`,
+`portalBand`, `bossBand` in `packages/core/src/pacing.ts`): realm 0 is a 10-zone, 250-kill tutorial
+road, realm 5 the full 50 zones of 500 kills, and realms 1–4 interpolate linearly
+(`docs/DECISIONS.md` #63, #64). Measured 2026-09-27 at 3 seeds: realm 0 portal-ready in 17.1–17.3 min
+active and 41–47 min idle, realm 5 in 2.22 h / 11.0–11.5 h; guardian 3.7–4.5 min in realm 0,
+26–30 min at realm 5, 16–23 min by realm 50; ≤2 rows affordable at 85.7–86.2% of looks.
 
 **The horizon is part of the band, not a detail.** The ratio is **not monotonic
 in horizon** — measured on one set of constants it runs **1.99× at 3 days,

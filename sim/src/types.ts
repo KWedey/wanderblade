@@ -50,6 +50,13 @@ export interface RealmRecord {
   abandons: number;
 }
 
+/** One realm's road, walked by a player who never stops striking and one who never starts. */
+export interface PortalReach {
+  realm: number;
+  idle: number | null;
+  active: number | null;
+}
+
 /** A periodic snapshot of the run, for the CSV timeline. */
 export interface Sample {
   timeSec: number;
@@ -69,32 +76,35 @@ export interface Sample {
 /**
  * One look at the upgrade panel, taken before any purchase loop ran. `priced`
  * counts rows carrying a real price; `affordable` counts the ones the player
- * could act on that instant.
+ * could act on that instant; `reachSec` is how long the current income takes
+ * to cover the cheapest priced gold row, 0 when one is already affordable.
  */
 export interface ShopSample {
   timeSec: number;
+  /** Taken inside an active session. Idle slices are looks nobody takes. */
+  inSession: boolean;
   /** Seconds since this realm began — the grace window is measured from here. */
   sinceRealmStartSec: number;
   realm: number;
   affordable: number;
   priced: number;
+  reachSec: number;
 }
 
-/** What the spend-depth validator reports. */
+/** What the spend-depth validator reports (docs/DECISIONS.md #63 scarcity). */
 export interface SpendDepth {
   /** Samples taken past the post-ascension grace window. */
   counted: number;
-  minAffordable: number;
   /** Rows carrying a real price at the leanest look — gold cannot move this. */
   minPriced: number;
-  /** Realm holding `minAffordable`. */
+  /** Share of looks with at most SPEND_LEAN_MAX affordable rows — the scarcity clause. */
+  leanFraction: number;
+  /** Share of looks with a row affordable or within SPEND_REACH_SEC of income. */
+  reachFraction: number;
+  /** Realm with the most looks where nothing was within reach. */
   worstRealm: number;
-  /** Share of looks offering the target number of affordable rows or more. */
-  richFraction: number;
-  /** Share of counted samples with fewer than two things to buy. */
-  starvedFraction: number;
-  /** Longest unbroken stretch, in seconds, with fewer than two things to buy. */
-  longestStarvedSec: number;
+  /** Longest unbroken stretch, in seconds, with nothing within reach. */
+  longestDroughtSec: number;
 }
 
 /** What active play buys in permanent currency, against the same span idle. */
@@ -197,8 +207,11 @@ export interface SeedResult {
   eightHourBuys: number[];
   /** Zones of road progress after a 24-hour idle return. */
   twentyFourHourZones: number[];
-  /** Realm 0 start → portal available, for each policy. */
-  portalReachSec: { idle: number | null; active: number | null };
+  /**
+   * Realm start → portal available for each policy, at the realms P5 bands
+   * directly: the tutorial realm and the first full-length one.
+   */
+  portalReach: PortalReach[];
   /** Prompt ascension versus farming a ready realm twice as long. */
   promptVsOverfarm: { promptBanked: number; overfarmBanked: number; horizonSec: number } | null;
   /** Abandoning an underprepared attempt versus farming the road instead. */

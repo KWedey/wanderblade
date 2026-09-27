@@ -6,10 +6,10 @@ import {
   enemyHp,
   heroDps,
   initialState,
-  killsPerZone,
+  killsPerZoneFor,
   killTime,
   serialize,
-  zonesPerRealm,
+  zonesForRealm,
   type ArcPoint,
   type GameState,
   type Strike,
@@ -68,9 +68,13 @@ function equip(s: GameState, power: number): void {
   s.nextActionAtSec = s.timeSec + killTime(s, 0);
 }
 
-/** A Road state parked at `zone` whose kills take about `killSeconds` each. */
+/**
+ * A Road state parked at `zone` whose kills take about `killSeconds` each, in
+ * the first realm whose road is long enough to have that zone.
+ */
 export function roadAt(seed: number, zone: number, killSeconds: number): GameState {
   const s = initialState(seed);
+  while (zone >= zonesForRealm(s.realm)) s.realm += 1;
   s.zone = zone;
   equip(s, Math.max(1, enemyHp(s.realm, zone) / killSeconds - heroDps(s)));
   return s;
@@ -78,8 +82,8 @@ export function roadAt(seed: number, zone: number, killSeconds: number): GameSta
 
 /** One kill short of the portal, so the very next kill opens it. */
 export function nearPortal(seed: number, killSeconds: number): GameState {
-  const s = roadAt(seed, zonesPerRealm - 1, killSeconds);
-  s.killsInZone = killsPerZone - 1;
+  const s = roadAt(seed, zonesForRealm(0) - 1, killSeconds);
+  s.killsInZone = killsPerZoneFor(0) - 1;
   return s;
 }
 
@@ -88,10 +92,11 @@ export function nearPortal(seed: number, killSeconds: number): GameState {
  * `bossSeconds` at zero momentum, so boss and ascension tests need seconds
  * instead of hours. Reaching in like this is what the client must never do.
  */
-export function portalReady(seed: number, bossSeconds: number): GameState {
+export function portalReady(seed: number, bossSeconds: number, realm = 0): GameState {
   const s = initialState(seed);
-  s.zone = zonesPerRealm - 1;
-  s.killsInZone = killsPerZone - 1;
+  s.realm = realm;
+  s.zone = zonesForRealm(s.realm) - 1;
+  s.killsInZone = killsPerZoneFor(s.realm) - 1;
   s.portalReady = true;
   s.gold = 1000;
   s.ascendancy.pending = 5;

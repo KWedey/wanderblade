@@ -5,6 +5,7 @@ import {
   ARC_SPLIT_MAX,
   ARC_STAGGER_SEC,
   enterPortal,
+  FULL_LENGTH_REALM,
   initialState,
   type GameState,
 } from '../src/index';
@@ -77,7 +78,8 @@ describe('offline reconciliation scales with the length of the gap', () => {
     // so bossDamage counts swings exactly. A super-linear step count shows up
     // here, and unlike a stopwatch it cannot be moved by another process.
     const five = 5 * 86_400;
-    const base = portalReady(7, 600 * 86_400);
+    // A full-length realm: the tutorial guardian is too small to outlast ten days.
+    const base = portalReady(7, 600 * 86_400, FULL_LENGTH_REALM);
     enterPortal(base);
 
     const short = clone(base);

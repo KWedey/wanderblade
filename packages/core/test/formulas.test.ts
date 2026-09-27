@@ -18,9 +18,16 @@ import {
   BOSS_REALM_GAIN,
   bossEtaSec,
   bossHp,
-  bossHpMult,
+  bossHpMultFor,
+  FULL_LENGTH_REALM,
   bossSwingSec,
   d0,
+  g0,
+  levelCostBase,
+  rC,
+  rD,
+  rG,
+  rH,
   damagePerSwing,
   earningsMultiplier,
   EARNINGS_BONUS_PER_VICTORY,
@@ -42,7 +49,7 @@ import {
   SKILL_MULT_CEILING,
   SKILLS,
   swingInterval,
-  zonesPerRealm,
+  zonesForRealm,
 } from '../src/index';
 
 /** The compounding factor of a damage or gear node; the speed node has none. */
@@ -76,26 +83,30 @@ describe('enemy formulas', () => {
     expect(enemyHp(0, 2)).toBeCloseTo(24.025, 10);
   });
 
-  it('enemyGold(0, z) = 1.48^z, growing slower than HP', () => {
-    expect(enemyGold(0, 0)).toBeCloseTo(1, 10);
-    expect(enemyGold(0, 1)).toBeCloseTo(1.48, 10);
-    expect(enemyHp(0, 10) / enemyHp(0, 0)).toBeGreaterThan(
-      enemyGold(0, 10) / enemyGold(0, 0),
-    );
+  it('enemyGold(0, z) = rG^z, and rG is the zero-drift gold rate', () => {
+    expect(enemyGold(0, 0)).toBeCloseTo(g0, 10);
+    expect(enemyGold(0, 1)).toBeCloseTo(g0 * rG, 10);
+    // Gold grows exactly as fast as the levels a zone's HP demands cost, so a
+    // reinvesting hero keeps one kill time across the realm (DECISIONS.md #64).
+    const zeroDrift = Math.pow(rH, Math.log(rC) / Math.log(rD));
+    expect(rG / zeroDrift).toBeGreaterThan(0.995);
+    expect(rG / zeroDrift).toBeLessThan(1.005);
   });
 
   it("bossHp scales off the realm's final-zone enemy", () => {
-    expect(bossHp(0)).toBeCloseTo(bossHpMult * enemyHp(0, zonesPerRealm - 1), 4);
+    expect(bossHp(0)).toBeCloseTo(bossHpMultFor(0) * enemyHp(0, zonesForRealm(0) - 1), 4);
     // Guardians rubber-band a little ahead of their realm (DECISIONS.md #23).
-    expect(bossHp(2) / bossHp(0)).toBeCloseTo(realmScale(2) * BOSS_REALM_GAIN ** 2, 6);
-    expect(bossHp(2) / bossHp(0)).toBeGreaterThan(realmScale(2));
+    const full = FULL_LENGTH_REALM;
+    expect(bossHp(full + 2) / bossHp(full)).toBeCloseTo(realmScale(2) * BOSS_REALM_GAIN ** 2, 6);
+    expect(bossHp(full + 2) / bossHp(full)).toBeGreaterThan(realmScale(2));
   });
 });
 
 describe('cost formulas', () => {
-  it('levelCost(level, 0) = 10 * 1.15^level', () => {
-    expect(levelCost(0, 0)).toBeCloseTo(10, 10);
-    expect(levelCost(1, 0)).toBeCloseTo(11.5, 10);
+  it('levelCost(level, 0) = levelCostBase * rC^level', () => {
+    expect(levelCost(0, 0)).toBeCloseTo(levelCostBase, 10);
+    expect(levelCost(1, 0)).toBeCloseTo(levelCostBase * rC, 10);
+    expect(levelCost(7, 0)).toBeCloseTo(levelCostBase * rC ** 7, 8);
   });
 
   it('prices each skill on its own geometry, not one shared curve', () => {
@@ -106,10 +117,14 @@ describe('cost formulas', () => {
       expect(skillCost(id, 5, 0)).toBeCloseTo(def.costBase * def.costRate ** 5, 10);
     }
     // The tracks are not five copies of one decision: the cheapest rank-0 row
-    // costs a fraction of the dearest, and the price curves cross with rank.
+    // costs a fraction of the dearest, and each later track steps steeper.
     expect(skillCost('cleave', 0, 0)).toBeLessThan(skillCost('secondWind', 0, 0) / 8);
-    expect(skillCost('sunder', 0, 0)).toBeGreaterThan(skillCost('warcry', 0, 0));
-    expect(skillCost('sunder', 40, 0)).toBeLessThan(skillCost('warcry', 40, 0));
+    for (let i = 1; i < SKILL_IDS.length; i++) {
+      const prev = SKILLS[SKILL_IDS[i - 1]!]!;
+      const next = SKILLS[SKILL_IDS[i]!]!;
+      expect(next.costBase).toBeGreaterThan(prev.costBase);
+      expect(next.costRate).toBeGreaterThan(prev.costRate);
+    }
     expect(skillCost('unknown', 0, 0)).toBe(Infinity);
   });
 
@@ -129,9 +144,10 @@ describe('cost formulas', () => {
 });
 
 describe('hero damage model', () => {
-  it('heroBaseDamage(level, 0) = d0 * 1.12^level', () => {
+  it('heroBaseDamage(level, 0) = d0 * rD^level', () => {
     expect(heroBaseDamage(0, 0)).toBeCloseTo(d0, 10);
-    expect(heroBaseDamage(1, 0)).toBeCloseTo(d0 * 1.12, 10);
+    expect(heroBaseDamage(1, 0)).toBeCloseTo(d0 * rD, 10);
+    expect(heroBaseDamage(9, 0)).toBeCloseTo(d0 * rD ** 9, 8);
   });
 
   it('skillMult is the product of skillRankMult; rank 0 is neutral', () => {
@@ -213,7 +229,7 @@ describe('hero damage model', () => {
     s.ascendancy.nodes.heft = 1;
     const edge = (1 + perRankOf('edge')) ** 2;
     const heft = (1 + perRankOf('heft')) ** 1;
-    const expected = (d0 * 1.12 ** 3 * edge + 40 * heft) * skillRankMult('cleave', 2);
+    const expected = (d0 * rD ** 3 * edge + 40 * heft) * skillRankMult('cleave', 2);
     expect(heroDps(s)).toBeCloseTo(expected, 8);
   });
 
@@ -355,7 +371,7 @@ describe('Ascendancy accrual formulas', () => {
     for (const realm of [0, 1, 4]) {
       const zones = ascendancyBossPayout(realm) / ascendancyPerZone(realm);
       expect(zones).toBeGreaterThanOrEqual(5);
-      expect(zones).toBeLessThan(zonesPerRealm);
+      expect(zones).toBeLessThan(zonesForRealm(realm));
     }
   });
 });

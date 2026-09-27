@@ -924,3 +924,47 @@ Judges named the result twice without naming the cause: *"flat stepped colour ca
 - Real-phone playtest notes become a required exit artifact for M3F, recorded in `docs/PLAYTESTS.md`.
 
 **Supersedes:** the realm-0 reading of the P5 band in #31/#39 and the fixed 50-zone realm in `constants.ts`. #34's realm-300 ceiling stands.
+
+## 64. Realm length, guardian size and pacing bands are functions of the realm; income answers purchases — 2026-09-27
+
+**Decision:** The single constants `killsPerZone`, `zonesPerRealm`, `bossHpMult`, `dropChance` and `leaguePerKill` are gone. `packages/core/src/pacing.ts` owns `zonesForRealm`, `killsPerZoneFor`, `dropChanceFor`, `bossHpMultFor`, `portalBand` and `bossBand`: realm 0 is 10 zones of 250 kills, realm 5 and beyond are the old 50 zones of 500, and realms 1–4 interpolate linearly. The engine, the client's zone sweep and every simulator validator read the same functions. A save whose `zone` no longer exists in its realm loads clamped onto the last zone with the portal open; a guardian mid-fight in such a save is resized to today's `bossHp(realm)`, keeping its fraction of HP, so the fight ends on today's band rather than the old road's.
+
+The economy moved from floor-bound to DPS-bound so that the panel can be scarce at all. Before, DPS passed the idle kill floor at hero level 2 and income was a function of the zone index alone, so every row went green after 90 s whatever the prices did (#63). Now gear tracks enemy HP at 1.2 of its base instead of 2, so gear alone never reaches the floor, the kill floor is 0.7 s, and gold per zone grows at exactly the rate the zone's levels cost — `rG = rH^(ln rC / ln rD)` = 1.75 — so a reinvesting hero keeps one kill time across a realm and income responds to what was bought.
+
+| Constant | Before | After |
+|---|---|---|
+| realm length | 50 zones × 1200 kills, every realm | 10 × 250 at realm 0 → 50 × 500 at realm 5 |
+| `d0`, `rD` | 25, 1.12 | 10, **1.25** — two levels per zone, not four |
+| `levelCostBase`, `rC` | 10, 1.15 | 100, **1.33** |
+| `rG` | 1.48 | 1.75 (zero drift) |
+| `gearPowerBase` | 2 | 1.2 — gear alone no longer clears the kill floor |
+| `minKillTimeSec` | 0.35 | 0.7 |
+| `dropChance` | 0.008 | `DROPS_PER_ZONE` 10 / kills per zone |
+| skills cost / step | 35/1.12, 60/1.19, 110/1.15, 190/1.13, 300/1.21 | 60/×4, 120/×12, 250/×36, 500/×108, 1000/×324; unlock 0/0/2/6/12 |
+| guardian multiple | 5600 | 1300 at realm 0 → 16000 at realm 5 |
+| `ARC_CATCH_MULT` | 1.6 | 1.25 |
+| catch Ascendancy | `ASC_CATCHES_PER_ZONE` 125 | `ASC_CATCH_ZONE_BONUS` 16 over `coinsPerZone(realm)` |
+
+**Why the hero level got bigger and rarer.** The greedy bot drains the wallet at every 30 s glance, so whatever row it favours settles at a price of about one glance's income and is green at the next glance. At 1.12 damage per level the hero row was affordable at ~80% of looks and two cheap skill rows lingered beside it (their value per gold never beat the hero's, so they sat green unbought): ≤2 affordable held at 53–56% of looks. Steeper skill steps alone (two attempts, ×4–×324) moved it to 54%. Making a level worth 1.25× at 1.33× the price — with `rG` re-derived for zero drift — leaves the hero row unaffordable at most glances, and on those the bot spends the residual on the lingering skills, which then leave for a while. Lean went to 84–86% in one step.
+
+**Why the kill floor doubled.** Momentum divides through the floor, so active play is untouched; the floor is the ceiling on how fast a bonus-laden deep realm can run. At 0.35 s the earnings bonus compounded into 123 realms in 14 days and P10 read 1.06×. Restoring 0.35 s with everything else final fails P1, P5 and P8 at 0/3 seeds. The 0.7 s floor also halves the coins in the air on a floor-speed road, which is why `thumb.test.ts` now pins catch rate at 350–450 ms latency at 0.78 rather than the 1.00 a denser road handed out through neighbour catches.
+
+**What P8 measures now.** Only looks inside an active session, 60 s after a realm starts: ≤2 affordable at ≥80%; a row affordable or ≤60 s of income away at ≥95%; ≥5 priced always; no drought past 5 min. The old 95%-≥4-affordable clause was measured mostly on idle slices (17k of them), where the wallet grows while nobody buys, so its 99.9% said nothing about a session.
+
+**Measured, `npm run sim -- --seeds 3`, 14 days, ALL PASS — 20 validators × 3 seeds:**
+
+- P5: realm 0 portal-ready 17.1–17.3 min active, 41–47 min idle; realm 5 2.22 h / 11.0–11.5 h; realms 1–5 inside their ramped bands; realms past 5 run 2.9–10.0 h on the mixed schedule.
+- P6: 56–57/57 realms in band per seed; realm 0 guardian 3.7–4.5 min, realm 5 26–30 min, 16–23 min by realm 50.
+- P8: 6 priced at the leanest look; ≤2 affordable at 85.7–86.2% of 872–981 looks; reach 100%; longest drought 0 s.
+- P10: 1.79–1.99× Ascendancy at 14 d; first ascension 22.2–23.6 min active vs 51.5–55.8 min idle (2.25–2.37× sooner).
+- P1 1.83–1.90×; P2, P3, P4, P7, P9 PASS; all ten correctness validators PASS.
+
+**Content end (#48) moves to day 51.2–51.7** on the 90-day run at 3 seeds (51.15, 51.62, 51.65; was 74.8–78.9), which also runs ALL PASS with 301/301 guardians in band: shorter early realms and a faster ladder. #34's realm-300 ceiling stands — `bossHp(300)` keeps ×1.36 headroom under `Number.MAX_VALUE` at the 16000 multiple, and `magnitude.test.ts` pins the frontier at 301 with the hero ladder at 1022/315 for realms 199/296 and every skill track priced at twice the ranks a realm's whole gold could buy.
+
+**Consequences:**
+- `docs/ECONOMY.md` and `docs/ACTIVE-PLAY.md` carry the per-realm bands and the new constants; `sim/src/shop-run.ts` (`npm run shop`) prints the look-by-look panel that found the lingering rows.
+- Dev staging: `?stage=mid` is 25 min into realm 0 (zone 8 of 10, short of the portal); `?stage=late` takes each portal as it opens and ends on a Road several realms deep. `tools/qa/loop.mjs` takes `--band-min/--band-max` (minutes) and defaults to realm 0's 3–6.
+- Slice A's death phase was sized to fit inside a 0.35 s kill; the floor is now 0.7 s, so it has twice the room.
+- Skill values are still the asymptotic bonuses of #26; a cheap late rank of a near-capped skill is worth little and is what lingers. Making skill value commensurate with its price is the next lever if scarcity has to tighten further.
+
+**Supersedes:** the constants table of #5 as restated in #26/#27/#32; the P8 clause of #26; the content-end day of #48. #62's integer-millisecond clock and #6's split-invariance are unchanged and covered at the new lengths across zone and realm boundaries in `determinism.test.ts`.

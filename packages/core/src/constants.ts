@@ -18,31 +18,50 @@ export const REALM_STEP = 8;
 export const hp0 = 10;
 export const rH = 1.55;
 
-/** Enemy gold: gold(realm, z) = g0 * REALM_STEP^realm * rG^z. */
+/**
+ * Enemy gold: gold(realm, z) = g0 * REALM_STEP^realm * rG^z.
+ * `rG` = `rH^(ln rC / ln rD)`: a zone's gold grows exactly as fast as the levels
+ * its HP demands cost, so a reinvesting hero keeps one kill time across the realm
+ * and income answers purchases, not the zone index (docs/DECISIONS.md #64).
+ */
 export const g0 = 1;
-export const rG = 1.48;
+export const rG = 1.75;
 
 // --- Hero ----------------------------------------------------------------
-/** Hero base damage: base(level) = d0 * rD^level, scaled by the realm. */
-export const d0 = 25;
-export const rD = 1.12;
+/**
+ * Hero base damage: base(level) = d0 * rD^level, scaled by the realm.
+ * A level is a big, rare buy — about two per zone — so the hero row costs
+ * more than one glance's income and is not green at every look (#64).
+ */
+export const d0 = 10;
+export const rD = 1.25;
 
-/** Hero level cost: levelCost(level) = levelCostBase * rC^level, realm-scaled. */
-export const levelCostBase = 10;
-export const rC = 1.15;
+/**
+ * Hero level cost: levelCost(level) = levelCostBase * rC^level, realm-scaled.
+ * Cost outgrows damage (1.33 vs 1.25), so gold buys damage at elasticity 0.78
+ * and the per-victory earnings bonus lands on DPS as x1.12, which
+ * `BOSS_REALM_GAIN` absorbs (docs/DECISIONS.md #32).
+ */
+export const levelCostBase = 100;
+export const rC = 1.33;
 
-// --- Gear (the primary realm-local power scaler) -------------------------
-/** Drop power: gearPowerBase * REALM_STEP^realm * gearPowerRate^z * rarityMult. */
-export const gearPowerBase = 2;
+// --- Gear (the idle half of realm-local power) ---------------------------
+/**
+ * Drop power: gearPowerBase * REALM_STEP^realm * gearPowerRate^z * rarityMult.
+ * Gear tracks enemy HP zone for zone, so a hero who buys nothing still walks;
+ * bought damage is the other half, so a purchase still moves the kill time (#64).
+ */
+export const gearPowerBase = 1.2;
 /** Gear power grows on the same base as enemy HP, so it tracks difficulty. */
 export const gearPowerRate = rH;
 
 /**
- * Chance of a gear drop per kill. Kept scarce: gear power grows on enemy HP's
- * base, so frequent drops make the equipped set track the frontier exactly and
- * every boss becomes the same fight. Scarcity is what makes a build vary.
+ * Gear drops per zone, whatever the zone's length. Kept scarce: gear power
+ * grows on enemy HP's base, so frequent drops make the equipped set track the
+ * frontier exactly and every boss becomes the same fight. Per zone rather than
+ * per kill because zone length is a function of the realm (`killsPerZoneFor`).
  */
-export const dropChance = 0.008;
+export const DROPS_PER_ZONE = 10;
 
 // --- Monster variety -----------------------------------------------------
 export interface SpeciesDef {
@@ -108,18 +127,36 @@ export const SLOT_POWER: Record<GearSlot, number> = {
 };
 
 // --- Realm structure -----------------------------------------------------
-export const killsPerZone = 1200;
-/** Zones in a realm's road. Clearing the last one makes the portal available. */
-export const zonesPerRealm = 50;
-/** Leagues gained per Road kill. Zone length = 1 league. */
-export const leaguePerKill = 1 / killsPerZone;
+/**
+ * Realm length grows with realm index (docs/DECISIONS.md #63): realm 0 is a
+ * tutorial the first session finishes, realms FULL_LENGTH_REALM and up hold the
+ * full ladder. `pacing.ts` interpolates between the two ends.
+ */
+export const FULL_LENGTH_REALM = 5;
+export const ZONES_REALM0 = 10;
+/** Zones in a full-length realm's road. */
+export const ZONES_FULL = 50;
+export const KILLS_PER_ZONE_REALM0 = 250;
+export const KILLS_PER_ZONE_FULL = 500;
+
+/** Realm start → portal available, in seconds, at both ends of the ramp. */
+export const PORTAL_BAND_REALM0_SEC = {
+  active: { minSec: 12 * 60, maxSec: 20 * 60 },
+  idle: { minSec: 40 * 60, maxSec: 80 * 60 },
+} as const;
+export const PORTAL_BAND_FULL_SEC = {
+  active: { minSec: 2 * 3600, maxSec: 4 * 3600 },
+  idle: { minSec: 8 * 3600, maxSec: 16 * 3600 },
+} as const;
 
 // --- Combat pacing -------------------------------------------------------
 /**
  * Idle walking floor for a Road kill, in seconds. Momentum divides *through*
- * this floor (see `killTime`), so active play is never capped by it.
+ * this floor (see `killTime`), so active play is never capped by it. It is
+ * also the ceiling on how fast a bonus-laden deep realm can run, which is what
+ * keeps realm cadence slow enough for a realm lead to mean anything (P10).
  */
-export const minKillTimeSec = 0.35;
+export const minKillTimeSec = 0.7;
 
 /** Nominal seconds per hero swing against a guardian at zero momentum. */
 export const bossSwingSec = 1;
@@ -143,13 +180,12 @@ export const ARC_FLIGHT_SEC = 1.5;
  * not the whole kill. The kill already credited 1.0x in full, so a catch pays
  * only the increment and idle loses nothing.
  *
- * It is 1.6 rather than the 1.15 a one-arc-per-kill payout wanted because the
- * binding constraint is the strike rate, not the number of coins in the air:
- * the reference player strikes 3.3x/s against 4.2 kills/s, so splitting a
- * payout across n coins divides each catch by n without buying any more
- * catches. Measured at 1.91-1.95x Road-active, mid-band.
+ * Kills are slower than strikes on a damage-bound road (docs/DECISIONS.md #64),
+ * so the reference player catches most coins and the multiple, not the strike
+ * rate, sets the Road-active band. Momentum's x1.75 times a full catch caps at
+ * 1.75 * this; P1 bands 1.8–2.2.
  */
-export const ARC_CATCH_MULT = 1.6;
+export const ARC_CATCH_MULT = 1.25;
 /**
  * Coins per kill. A kill's payout is thrown as several arcs rather than one,
  * so the air carries a stream of loot instead of a single blip, and a catch is
@@ -199,8 +235,13 @@ export const ARC_CATCH_SEC = 0.3;
 export const ARC_CATCH_PERP = 0.1;
 
 // --- Portal guardian -----------------------------------------------------
-/** Guardian HP = this * enemyHp(realm, last zone) * BOSS_REALM_GAIN^realm. */
-export const bossHpMult = 5600;
+/**
+ * Guardian HP = bossHpMultFor(realm) * enemyHp(realm, last zone) * BOSS_REALM_GAIN^realm.
+ * The multiple ramps with the realm like its road does, so the opening guardian
+ * falls inside the first session and the deep ones keep their old fights.
+ */
+export const bossHpMultRealm0 = 1300;
+export const bossHpMultFull = 16000;
 /**
  * Guardians scale slightly faster than their realm, absorbing both the earnings
  * bonus that funds hero levels and the Ascendancy tree's compounding damage.
@@ -212,6 +253,14 @@ export const bossHpMult = 5600;
  */
 export const BOSS_REALM_GAIN = 1.19;
 
+/**
+ * How long a prepared build's fight should last at sustained full momentum, in
+ * seconds, at both ends of the ramp. The ceiling doubles as the entry rule: the
+ * modelled player farms on past it (docs/DECISIONS.md #24).
+ */
+export const BOSS_BAND_REALM0_SEC = { minSec: 3 * 60, maxSec: 6 * 60 } as const;
+export const BOSS_BAND_FULL_SEC = { minSec: 15 * 60, maxSec: 90 * 60 } as const;
+
 // --- Ascendancy ----------------------------------------------------------
 /**
  * Pending Ascendancy is granted per zone cleared, never per second, so farming
@@ -221,17 +270,12 @@ export const ASC_PER_ZONE = 1;
 /** Guardian victory payout, the dominant share of a realm's Ascendancy. */
 export const ASC_BOSS_PAYOUT = 8;
 /**
- * Catching a loot arc pays Ascendancy worth this fraction of a zone clear —
- * one caught coin is 1/125th of a zone. Expressed against the zone rate rather
- * than as a flat number so it inherits the realm scaling for free.
- *
- * Active play has to buy the *permanent* currency, not a bigger pile of the
- * temporary one: no multiplier on gold can beat a night of idle, because idle
- * has all night. Ascendancy per realm is bounded — fifty zones and one
- * guardian, and a portal-ready realm pays nothing — so catches are the only
- * way to raise a realm's yield, and waiting cannot substitute for them.
+ * Catching every coin a zone throws pays this multiple of the zone's own
+ * Ascendancy on top of it, so it inherits realm scaling and zone length for free.
+ * Active play has to buy the *permanent* currency: no gold multiplier beats a
+ * night of idle, and a realm's Ascendancy is bounded, so only catches raise it.
  */
-export const ASC_CATCHES_PER_ZONE = 125;
+export const ASC_CATCH_ZONE_BONUS = 16;
 /** Both accruals grow linearly per realm: amount * (1 + this * realm). */
 export const ASC_REALM_GROWTH = 0.5;
 
@@ -329,35 +373,30 @@ export interface SkillDef {
  * spend on next" without a greyed lock being the answer.
  *
  * Each track has its own price and its own curve, so they are not five copies
- * of one decision. Cheap-and-shallow through dear-and-deep: Cleave is the row
- * a broke hero can always afford and stops paying early; Sunder costs six
- * times as much at rank 0 but has the slowest price growth and the highest
- * ceiling, so it is the track a rich hero keeps feeding. Second Wind is a
- * burst — expensive, small, and almost fully paid out by rank 10.
- *
- * The ceilings multiply to 2.25x, the same total the uniform tracks reached,
- * so differentiating them moved no pacing band.
+ * of one decision. Price steps are steep and graduated (x4 through x324) so a
+ * bought rank leaves the panel for a while instead of sitting green at the
+ * next glance; the ceilings multiply to 2.25x (docs/DECISIONS.md #64).
  */
 export const SKILLS: Record<string, SkillDef> = {
   cleave: {
     id: 'cleave', name: 'Cleave', unlockLevel: 0,
-    costBase: 35, costRate: 1.12, maxBonus: 0.12, decay: 0.78,
+    costBase: 60, costRate: 4, maxBonus: 0.12, decay: 0.78,
   },
   warcry: {
     id: 'warcry', name: 'Warcry', unlockLevel: 0,
-    costBase: 60, costRate: 1.19, maxBonus: 0.23, decay: 0.93,
+    costBase: 120, costRate: 12, maxBonus: 0.23, decay: 0.93,
   },
   riposte: {
     id: 'riposte', name: 'Riposte', unlockLevel: 2,
-    costBase: 110, costRate: 1.15, maxBonus: 0.17, decay: 0.86,
+    costBase: 250, costRate: 36, maxBonus: 0.17, decay: 0.86,
   },
   sunder: {
     id: 'sunder', name: 'Sunder', unlockLevel: 6,
-    costBase: 190, costRate: 1.13, maxBonus: 0.27, decay: 0.95,
+    costBase: 500, costRate: 108, maxBonus: 0.27, decay: 0.95,
   },
   secondWind: {
-    id: 'secondWind', name: 'Second Wind', unlockLevel: 14,
-    costBase: 300, costRate: 1.21, maxBonus: 0.10, decay: 0.72,
+    id: 'secondWind', name: 'Second Wind', unlockLevel: 12,
+    costBase: 1000, costRate: 324, maxBonus: 0.10, decay: 0.72,
   },
 };
 

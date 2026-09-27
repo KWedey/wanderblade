@@ -3,16 +3,16 @@ import {
   abandonBoss,
   advance,
   clockAfter,
-  dropChance,
+  dropChanceFor,
   enterPortal,
   EVENT_CAP,
   initialState,
-  killsPerZone,
-  leaguePerKill,
+  killsPerZoneFor,
+  leaguesPerKillFor,
   speciesFor,
   speciesIndex,
   summarizeEvents,
-  zonesPerRealm,
+  zonesForRealm,
   type EventLog,
   type GameEvent,
   type Recap,
@@ -26,7 +26,7 @@ describe('road progression sanity', () => {
     expect(s.killIndex).toBe(1);
     // enemyGold(0, 0) = 1, scaled by which monster this kill was
     expect(s.gold).toBeCloseTo(speciesFor(1).goldMult, 6);
-    expect(s.leagues).toBeCloseTo(leaguePerKill, 6);
+    expect(s.leagues).toBeCloseTo(leaguesPerKillFor(0), 6);
     expect(events[0]).toMatchObject({
       type: 'kill',
       killIndex: 1,
@@ -45,7 +45,7 @@ describe('road progression sanity', () => {
     expect(s.collection.zonesCleared).toBe(1);
     const step = events.findIndex((e) => e.type === 'zone');
     expect(step).toBeGreaterThanOrEqual(0);
-    expect(events.slice(0, step).filter((e) => e.type === 'kill')).toHaveLength(killsPerZone);
+    expect(events.slice(0, step).filter((e) => e.type === 'kill')).toHaveLength(killsPerZoneFor(0));
     expect(events.filter((e) => e.type === 'zone')).toHaveLength(1);
   });
 
@@ -53,7 +53,7 @@ describe('road progression sanity', () => {
     const s = nearPortal(9, 1);
     const events = advance(s, 5);
     expect(s.portalReady).toBe(true);
-    expect(s.zone).toBe(zonesPerRealm - 1);
+    expect(s.zone).toBe(zonesForRealm(0) - 1);
     expect(events.filter((e) => e.type === 'portalReady')).toHaveLength(1);
 
     const more = advance(s, 3600);
@@ -96,8 +96,8 @@ describe('road progression sanity', () => {
     expect(events.filter((e) => e.type === 'equip')).toHaveLength(equips);
 
     const recap = summarizeEvents(events);
-    expect(recap.drops / recap.kills).toBeGreaterThan(dropChance * 0.4);
-    expect(recap.drops / recap.kills).toBeLessThan(dropChance * 2.2);
+    expect(recap.drops / recap.kills).toBeGreaterThan(dropChanceFor(0) * 0.4);
+    expect(recap.drops / recap.kills).toBeLessThan(dropChanceFor(0) * 2.2);
   });
 
   it('collection records track drops and zones cleared', () => {

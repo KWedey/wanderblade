@@ -7,17 +7,20 @@ import {
   ASC_NODE_IDS,
   ascSpent,
   attackSpeedMultiplier,
+  bossBand,
   bossEtaSec,
   bossHp,
   deserialize,
   earningsMultiplier,
   enterPortal,
   gearPowerTotal,
+  goldPerKill,
   heroDps,
   initialState,
   killTime,
   momentumAt,
   pricedCount,
+  purchaseOptions,
   serialize,
   swingInterval,
   type GameEvent,
@@ -26,7 +29,6 @@ import {
 } from '@wanderblade/core';
 import { botTouch } from './bot';
 import {
-  BOSS_MAX_SEC,
   CAP_RATE,
   IDLE_SLICE_SEC,
   runActive,
@@ -54,6 +56,28 @@ export function previewEtaSec(state: GameState): number {
   return bossEtaSec(state, 1);
 }
 
+/** Road gold per second at the current momentum, catches left out. */
+export function goldPerSec(s: GameState): number {
+  return goldPerKill(s) / killTime(s, momentumAt(s.momentum, s.timeSec));
+}
+
+/**
+ * Seconds of the current Road income until the cheapest priced gold row is
+ * affordable; 0 when one already is. Catches are left out, so an active
+ * player is nearer than this says, never further.
+ */
+export function reachSec(s: GameState): number {
+  let cheapest = Infinity;
+  for (const o of purchaseOptions(s)) {
+    if (o.currency !== 'gold' || !o.unlocked) continue;
+    if (o.affordable) return 0;
+    if (o.cost < cheapest) cheapest = o.cost;
+  }
+  if (!Number.isFinite(cheapest)) return Infinity;
+  const income = goldPerSec(s);
+  return income > 0 ? (cheapest - s.gold) / income : Infinity;
+}
+
 /** Portal-entry timing. `prompt` commits at the first chance after it opens. */
 export type EntryStrategy = 'prompt' | 'overfarm-2x';
 
@@ -62,8 +86,8 @@ export interface RunOptions {
   entry: EntryStrategy;
   /** Stop once this many victories have landed. */
   maxVictories?: number;
-  /** Stop the moment the current realm's portal opens. */
-  stopAtPortalReady?: boolean;
+  /** Stop the moment this realm's portal opens. */
+  stopAtPortalReadyRealm?: number;
   /** Play without pause — the "hours of active play" the pacing band means. */
   continuous?: boolean;
   sampleEverySec?: number;
@@ -106,7 +130,7 @@ export function totalEarned(s: GameState): number {
   return s.ascendancy.banked + s.ascendancy.pending + ascSpent(s.ascendancy);
 }
 
-function blankRealm(realm: number, startSec: number): RealmRecord {
+export function blankRealm(realm: number, startSec: number): RealmRecord {
   return {
     realm,
     startSec,
@@ -301,10 +325,12 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
     }
     current().treePurchasesTotal += botTouch(state).tree;
     const r = current();
+    // The band's ceiling is the entry rule: a fight the preview says would run
+    // past it is not worth committing to yet (docs/DECISIONS.md #24).
     if (
       r.portalReadySec !== null &&
       state.timeSec - r.portalReadySec < PREPARE_PATIENCE_SEC &&
-      previewEtaSec(state) > BOSS_MAX_SEC
+      previewEtaSec(state) > bossBand(state.realm).maxSec
     ) {
       return; // the preview says this fight is not worth committing to yet
     }
@@ -338,7 +364,7 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
           if (opts.entry === 'overfarm-2x') {
             overfarmUntilSec = e.timeSec + (e.timeSec - r.startSec);
           }
-          if (opts.stopAtPortalReady) stop = true;
+          if (opts.stopAtPortalReadyRealm === e.realm) stop = true;
         } else if (e.type === 'bossVictory') {
           current().pendingAtVictory = e.pendingBanked;
         } else if (e.type === 'abandon') {
@@ -363,14 +389,16 @@ export function runPlayer(seed: number, config: SimConfig, opts: RunOptions): Ru
         }
       }
     },
-    onShop: (s) => {
+    onShop: (s, inSession) => {
       if (s.phase !== 'road') return;
       shopSamples.push({
         timeSec: s.timeSec,
+        inSession,
         sinceRealmStartSec: s.timeSec - current().startSec,
         realm: s.realm,
         affordable: affordableCount(s),
         priced: pricedCount(s),
+        reachSec: reachSec(s),
       });
     },
     onPurchases: (bought) => {

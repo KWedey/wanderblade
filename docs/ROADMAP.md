@@ -95,8 +95,8 @@ Verdict on 2026-09-27: the game is not fun. Nothing on screen changes between zo
 - [ ] Monsters die on screen; coins launch from the kill, fly above the monster, land ahead and are collected
 - [ ] A miss is seen and heard; momentum is legible at a glance; kill payout is shown
 - [ ] Pending Ascendancy on the Road HUD
-- [ ] Realm 0 portal-ready in 12–20 min active, guardian 3–6 min; realm length and boss band grow per realm
-- [ ] Upgrade scarcity: ≤ 2 affordable rows most of the time, never starved; P5/P6/P8 re-banded per realm, full sim quoted
+- [x] Realm 0 portal-ready in 12–20 min active, guardian 3–6 min; realm length and boss band grow per realm (ADR #64)
+- [x] Upgrade scarcity: ≤ 2 affordable rows most of the time, never starved; P5/P6/P8 re-banded per realm, full sim quoted (ADR #64)
 - [ ] Real-phone playtest recorded in `docs/PLAYTESTS.md`: first session reaches ascension
 
 **Exit:** a first-time player ascends inside one session and can say what tapping did.
