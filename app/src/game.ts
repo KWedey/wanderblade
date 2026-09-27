@@ -7,9 +7,7 @@ import {
   abandonBoss as coreAbandonBoss,
   advance,
   ASC_NODES,
-  ASC_NODE_IDS,
   ascMultiplier,
-  ascNodeCost,
   attackSpeedMultiplier,
   earningsMultiplier,
   buyHeroLevel as coreBuyHeroLevel,
@@ -18,6 +16,7 @@ import {
   bossEtaSec,
   CLOCK_MS_PER_SEC,
   clockAfter,
+  clockMs,
   goldPerKill,
   enterPortal as coreEnterPortal,
   heroDps,
@@ -184,7 +183,7 @@ export class Game {
     this.lastTickMs += dtMs;
 
     if (dtSec > 0) {
-      const strikes = this.drainStrikes();
+      const strikes = this.drainStrikes(clockMs(this.state.timeSec) + dtMs);
       if (dtSec > SUSPEND_TICK_SEC) {
         this.applyOfflineReturn(dtSec);
       } else {
@@ -313,9 +312,17 @@ export class Game {
     this.pendingStrikes.push({ atSec, aim });
   }
 
-  /** Hand the buffered Strikes to `advance` and clear the buffer. */
-  private drainStrikes(): Strike[] {
-    return this.pendingStrikes.splice(0, this.pendingStrikes.length);
+  /**
+   * Hand `advance` the buffered Strikes it will process. A burst's later stamps
+   * can sit a millisecond past this tick's target; core ignores those, so they
+   * stay queued for the next tick instead of being drained into oblivion.
+   */
+  private drainStrikes(untilMs: number): Strike[] {
+    let n = 0;
+    while (n < this.pendingStrikes.length && clockMs(this.pendingStrikes[n]!.atSec) <= untilMs) {
+      n += 1;
+    }
+    return this.pendingStrikes.splice(0, n);
   }
 
   /**
@@ -323,9 +330,15 @@ export class Game {
    * the fight; this is the single call site that starts it.
    */
   enterPortal(): void {
-    const { entered, events } = coreEnterPortal(this.state);
+    const { entered, reason, events } = coreEnterPortal(this.state);
     this.ingestEvents(events);
-    if (!entered) this.refuse('The road is not yet walked to its end.');
+    if (!entered) {
+      this.refuse(
+        reason === 'unwinnable'
+          ? 'This guardian is beyond any blade. The road ends here.'
+          : 'The road is not yet walked to its end.',
+      );
+    }
     this.renderAll();
   }
 
@@ -555,27 +568,28 @@ export class Game {
         etaSec: waitFor(r.cost),
       }));
 
-    // The tree prices and gates itself off core, exactly as the shop rows do.
+    // The tree's rows are core's shop rows too, so the guardian lock that
+    // refuses the payment is the same one that greys the button.
     const asc = s.ascendancy;
     const ascendancy: AscendancyVM = {
       banked: asc.banked,
       pending: asc.pending,
       victories: asc.victories,
       earningsMult: earningsMultiplier(asc.victories),
-      nodes: ASC_NODE_IDS.map((id) => {
-        const def = ASC_NODES[id]!;
-        const rank = asc.nodes[id] ?? 0;
-        const cost = ascNodeCost(id, rank);
-        return {
-          id,
-          name: def.name,
-          effect: def.effect,
-          rank,
-          cost,
-          canAfford: asc.banked >= cost,
-          multiplier: ascMultiplier(asc, def.effect),
-        };
-      }),
+      nodes: rows
+        .filter((r) => r.kind === 'node')
+        .map((r) => {
+          const effect = ASC_NODES[r.id]!.effect;
+          return {
+            id: r.id,
+            name: r.name,
+            effect,
+            rank: r.rank,
+            cost: r.cost,
+            canAfford: r.affordable,
+            multiplier: ascMultiplier(asc, effect),
+          };
+        }),
     };
 
     const heroRow = rows.find((r) => r.kind === 'hero')!;

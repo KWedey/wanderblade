@@ -149,6 +149,17 @@ describe('the boss phase pays nothing', () => {
     }
     expect(s.phase).toBe('boss'); // a weak build simply takes longer
   });
+
+  it('lets a hero whose damage has overflowed fell the guardian, rather than deal nothing', () => {
+    const s = portalReady(6, 30 * 86_400);
+    enterPortal(s);
+    s.hero.level = 5000; // heroBaseDamage is Infinity from here
+    const events = advance(s, 5);
+    expect(events.some((e) => e.type === 'bossVictory')).toBe(true);
+    expect(s.phase).toBe('road');
+    expect(s.ascendancy.victories).toBe(1);
+    expect(Number.isFinite(s.lifetime.bossDamage)).toBe(true);
+  });
 });
 
 describe('abandonment', () => {

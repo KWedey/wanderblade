@@ -43,6 +43,19 @@ describe('writeSave / readSave round-trip', () => {
     expect(serialize(loaded!.state)).toBe(serialize(s));
   });
 
+  it('loads a save written after the very first kill', () => {
+    // The first kill is not species 0, so a sparse Bestiary tally would carry
+    // null holes here — and null is not a finite number to the validator.
+    const s = initialState(7);
+    advance(s, 0.5);
+    expect(s.killIndex).toBe(1);
+    writeSave(s);
+
+    const loaded = readSave();
+    expect(loaded, 'a two-second-old run was discarded').not.toBeNull();
+    expect(serialize(loaded!.state)).toBe(serialize(s));
+  });
+
   it('round-trips a mid-run state, preserving rngState and killIndex', () => {
     const s = initialState(77);
     advance(s, 3333.5);
@@ -225,6 +238,21 @@ describe('a save older than the schema still loads', () => {
     expect((inner.ascendancy as Record<string, unknown>).banked).toBe(0);
     const loaded = readSave()!;
     expect(loaded.state.ascendancy.pending).toBe(0);
+  });
+
+  it('gives gear from before items knew their realm the realm the save is in', () => {
+    const state = initialState(7);
+    state.realm = 3;
+    state.gear.weapon = { power: 40, rarity: 'rare', realm: 3, zone: 2 };
+    writeSave(state);
+    const outer = JSON.parse(localStorage.getItem(SAVE_KEY)!) as { state: string };
+    const inner = JSON.parse(outer.state) as { gear: { weapon: Record<string, unknown> } };
+    delete inner.gear.weapon['realm'];
+    localStorage.setItem(SAVE_KEY, envelope(JSON.stringify(inner)));
+
+    const loaded = readSave();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.state.gear.weapon).toEqual({ power: 40, rarity: 'rare', realm: 3, zone: 2 });
   });
 
   // Age fills a gap; corruption still fails. A field that is present and wrong

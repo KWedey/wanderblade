@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SKILL_IDS, SKILLS } from '@wanderblade/core';
 
+import { HOLD_STRIKE_INTERVAL_SEC } from '../src/active';
 import { formatDuration, formatPercent } from '../src/format';
 import { createView, type View, type ViewHandlers, type ViewModel } from '../src/view';
 
@@ -100,6 +101,42 @@ beforeEach(() => {
 afterEach(() => {
   root.remove();
   vi.unstubAllEnvs();
+});
+
+describe('a held strike ends with the focus it was started under', () => {
+  const HOLD_MS = HOLD_STRIKE_INTERVAL_SEC * 1000;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function holdSpace(): ViewHandlers {
+    const { h } = mount();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    vi.advanceTimersByTime(HOLD_MS * 2.5);
+    expect(h.onStrike).toHaveBeenCalledTimes(3); // the press, then two repeats
+    return h;
+  }
+
+  it('stops repeating when the window loses focus, since the key-up will never arrive', () => {
+    const h = holdSpace();
+    window.dispatchEvent(new Event('blur'));
+    vi.advanceTimersByTime(HOLD_MS * 4);
+    expect(h.onStrike).toHaveBeenCalledTimes(3);
+  });
+
+  it('stops repeating when the tab is hidden', () => {
+    const h = holdSpace();
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(HOLD_MS * 4);
+    expect(h.onStrike).toHaveBeenCalledTimes(3);
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true });
+  });
 });
 
 describe('the debug drawer', () => {

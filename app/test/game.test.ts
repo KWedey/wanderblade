@@ -87,6 +87,29 @@ describe('queued strikes satisfy what advance() requires of them', () => {
     expect(stamps[0]!).toBeGreaterThan(inner.state.timeSec);
   });
 
+  it('keeps a stamp past the tick window queued for the next tick, never dropped', () => {
+    const { game, inner } = newGame();
+    const ticking = game as unknown as { tick: () => void; state: GameState };
+    game.collectRecap();
+    // Two taps in one millisecond: the second is nudged to 58 ms so the pair
+    // stays ordered, and the tick that lands at 57 ms cannot reach it.
+    nowMs += 57;
+    game.strike(null);
+    game.strike(null);
+    expect(inner.pendingStrikes.map((s) => s.atSec)).toEqual([0.057, 0.058]);
+
+    nowMs += 0.5;
+    ticking.tick();
+    expect(ticking.state.timeSec).toBe(0.057);
+    expect(ticking.state.momentum.atSec).toBe(0.057);
+    expect(inner.pendingStrikes.map((s) => s.atSec)).toEqual([0.058]);
+
+    nowMs += 100;
+    ticking.tick();
+    expect(ticking.state.momentum.atSec).toBe(0.058);
+    expect(inner.pendingStrikes).toEqual([]);
+  });
+
   it('drops strikes banked before a suspension rather than replaying stale stamps', () => {
     const { game, inner } = newGame();
     game.collectRecap();
@@ -235,6 +258,21 @@ describe('the Ascendancy tree the client now reaches', () => {
     expect(withBank(edgeCost).vm().ascendancy.nodes[0]!.canAfford).toBe(true);
   });
 
+  it('calls no node affordable during a guardian attempt, whatever the bank holds', () => {
+    let latest: ViewModel | null = null;
+    const view: View = { ...stubView, renderPanels: (next) => (latest = next) };
+    const inner = new Game(view) as unknown as AscInternals;
+    inner.state.ascendancy.banked = 10_000;
+    inner.state.phase = 'boss';
+    inner.state.boss = { hpRemaining: 500, hpMax: 1000, enteredAtSec: 0 };
+    inner.tick();
+    expect(latest).not.toBeNull();
+    for (const node of latest!.ascendancy.nodes) expect(node.canAfford, node.id).toBe(false);
+
+    inner.buyAscendancyNode('edge');
+    expect(inner.state.ascendancy.banked).toBe(10_000);
+  });
+
   it('spends the bank and takes the rank when the node is bought', () => {
     const cost = ascNodeCost('edge', 0);
     const { vm, inner } = withBank(cost + 5);
@@ -300,6 +338,35 @@ describe('the portal pays nothing, and says so', () => {
     const goal = vmInPhase('boss').purchaseGoal;
     expect(goal).not.toMatch(/in ~/);
     expect(goal).toMatch(/more gold|ready/);
+  });
+});
+
+describe('a refused portal says why', () => {
+  interface PortalInternals {
+    state: GameState;
+    enterPortal: () => void;
+  }
+
+  function refusalAt(realm: number): string | null {
+    nowMs = 1000;
+    let latest: ViewModel | null = null;
+    const view: View = { ...stubView, renderPanels: (next) => (latest = next) };
+    const inner = new Game(view) as unknown as PortalInternals;
+    inner.state.realm = realm;
+    inner.state.portalReady = true;
+    inner.enterPortal();
+    const rendered = latest as ViewModel | null;
+    if (!rendered) throw new Error('no view model rendered');
+    return rendered.refusal;
+  }
+
+  it('opens a winnable realm without a word', () => {
+    expect(refusalAt(0)).toBeNull();
+  });
+
+  it('names the overflow frontier as the end of the road, not an unwalked one', () => {
+    expect(refusalAt(301)).toMatch(/beyond any blade/);
+    expect(refusalAt(301)).not.toMatch(/not yet walked/);
   });
 });
 

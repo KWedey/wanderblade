@@ -300,8 +300,10 @@ function processKill(
   const kind = speciesFor(state.killIndex);
   const gold = goldPerKill(state) * kind.goldMult;
   state.gold += gold;
-  state.collection.speciesKills[species] =
-    (state.collection.speciesKills[species] ?? 0) + 1;
+  // Kept dense: a hole serializes as null, which is not a number to any reader.
+  const tally = state.collection.speciesKills;
+  while (tally.length <= species) tally.push(0);
+  tally[species] = (tally[species] ?? 0) + 1;
   state.lifetime.goldEarned += gold;
   recap.kills += 1;
   recap.goldEarned += gold;
@@ -426,7 +428,8 @@ function processSwing(
   clock: number,
 ): void {
   const dmg = damagePerSwing(state);
-  const dealt = Math.min(state.boss.hpRemaining, Number.isFinite(dmg) ? dmg : 0);
+  // An overflowing hero fells the guardian outright; only NaN deals nothing.
+  const dealt = Number.isNaN(dmg) ? 0 : Math.min(state.boss.hpRemaining, dmg);
   state.boss.hpRemaining -= dealt;
   state.lifetime.bossDamage += dealt;
   recap.bossDamage += dealt;
@@ -571,7 +574,7 @@ export function serialize(state: GameState): string {
 /** Counters older saves stored twice; the kept copy is `killIndex` / `victories`. */
 interface LegacyCounters {
   lifetime?: { kills?: number; ascensions?: number };
-  collection?: { bossTrophies?: number };
+  collection?: { bossTrophies?: number; speciesKills?: (number | null)[] };
 }
 
 /** Parse a state produced by `serialize`. */
@@ -579,9 +582,12 @@ export function deserialize(json: string): GameState {
   const state = JSON.parse(json) as GameState;
   const legacy = state as LegacyCounters;
   // A save older than the whole collection block must survive to the app's
-  // backfill; throwing here discards the run instead.
-  if (state.collection) state.collection.speciesKills ??= [];
-  if (legacy.collection) delete legacy.collection.bossTrophies;
+  // backfill; throwing here discards the run instead. A sparse tally's JSON
+  // holes read back as null.
+  if (legacy.collection) {
+    delete legacy.collection.bossTrophies;
+    state.collection.speciesKills = (legacy.collection.speciesKills ?? []).map((n) => n ?? 0);
+  }
   if (legacy.lifetime) {
     const ascensions = legacy.lifetime.ascensions ?? 0;
     if (state.ascendancy === undefined) {

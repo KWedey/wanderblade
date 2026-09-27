@@ -83,6 +83,32 @@ describe('a zone is monsters, not one monster repeated', () => {
     expect(halves.gold).toBe(whole.gold);
   });
 
+  it('keeps the tally dense from the first kill, so its JSON carries no null', () => {
+    const s = initialState(7);
+    advance(s, 0.5);
+    expect(s.killIndex).toBe(1);
+    expect(speciesIndex(1)).toBeGreaterThan(0); // the first kill is not species 0
+    expect(s.collection.speciesKills).toEqual([0, 0, 0, 1]);
+    expect(JSON.stringify(s.collection.speciesKills)).not.toContain('null');
+    expect(serialize(clone(s))).toBe(serialize(s));
+
+    // The padding is part of the state, so a split has to lay it down identically.
+    const halves = initialState(7);
+    advance(halves, 0.2);
+    advance(halves, 0.3);
+    expect(serialize(halves)).toBe(serialize(s));
+  });
+
+  it('reads the holes an older engine left in the tally as zero kills', () => {
+    const s = initialState(7);
+    advance(s, 0.5);
+    const old = JSON.parse(serialize(s)) as { collection: { speciesKills: (number | null)[] } };
+    old.collection.speciesKills = [null, null, null, 1];
+
+    const loaded = deserialize(JSON.stringify(old));
+    expect(loaded.collection.speciesKills).toEqual([0, 0, 0, 1]);
+  });
+
   it('loads a save written before the Bestiary existed, rather than discarding it', () => {
     const s = roadAt(4, 10, 0.3);
     advance(s, 120);

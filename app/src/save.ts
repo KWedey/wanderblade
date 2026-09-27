@@ -80,7 +80,12 @@ function isValidGearItem(v: unknown): boolean {
   if (v === null) return true;
   if (typeof v !== 'object') return false;
   const item = v as Record<string, unknown>;
-  return isFiniteNumber(item.power) && typeof item.rarity === 'string' && isFiniteNumber(item.zone);
+  return (
+    isFiniteNumber(item.power) &&
+    typeof item.rarity === 'string' &&
+    isFiniteNumber(item.realm) &&
+    isFiniteNumber(item.zone)
+  );
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -111,7 +116,14 @@ function backfill(v: unknown): void {
   fill(v, 'gear', {});
 
   if (isObject(v.hero)) fill(v.hero, 'skills', {});
-  if (isObject(v.gear)) for (const slot of GEAR_SLOTS) fill(v.gear, slot, null);
+  if (isObject(v.gear)) {
+    for (const slot of GEAR_SLOTS) {
+      fill(v.gear, slot, null);
+      // Ascension wipes gear, so anything worn was found in the realm the save is in.
+      const item = v.gear[slot];
+      if (isObject(item)) fill(item, 'realm', isFiniteNumber(v.realm) ? v.realm : 0);
+    }
+  }
   if (isObject(v.ascendancy)) {
     for (const key of ['pending', 'banked', 'victories']) fill(v.ascendancy, key, 0);
     fill(v.ascendancy, 'nodes', {});

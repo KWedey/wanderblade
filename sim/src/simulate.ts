@@ -156,7 +156,6 @@ interface Watched {
   pending: number;
   leagues: number;
   zone: number;
-  kills: number;
   gearFound: number;
   zonesCleared: number;
   killIndex: number;
@@ -171,7 +170,6 @@ function watched(s: GameState): Watched {
     pending: s.ascendancy.pending,
     leagues: s.leagues,
     zone: s.zone,
-    kills: s.killIndex,
     gearFound: s.collection.gearFound,
     zonesCleared: s.collection.zonesCleared,
     killIndex: s.killIndex,
@@ -217,7 +215,6 @@ class ContractWatch {
         ['pendingAscendancy', now.pending - this.prev.pending],
         ['leagues', now.leagues - this.prev.leagues],
         ['zone', now.zone - this.prev.zone],
-        ['kills', now.kills - this.prev.kills],
         ['gearFound', now.gearFound - this.prev.gearFound],
         ['zonesCleared', now.zonesCleared - this.prev.zonesCleared],
         ['killIndex', now.killIndex - this.prev.killIndex],

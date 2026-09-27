@@ -666,6 +666,12 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   });
   window.addEventListener('pointerup', stopHold);
   window.addEventListener('pointercancel', stopHold);
+  // The release never arrives once focus is gone, and a hold that outlives the
+  // tab is idle play at the active rate.
+  window.addEventListener('blur', stopHold);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopHold();
+  });
 
   window.addEventListener('keydown', (event) => {
     if (event.key !== ' ' && event.key !== 'Enter') return;
