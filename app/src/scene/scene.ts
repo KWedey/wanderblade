@@ -3,7 +3,6 @@
 // controller (DECISIONS.md #12). It renders into a small offscreen buffer and
 // upscales with smoothing off, which is what keeps the pixels square everywhere.
 
-import type { ArcPoint } from '@wanderblade/core';
 import { GUARDIAN_BODY, rosterAt } from '../species';
 import { drawArcs, drawHero, drawHeroGround, drawMonsters } from './actors';
 import { drawDungeonBackdrop, drawDungeonFloor } from './dungeon';
@@ -46,9 +45,10 @@ import {
 } from './pixels';
 import { buildGroundTexture, drawForeground, drawMotes, drawRoadBackdrop, drawRoadGround } from './road';
 import { bakeSprite, context } from './sprites';
-import { catchArc, createWorld, step, strike } from './world';
+import { catchArc, createWorld, step, strike, type StrikeResult } from './world';
 
 export type { SceneModel } from './frame';
+export type { StrikeResult } from './world';
 
 /**
  * Where a Strike landed, in the engine's arc space: hero at the origin, x
@@ -61,9 +61,10 @@ export interface Scene {
   /**
    * Register a Strike and report where it landed in core's arc space, or null
    * when it had no position (keyboard, or a tap that could not be located). A
-   * positionless Strike still swings and still builds momentum.
+   * positionless Strike still swings and still builds momentum. `missed` says
+   * it hit neither a creature nor a coin.
    */
-  strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null;
+  strikeAt(clientX: number | null, clientY: number | null): StrikeResult;
   /** Play the catch flourish for an `arcCatch` the engine resolved. */
   catchArc(bonusGold: number, upgraded: boolean): void;
   /** CSS pixels of chrome above the world band. */
@@ -198,7 +199,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   window.addEventListener('resize', onResize);
   resize();
 
-  function strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null {
+  function strikeAt(clientX: number | null, clientY: number | null): StrikeResult {
     const at = clientX === null || clientY === null ? null : toScene(clientX, clientY);
     return strike(world, f, at);
   }

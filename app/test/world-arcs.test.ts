@@ -132,8 +132,49 @@ describe('a coin that lands uncaught rests on the road and is collected by the h
 describe('an aimed strike reports where it landed in arc space', () => {
   it('maps the tap through the same conversion the coins are drawn with', () => {
     const { f } = frame({ view });
-    const aim = strike(f.world, f, { x: 150, y: 80 })!;
+    const { aim } = strike(f.world, f, { x: 150, y: 80 });
     expect(aim).toEqual(toArcSpace(view, 150, 80));
     expect(f.world.lastAim).toEqual({ x: 150, y: 80 });
+  });
+});
+
+describe('a strike that hits nothing is a miss the player can see', () => {
+  it('reports a miss and throws a slash spark at the tap when no creature is in reach and no coin is under it', () => {
+    const { f } = frame({ view });
+    f.world.queue.push({ sprite: 0, x: view.worldRightX + 30, flash: 0, recoil: 0, bob: 0, spread: 0 });
+    const r = strike(f.world, f, { x: 40, y: 20 });
+    expect(r.missed).toBe(true);
+    expect(f.world.particles.length).toBeGreaterThan(0);
+    const spark = f.world.particles[0]!;
+    expect(Math.abs(spark.x - 40)).toBeLessThan(12);
+    expect(Math.abs(spark.y - 20)).toBeLessThan(8);
+  });
+
+  it('is not a miss when the engaged creature is under the blade', () => {
+    const { f } = frame({ view, model: { kills: 3 } });
+    step(f.world, f, 1 / 60);
+    f.model.killProgress = 0.9;
+    step(f.world, f, 1 / 60);
+    expect(strike(f.world, f, { x: 40, y: 20 }).missed).toBe(false);
+  });
+
+  it('is not a miss when the tap sits on a drawn coin, even with no creature in reach', () => {
+    const arcs = [arc(3, 10)];
+    const { f } = frame({ view, model: { arcs, timeSec: 10.7 } });
+    const [p] = arcScreenPoints(f);
+    expect(strike(f.world, f, { x: p!.x, y: p!.y }).missed).toBe(false);
+  });
+
+  it('lets an unaimed strike auto-aim at the nearest coin and not miss', () => {
+    const arcs = [arc(3, 10)];
+    const { f } = frame({ view, model: { arcs, timeSec: 10.7 } });
+    const r = strike(f.world, f, null);
+    expect(r.aim).not.toBeNull();
+    expect(r.missed).toBe(false);
+  });
+
+  it('calls an unaimed strike at an empty road a miss', () => {
+    const { f } = frame({ view });
+    expect(strike(f.world, f, null).missed).toBe(true);
   });
 });

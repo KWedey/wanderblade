@@ -147,7 +147,7 @@ export interface ViewModel {
 
 export interface ViewHandlers {
   /** One Strike (docs/ACTIVE-PLAY.md). Core resolves it against the loot arcs. */
-  onStrike: (aim: ArcPoint | null) => void;
+  onStrike: (aim: ArcPoint | null, missed: boolean) => void;
   onBuyLevel: () => void;
   onBuySkill: (id: string) => void;
   onEnterPortal: () => void;
@@ -616,6 +616,11 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   // auto-strikes at the cap-sustaining rate so momentum never demands mashing.
   const strikeHintEl = q(root, '[data-role="strike-hint"]');
   let hintDismissed = false;
+  // Counted on the canvas so a browser probe can see a whiff and a catch happen.
+  let misses = 0;
+  let catches = 0;
+  sceneCanvas.dataset['misses'] = '0';
+  sceneCanvas.dataset['catches'] = '0';
   let holdTimer: number | null = null;
   const heldAim = createHeldAim();
 
@@ -632,7 +637,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
       hintDismissed = true;
       strikeHintEl.classList.add('gone');
     }
-    handlers.onStrike(scene.strikeAt(clientX, clientY));
+    const result = scene.strikeAt(clientX, clientY);
+    if (result.missed) sceneCanvas.dataset['misses'] = String(++misses);
+    handlers.onStrike(result.aim, result.missed);
   }
 
   function startHold(clientX: number | null, clientY: number | null): void {
@@ -968,6 +975,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   let dressedRegion = -1;
 
   function catchArc(bonusGold: number, upgraded: boolean): void {
+    sceneCanvas.dataset['catches'] = String(++catches);
     scene.catchArc(bonusGold, upgraded);
   }
 

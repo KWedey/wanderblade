@@ -11,7 +11,7 @@ import { createView, type View, type ViewHandlers, type ViewModel } from '../src
 vi.mock('../src/scene/scene', () => ({
   createScene: () => ({
     frame: () => {},
-    strikeAt: () => null,
+    strikeAt: () => ({ aim: null, missed: false }),
     catchArc: () => {},
     setSceneTop: () => {},
     setSceneRight: () => {},

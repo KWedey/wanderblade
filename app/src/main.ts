@@ -13,7 +13,7 @@ if (!root) throw new Error('main: #app mount point missing');
 let game: Game;
 
 const handlers: ViewHandlers = {
-  onStrike: (outcome) => game.strike(outcome),
+  onStrike: (aim, missed) => game.strike(aim, missed),
   onBuyLevel: () => game.buyLevel(),
   onBuySkill: (id) => game.buySkill(id),
   onEnterPortal: () => game.enterPortal(),

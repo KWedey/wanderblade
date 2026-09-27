@@ -2,7 +2,7 @@
 // swing, particles, floaters, landed coins and the scroll of every parallax
 // band. Pure state and its step; nothing here touches a canvas.
 
-import { arcPositionAt, type ArcPoint, type LootArc } from '@wanderblade/core';
+import { arcHitIndex, arcPositionAt, type ArcPoint, type LootArc } from '@wanderblade/core';
 import { rosterAt, speciesIndexAt } from '../species';
 import {
   BLADE_REACH,
@@ -60,6 +60,7 @@ const TEXT_DAMAGE = '#ffffff';
 const SPARK_COLORS = ['#9badb7', '#696a6a', '#847e87'];
 /** Sparks at the gold readout when a streak lands. */
 const COLLECT_SPARKS = [LOOT_GLOW, '#ffffff'];
+const MISS_SPARKS = 5;
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
 export const STREAK_SEC = 0.5;
@@ -401,14 +402,15 @@ function killMonster(w: World, input: WorldInput): void {
   }
 }
 
-function swing(w: World, input: WorldInput, fromStrike: boolean): void {
+/** Swing the blade. Returns whether a creature was in reach to take the hit. */
+function swing(w: World, input: WorldInput, fromStrike: boolean): boolean {
   const { model, view } = input;
   // At a maxed speed node and full momentum the cadence outruns a fixed
   // 0.32s animation, and overlapping swings read as a blur rather than as
   // faster hits. The stroke shortens to fit its own interval instead.
   w.swingAnim = Math.min(SWING_ANIM_SEC, swingInterval(model.attackSpeedMult) * 0.9);
   const lead = w.queue[0];
-  if (!lead || lead.x - engageInset(w, input) > view.heroX + BLADE_REACH + 16) return;
+  if (!lead || lead.x - engageInset(w, input) > view.heroX + BLADE_REACH + 16) return false;
 
   const leadSprite = input.sprites.skinned.monsters[lead.sprite];
   // Contact and damage-number placement have to land on the scaled silhouette, not the sprite's raw box.
@@ -425,14 +427,14 @@ function swing(w: World, input: WorldInput, fromStrike: boolean): void {
 
   // Only the player's own strikes get a number: auto-swings land several a
   // second and numbering them buries the one hit the player caused.
-  if (!fromStrike) return;
+  if (!fromStrike) return true;
   // A fast tapper out-runs the floater's lifetime and the numbers pile into
   // an illegible column; the flash and sparks already confirm every hit.
-  if (w.damageTextCooldown > 0) return;
+  if (w.damageTextCooldown > 0) return true;
   w.damageTextCooldown = DAMAGE_TEXT_INTERVAL_SEC;
   // Honest: real DPS across the interval this swing represents.
   const damage = damagePerSwing(model.dps, model.attackSpeedMult);
-  if (damage < 0.05) return;
+  if (damage < 0.05) return true;
   // Above the monster's head, not beside its ribs: the blade sweeps through
   // contact height and a number there is inside the arc.
   payout(w, input, {
@@ -445,6 +447,29 @@ function swing(w: World, input: WorldInput, fromStrike: boolean): void {
     tier: 'damage',
     owned: true,
   });
+  return true;
+}
+
+/**
+ * A whiff: a short steel slash at the tap point, cut diagonally so it cannot
+ * be read as the round burst a hit makes. Kept out of the hero's pocket.
+ */
+function missAt(w: World, input: WorldInput, x: number, y: number): void {
+  const at = nudgeFromPocket(pocket(input), x, y);
+  for (let i = 0; i < MISS_SPARKS; i++) {
+    const along = i / (MISS_SPARKS - 1) - 0.5;
+    addParticle(w, {
+      x: at.x + along * 10,
+      y: at.y - along * 6,
+      vx: 70 + along * 40,
+      vy: -30 - along * 30,
+      age: 0,
+      life: 0.14 + hash01(i * 2.3 + w.clockSec) * 0.08,
+      size: 1,
+      color: SPARK_COLORS[i % SPARK_COLORS.length]!,
+      gravity: 0.2,
+    });
+  }
 }
 
 /** Scene x the engaged creature is killed at: arcs launch here and the road ahead runs right of it. */
@@ -496,21 +521,36 @@ function autoAim(input: WorldInput): ArcPoint | null {
   return best ? toArcSpace(view, best.x, best.y) : null;
 }
 
-/** A Strike at scene point `at`, or unaimed when null. Returns where it landed in arc space. */
-export function strike(w: World, input: WorldInput, at: { x: number; y: number } | null): ArcPoint | null {
-  const { view } = input;
+export interface StrikeResult {
+  /** Where the strike landed in core's arc space, or null when it had no position. */
+  aim: ArcPoint | null;
+  /** No creature in reach and, by core's own hit test, no coin under the aim. */
+  missed: boolean;
+}
+
+/**
+ * A Strike at scene point `at`, or unaimed when null. The engine decides the
+ * catch on its next tick; the whiff is read now off the same hit test, on the
+ * arcs as drawn, because a miss that answers a tenth of a second late reads
+ * as no answer at all.
+ */
+export function strike(w: World, input: WorldInput, at: { x: number; y: number } | null): StrikeResult {
+  const { model, view } = input;
   // Restart the auto-attack cadence rather than zeroing it — zero would go
   // negative on the very next step() and fire an immediate duplicate swing.
   w.swingCooldown = 1 / SWINGS_PER_SEC;
-  swing(w, input, true);
+  const connected = swing(w, input, true);
 
-  if (!at) {
-    const aim = autoAim(input);
-    if (aim) w.lastAim = fromArcSpace(view, aim.x, aim.y);
-    return aim;
+  const aim = at ? toArcSpace(view, at.x, at.y) : autoAim(input);
+  const point = at ?? (aim ? fromArcSpace(view, aim.x, aim.y) : null);
+  w.lastAim = point;
+  const caught = aim !== null && arcHitIndex(model.arcs, aim, model.timeSec) >= 0;
+  const missed = !connected && !caught;
+  if (missed) {
+    const spark = point ?? { x: view.heroX + BLADE_REACH, y: view.groundY - 14 };
+    missAt(w, input, spark.x, spark.y);
   }
-  w.lastAim = at;
-  return toArcSpace(view, at.x, at.y);
+  return { aim, missed };
 }
 
 /**
