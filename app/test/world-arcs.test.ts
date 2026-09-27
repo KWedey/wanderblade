@@ -108,6 +108,30 @@ describe('a coin that lands uncaught rests on the road and is collected by the h
     expect(f.world.catchesToAbsorb).toBe(0);
   });
 
+  it('rests the coin that landed when a younger one was caught in the same tick', () => {
+    const older = arc(3, 10);
+    const younger = arc(4, 10.3);
+    const { f } = frame({ view, model: { arcs: [older, younger], timeSec: 10.5, kills: 2 } });
+    step(f.world, f, 1 / 60);
+    f.world.catchesToAbsorb = 1;
+    f.model = { ...f.model, arcs: [], timeSec: 10 + ARC_FLIGHT_SEC + 0.05 };
+    step(f.world, f, 1 / 60);
+    expect(f.world.rests).toHaveLength(1);
+    const at = fromArcSpace(view, arcLandingX(3), 0);
+    expect(Math.abs(at.x - f.world.rests[0]!.x)).toBeLessThan(1.5);
+  });
+
+  it('forgets a catch of a coin it never saw, so the next landing still rests', () => {
+    const a = arc(3, 10);
+    const { f } = frame({ view, model: { arcs: [a], timeSec: 10.5, kills: 2 } });
+    f.world.catchesToAbsorb = 1;
+    step(f.world, f, 1 / 60);
+    expect(f.world.catchesToAbsorb).toBe(0);
+    f.model = { ...f.model, arcs: [], timeSec: 10 + ARC_FLIGHT_SEC + 0.05 };
+    step(f.world, f, 1 / 60);
+    expect(f.world.rests).toHaveLength(1);
+  });
+
   it('sees a coin land when the engine prunes its list in place, as core does', () => {
     const arcs = [arc(3, 10)];
     const { f } = frame({ view, model: { arcs, timeSec: 10.5, kills: 2 } });

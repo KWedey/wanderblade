@@ -123,6 +123,8 @@ export interface Fallen {
   sprite: number;
   x: number;
   age: number;
+  /** Drawn at the size it died at; the phase may have flipped since. */
+  scale: number;
 }
 
 /** Seconds a corpse takes to go down — inside core's 0.35 s kill floor, so the next duel is never hidden behind the last. */
@@ -400,7 +402,7 @@ function killMonster(w: World, input: WorldInput): void {
   w.shake = Math.min(MAX_SHAKE, w.shake + 2.1);
 
   const dead = w.queue.shift();
-  if (dead) w.fallen.push({ sprite: dead.sprite, x, age: 0 });
+  if (dead) w.fallen.push({ sprite: dead.sprite, x, age: 0, scale: leadScale(input.model) });
   // The kill's own gold, rising off the corpse. The coins carry the catch
   // bonus; this is the base pay the log line names, so the two agree.
   if (input.model.goldPerKill > 0) {
@@ -567,8 +569,7 @@ function tapOnFight(w: World, input: WorldInput, at: { x: number; y: number }): 
  * A Strike at scene point `at`, or unaimed when null. An aimed strike lands
  * where it was aimed: on the creature, on a coin, or on nothing. The engine
  * decides the catch on its next tick; the whiff is read now off the same hit
- * test, on the arcs as drawn, because a miss that answers a tenth of a second
- * late reads as no answer at all.
+ * test on the arcs as drawn, because a miss that answers late is no answer.
  */
 export function strike(w: World, input: WorldInput, at: { x: number; y: number } | null): StrikeResult {
   const { model, view } = input;
@@ -643,6 +644,11 @@ function advanceScroll(w: World, input: WorldInput, speed: number, dtSec: number
   w.scrollBirds = wrap(w.scrollBirds + (speed * 0.12 + 9) * dtSec, vw * 3);
 }
 
+/** The hero picks a landed coin up: it leaves the road and streaks to the counter. */
+function collectRest(w: World, r: Rest): void {
+  w.streaks.push({ x0: r.x, y0: r.y, age: 0, gold: r.gold, spin: r.spin });
+}
+
 /**
  * Coins that left the engine's list since last frame. A catch was announced
  * through catchArc and is absorbed; anything else landed, and sits on the road
@@ -651,8 +657,11 @@ function advanceScroll(w: World, input: WorldInput, speed: number, dtSec: number
 function settleArcs(w: World, input: WorldInput): void {
   const { model, view } = input;
   const live = new Set(model.arcs);
-  for (const arc of w.seenArcs) {
-    if (live.has(arc)) continue;
+  const gone = w.seenArcs.filter((arc) => !live.has(arc));
+  // Latest expiry first: a caught coin left before it landed, so it takes the
+  // absorb before an older coin that landed in the same tick can.
+  gone.sort((a, b) => b.expiresAtSec - a.expiresAtSec);
+  for (const arc of gone) {
     if (w.catchesToAbsorb > 0) {
       w.catchesToAbsorb--;
       continue;
@@ -660,12 +669,11 @@ function settleArcs(w: World, input: WorldInput): void {
     const since = model.timeSec - arc.expiresAtSec;
     if (since < 0 || since > LANDED_WINDOW_SEC) continue;
     const at = fromArcSpace(view, arc.landingX, 0);
-    if (w.rests.length >= REST_CAP) {
-      const oldest = w.rests.shift()!;
-      w.streaks.push({ x0: oldest.x, y0: oldest.y, age: 0, gold: oldest.gold, spin: oldest.spin });
-    }
+    if (w.rests.length >= REST_CAP) collectRest(w, w.rests.shift()!);
     w.rests.push({ x: at.x, y: at.y, age: 0, gold: arc.gear === null, spin: arc.expiresAtSec * 9 });
   }
+  // A catch of a coin this list never held has nothing to absorb; carried, it would eat the next landing.
+  w.catchesToAbsorb = 0;
   // A copy: the engine prunes its list in place, and the same array can never be seen to lose a member.
   w.seenArcs = model.arcs.slice();
 }
@@ -721,6 +729,8 @@ function fillQueue(w: World, input: WorldInput): void {
   if (model.boss) {
     if (queue.length !== 1 || queue[0]!.sprite !== bossSlot(model.region)) {
       queue.length = 0;
+      // A road corpse still going down does not follow the hero into the dungeon.
+      w.fallen.length = 0;
       queue.push({ sprite: bossSlot(model.region), x: view.worldRightX + 30, flash: 0, recoil: 0, bob: 0, spread: 0 });
       w.bossEnteredAtSec = w.clockSec;
     }
@@ -808,7 +818,7 @@ function ageEffects(w: World, heroX: number, speed: number, dtSec: number): void
     // Landed coins ride the road back to the hero, who picks them up as he walks over them.
     r.x -= speed * dtSec;
     if (r.x <= heroX || r.x < -10) {
-      streaks.push({ x0: r.x, y0: r.y, age: 0, gold: r.gold, spin: r.spin });
+      collectRest(w, r);
       rests.splice(i, 1);
     }
   }

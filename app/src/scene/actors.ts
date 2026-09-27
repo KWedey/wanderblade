@@ -117,17 +117,16 @@ export function drawHero(f: Frame): void {
  * in is never hidden behind the one that just fell.
  */
 function drawFallen(f: Frame): void {
-  const { ctx, model, view, world } = f;
+  const { ctx, view, world } = f;
   const sprites = f.sprites.skinned;
-  const scale = leadScale(model);
   for (const c of world.fallen) {
     const sprite = sprites.monsters[c.sprite] ?? sprites.monsters[0]!;
     const t = Math.min(1, c.age / DEATH_SEC);
-    const w = sprite.width * scale;
-    const h = Math.max(1, Math.round(sprite.height * scale * (1 - t)));
+    const w = sprite.width * c.scale;
+    const h = Math.max(1, Math.round(sprite.height * c.scale * (1 - t)));
     const px = Math.floor(c.x - w / 2);
     const py = view.groundY - h;
-    drawShadow(f, c.x, (sprite.width - 2) * scale, ACTOR_SHADOW);
+    drawShadow(f, c.x, (sprite.width - 2) * c.scale, ACTOR_SHADOW);
     ctx.drawImage(sprite.image, px, py, w, h);
     ctx.globalAlpha = 0.55 * (1 - t);
     ctx.drawImage(sprite.flash, px, py, w, h);

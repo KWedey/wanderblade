@@ -2,8 +2,8 @@
 
 exports[`scene frames are pixel-identical across refactors > dungeon: the guardian walks out of its portal and is struck (landscape) 1`] = `
 {
-  "calls": 185355,
-  "sha256": "45a01be3d81cd2c90e42018296c4e751b18e64561b4744cc6bcf466ba476077d",
+  "calls": 185307,
+  "sha256": "0cba71e5ab35a8206e06d6330af9c3de105271ae5af8b9c8e7ef81ac941c935a",
 }
 `;
 

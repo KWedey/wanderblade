@@ -121,10 +121,10 @@ export function hash01(n: number): number {
  * stride is the one thing on screen that says a combo is running. Display
  * only; it feeds no distance (DECISIONS.md #12).
  */
+const STRIDE_STEEPEN = 2.2;
 export function strideGain(momentumMult: number): number {
   return 1 + Math.max(0, momentumMult - 1) * STRIDE_STEEPEN;
 }
-const STRIDE_STEEPEN = 2.2;
 
 /** Seconds one animated swing stands for, at `attackSpeedMult`. */
 export function swingInterval(attackSpeedMult: number): number {

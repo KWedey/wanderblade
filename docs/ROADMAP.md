@@ -91,10 +91,10 @@ The former Phase 3–5 sequence is superseded. The scene renderer remains useful
 
 Verdict on 2026-09-27: the game is not fun. Nothing on screen changes between zone 1 and zone 49, a tap is imperceptible, every upgrade is affordable after 90 s, and the first ascension is hours away. This milestone fixes feel and pacing before any more content. Plan: `docs/superpowers/plans/2026-09-27-feel-milestone.md`.
 
-- [ ] Scene reads the zone index; each zone advance is visible (signpost, backdrop shift, banner)
-- [ ] Monsters die on screen; coins launch from the kill, fly above the monster, land ahead and are collected
-- [ ] A miss is seen and heard; momentum is legible at a glance; kill payout is shown
-- [ ] Pending Ascendancy on the Road HUD
+- [x] Scene reads the zone index; each zone advance is visible (signpost, backdrop shift, banner)
+- [x] Monsters die on screen; coins launch from the kill, fly above the monster, land ahead and are collected
+- [x] A miss is seen and heard; momentum is legible at a glance; kill payout is shown
+- [x] Pending Ascendancy on the Road HUD
 - [ ] Realm 0 portal-ready in 12–20 min active, guardian 3–6 min; realm length and boss band grow per realm
 - [ ] Upgrade scarcity: ≤ 2 affordable rows most of the time, never starved; P5/P6/P8 re-banded per realm, full sim quoted
 - [ ] Real-phone playtest recorded in `docs/PLAYTESTS.md`: first session reaches ascension

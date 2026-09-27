@@ -1,10 +1,7 @@
 // Does a tap that hits nothing say so, and can a tap on the road still catch?
-//
-// ADR #63: a strike that misses must be seen and heard. The unit tests pin the
-// rule in world.ts; only a browser can prove the page routes a pointer tap
-// through it. The scene canvas counts misses and catches in data attributes,
-// and publishes where coins land, so this probe taps sky and then taps the
-// landing span and reads both counters back.
+// The unit tests pin the rule in world.ts; only a browser proves the page routes
+// a pointer tap through it. The canvas counts misses and catches in data
+// attributes and publishes where coins land; this taps sky, then the landing span.
 
 import { ProbeFailure, withBrowser } from './playwright.mjs';
 import { DEFAULT_PORT, requireServer, resolvePort } from './port.mjs';
@@ -32,6 +29,10 @@ const port = resolvePort(argv);
 const stage = flag('stage', 'mid');
 const seed = flag('seed', '7');
 const taps = Number(flag('taps', '40'));
+if (!Number.isInteger(taps) || taps < 1) {
+  console.error(`--taps must be a whole number of at least 1, got ${flag('taps', '40')}`);
+  process.exit(2);
+}
 await requireServer(port);
 
 let report;

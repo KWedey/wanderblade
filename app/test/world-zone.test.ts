@@ -121,9 +121,20 @@ describe('a creature dies on screen instead of being swapped out', () => {
     expect(DEATH_SEC).toBeLessThanOrEqual(0.15);
   });
 
+  it('keeps the size it died at once the scene is in the dungeon, and no road corpse follows the hero in', () => {
+    const { f } = road(3);
+    step(f.world, f, 1 / 60);
+    f.model.kills = 4;
+    step(f.world, f, 1 / 60);
+    expect(f.world.fallen[0]!.scale).toBe(1);
+    f.model.boss = true;
+    step(f.world, f, 1 / 60);
+    expect(f.world.fallen).toEqual([]);
+  });
+
   it('flattens the corpse toward the ground line as it ages', () => {
     const { f, calls } = road(3);
-    f.world.fallen.push({ sprite: 0, x: 120, age: DEATH_SEC * 0.5 });
+    f.world.fallen.push({ sprite: 0, x: 120, age: DEATH_SEC * 0.5, scale: 1 });
     drawMonsters(f);
     const blits = calls.filter((c) => c.op === 'drawImage');
     expect(blits.length).toBeGreaterThan(0);
