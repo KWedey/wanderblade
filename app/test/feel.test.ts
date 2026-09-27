@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createFeel, detuneFor, type Cue } from '../src/feel';
 
-const CUES: Cue[] = ['strike', 'kill', 'catch', 'buy', 'victory'];
+const CUES: Cue[] = ['strike', 'miss', 'kill', 'catch', 'buy', 'victory'];
 
 describe('createFeel without an AudioContext', () => {
   it('is silent rather than throwing when the platform has none', () => {
@@ -62,6 +62,10 @@ describe('hit-stop ranks the beats', () => {
 
   it('does not stop the scene for a purchase, which is not an impact', () => {
     expect(feel.hitStopSec('buy')).toBe(0);
+  });
+
+  it('does not stop the scene for a whiff: nothing was hit', () => {
+    expect(feel.hitStopSec('miss')).toBe(0);
   });
 });
 

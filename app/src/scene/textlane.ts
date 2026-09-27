@@ -18,8 +18,6 @@ export const LANE_STEP = FLOATER_GLYPH_H + FLOATER_RISE + 1;
 export const LANE_COUNT = 3;
 /** Lane 0 sits this far above the ground line, clear of the tallest monster. */
 export const LANE_BASE_OFFSET = 30;
-/** The combo widget owns the top lane over the hero's column. */
-export const COMBO_LANE = LANE_COUNT - 1;
 
 /** Baseline y of a lane, measured down from the scene's ground line. */
 export function laneBaseline(lane: number, groundY: number): number {

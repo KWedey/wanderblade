@@ -15,7 +15,7 @@ const RETRIGGER_SEC = 0.035;
  */
 const DETUNE_SEMITONES = 2.5;
 
-export type Cue = 'strike' | 'kill' | 'catch' | 'buy' | 'victory';
+export type Cue = 'strike' | 'miss' | 'kill' | 'catch' | 'buy' | 'victory';
 
 export interface FeelOptions {
   muted?: boolean;
@@ -39,6 +39,8 @@ interface Voice {
 const VOICES: Record<Cue, Voice> = {
   // A short, low, noisy thud — the blade landing, not a beep.
   strike: { from: 320, to: 90, decay: 0.11, type: 'square', gain: 0.5, noise: 0.7, buzz: 8 },
+  // Air, not contact: a rising breath of noise with no low body and no buzz, so a whiff cannot be mistaken for a hit.
+  miss: { from: 700, to: 1400, decay: 0.09, type: 'sine', gain: 0.22, noise: 1.2, buzz: 0 },
   kill: { from: 180, to: 45, decay: 0.22, type: 'sawtooth', gain: 0.8, noise: 0.5, buzz: 18 },
   // Coin chime: high, clean, no noise, so it cuts through a run of thuds.
   catch: { from: 1180, to: 1760, decay: 0.16, type: 'triangle', gain: 0.5, noise: 0, buzz: 12 },
@@ -58,6 +60,7 @@ export interface Feel {
 /** Hit-stop per cue. A kill stops longer than a swing, which reads as heavier. */
 const HIT_STOP: Record<Cue, number> = {
   strike: 0.035,
+  miss: 0,
   kill: 0.075,
   catch: 0.02,
   buy: 0,

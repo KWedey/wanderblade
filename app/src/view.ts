@@ -147,7 +147,7 @@ export interface ViewModel {
 
 export interface ViewHandlers {
   /** One Strike (docs/ACTIVE-PLAY.md). Core resolves it against the loot arcs. */
-  onStrike: (aim: ArcPoint | null) => void;
+  onStrike: (aim: ArcPoint | null, missed: boolean) => void;
   onBuyLevel: () => void;
   onBuySkill: (id: string) => void;
   onEnterPortal: () => void;
@@ -575,6 +575,12 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   function syncCollectAnchor(): void {
     const r = hudGoldEl.getBoundingClientRect();
     scene.setCollectAnchor(r.left + r.width / 2, r.top + r.height / 2);
+    const d = dpsEl.getBoundingClientRect();
+    scene.setComboAnchor(d.right, d.bottom);
+    // Landmarks for the browser probes, in client pixels: where a tap hits a coin and where it hits sky.
+    const { killPoint, landing } = scene.probeAnchors();
+    sceneCanvas.dataset['killPoint'] = `${Math.round(killPoint.x)},${Math.round(killPoint.y)}`;
+    sceneCanvas.dataset['landing'] = `${Math.round(landing.x0)},${Math.round(landing.x1)},${Math.round(landing.y)}`;
   }
   /**
    * The view owns layout, so it is the view that tells the scene how much
@@ -616,6 +622,11 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   // auto-strikes at the cap-sustaining rate so momentum never demands mashing.
   const strikeHintEl = q(root, '[data-role="strike-hint"]');
   let hintDismissed = false;
+  // Counted on the canvas so a browser probe can see a whiff and a catch happen.
+  let misses = 0;
+  let catches = 0;
+  sceneCanvas.dataset['misses'] = '0';
+  sceneCanvas.dataset['catches'] = '0';
   let holdTimer: number | null = null;
   const heldAim = createHeldAim();
 
@@ -632,7 +643,9 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
       hintDismissed = true;
       strikeHintEl.classList.add('gone');
     }
-    handlers.onStrike(scene.strikeAt(clientX, clientY));
+    const result = scene.strikeAt(clientX, clientY);
+    if (result.missed) sceneCanvas.dataset['misses'] = String(++misses);
+    handlers.onStrike(result.aim, result.missed);
   }
 
   function startHold(clientX: number | null, clientY: number | null): void {
@@ -974,6 +987,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   let dressedRegion = -1;
 
   function catchArc(bonusGold: number, upgraded: boolean): void {
+    sceneCanvas.dataset['catches'] = String(++catches);
     scene.catchArc(bonusGold, upgraded);
   }
 
@@ -997,7 +1011,12 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   function renderAscendancy(asc: AscendancyVM): void {
     // Real text, not a ::after. The bitmap layer reads textContent, so a
     // pseudo-element's mark stayed webfont and printed over the number.
-    setText(ascOpenBank, `${formatNumber(asc.banked)} A`);
+    // Pending rides the button too: a run that has earned 3 A and shows 0 A
+    // for two hours reads as a realm that pays nothing.
+    setText(
+      ascOpenBank,
+      asc.pending > 0 ? `${formatNumber(asc.banked)} A \u00b7 +${formatNumber(asc.pending)}` : `${formatNumber(asc.banked)} A`,
+    );
     setText(ascBanked, formatNumber(asc.banked));
     setText(ascPending, formatNumber(asc.pending));
     setText(ascVictories, formatNumber(asc.victories));

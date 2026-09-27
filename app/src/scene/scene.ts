@@ -3,24 +3,27 @@
 // controller (DECISIONS.md #12). It renders into a small offscreen buffer and
 // upscales with smoothing off, which is what keeps the pixels square everywhere.
 
-import type { ArcPoint } from '@wanderblade/core';
 import { GUARDIAN_BODY, rosterAt } from '../species';
 import { drawArcs, drawHero, drawHeroGround, drawMonsters } from './actors';
 import { drawDungeonBackdrop, drawDungeonFloor } from './dungeon';
 import { type Frame, type SceneModel, type SceneSprites, type SkinnedSprites } from './frame';
 import { shakeOffset } from './fx';
-import { createViewport, layoutViewport, toScene as toSceneAt, type Chrome } from './geometry';
+import { ARC_MAX_REACH, ARC_MIN_REACH } from '@wanderblade/core';
+import { createViewport, layoutViewport, toClient, toScene as toSceneAt, type Chrome } from './geometry';
 import { drawFloaters, drawMomentumMeter, drawParticles, drawRests, drawStreaks } from './overlay';
 import {
   HERO_INK,
   LOOT_INK,
   REALM_SKIN_COUNT,
   backdropSkin,
+  dayFraction,
   depthHaze,
   foregroundInk,
   monsterInk,
   realmSkin,
   sceneryInk,
+  zoneSkin,
+  type RealmSkin,
 } from './palette';
 import {
   BIRD_DOWN,
@@ -43,9 +46,10 @@ import {
 } from './pixels';
 import { buildGroundTexture, drawForeground, drawMotes, drawRoadBackdrop, drawRoadGround } from './road';
 import { bakeSprite, context } from './sprites';
-import { catchArc, createWorld, step, strike } from './world';
+import { catchArc, createWorld, fromArcSpace, killPointX, step, strike, type StrikeResult } from './world';
 
 export type { SceneModel } from './frame';
+export type { StrikeResult } from './world';
 
 /**
  * Where a Strike landed, in the engine's arc space: hero at the origin, x
@@ -58,9 +62,10 @@ export interface Scene {
   /**
    * Register a Strike and report where it landed in core's arc space, or null
    * when it had no position (keyboard, or a tap that could not be located). A
-   * positionless Strike still swings and still builds momentum.
+   * positionless Strike still swings and still builds momentum. `missed` says
+   * it hit neither a creature nor a coin.
    */
-  strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null;
+  strikeAt(clientX: number | null, clientY: number | null): StrikeResult;
   /** Play the catch flourish for an `arcCatch` the engine resolved. */
   catchArc(bonusGold: number, upgraded: boolean): void;
   /** CSS pixels of chrome above the world band. */
@@ -69,7 +74,16 @@ export interface Scene {
   setSceneRight(cssPx: number): void;
   /** Viewport point loot streaks fly to — the HUD's gold readout. */
   setCollectAnchor(clientX: number, clientY: number): void;
+  /** Viewport point the combo widget hangs from — the DPS readout's bottom-right corner. */
+  setComboAnchor(clientX: number, clientY: number): void;
+  /** Client-pixel landmarks a browser probe aims at: the kill point, and the span coins land on. */
+  probeAnchors(): ProbeAnchors;
   dispose(): void;
+}
+
+export interface ProbeAnchors {
+  killPoint: { x: number; y: number };
+  landing: { x0: number; x1: number; y: number };
 }
 
 const NO_JOLT = { x: 0, y: 0 };
@@ -125,8 +139,11 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   const chrome: Chrome = { topCss: 0, rightCss: 0 };
   const world = createWorld();
   let collectAnchorCss: { x: number; y: number } | null = null;
+  let comboAnchorCss: { x: number; y: number } | null = null;
   const model: SceneModel = {
     region: 0,
+    zone: 0,
+    zonesInRealm: 1,
     kills: 0,
     killProgress: 0,
     goldPerKill: 0,
@@ -159,6 +176,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     displayCtx.imageSmoothingEnabled = false;
     ctx.imageSmoothingEnabled = false;
     if (collectAnchorCss) setCollectAnchor(collectAnchorCss.x, collectAnchorCss.y);
+    if (comboAnchorCss) setComboAnchor(comboAnchorCss.x, comboAnchorCss.y);
     f.ground = buildGroundTexture(view);
   }
 
@@ -170,8 +188,22 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     world.collectAnchor = { x: p.x, y: Math.max(2, p.y) };
   }
 
+  function setComboAnchor(clientX: number, clientY: number): void {
+    comboAnchorCss = { x: clientX, y: clientY };
+    world.comboAnchor = toScene(clientX, clientY);
+  }
+
   function toScene(clientX: number, clientY: number): { x: number; y: number } {
     return toSceneAt(view, canvas, clientX, clientY);
+  }
+
+  function probeAnchors(): ProbeAnchors {
+    const near = fromArcSpace(view, ARC_MIN_REACH, 0);
+    const far = fromArcSpace(view, ARC_MAX_REACH, 0);
+    const kill = toClient(view, canvas, killPointX(view), view.arcBaseY);
+    const x0 = toClient(view, canvas, near.x, near.y);
+    const x1 = toClient(view, canvas, far.x, far.y);
+    return { killPoint: kill, landing: { x0: x0.x, x1: x1.x, y: x0.y } };
   }
 
   /** The view owns layout; it tells the scene how much chrome sits above the road. */
@@ -193,7 +225,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   window.addEventListener('resize', onResize);
   resize();
 
-  function strikeAt(clientX: number | null, clientY: number | null): ArcPoint | null {
+  function strikeAt(clientX: number | null, clientY: number | null): StrikeResult {
     const at = clientX === null || clientY === null ? null : toScene(clientX, clientY);
     return strike(world, f, at);
   }
@@ -253,9 +285,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     blit();
   }
 
+  // One graded skin per zone, so the backdrop caches keyed on skin identity hold.
+  const zoneSkins = new Map<string, RealmSkin>();
+  function skinFor(next: SceneModel): RealmSkin {
+    const key = `${next.region}:${next.zone}:${next.zonesInRealm}`;
+    const hit = zoneSkins.get(key);
+    if (hit) return hit;
+    const graded = zoneSkin(realmSkin(next.region), dayFraction(next.zone, next.zonesInRealm));
+    zoneSkins.set(key, graded);
+    return graded;
+  }
+
   function frame(dtSec: number, next: SceneModel): void {
     f.model = next;
-    f.skin = realmSkin(next.region);
+    f.skin = skinFor(next);
     if (!next.paused) step(world, f, Math.min(dtSec, 0.1));
     draw();
   }
@@ -269,6 +312,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     strikeAt,
     catchArc: (bonusGold, upgraded) => catchArc(world, f, bonusGold, upgraded),
     setCollectAnchor,
+    setComboAnchor,
+    probeAnchors,
     setSceneTop,
     setSceneRight,
     dispose,

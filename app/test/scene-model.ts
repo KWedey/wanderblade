@@ -4,6 +4,8 @@ import type { SceneModel } from '../src/scene/frame';
 export function sceneModel(over: Partial<SceneModel> = {}): SceneModel {
   return {
     region: 0,
+    zone: 0,
+    zonesInRealm: 50,
     kills: 0,
     killProgress: 0,
     goldPerKill: 0,

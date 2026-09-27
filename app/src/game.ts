@@ -263,6 +263,8 @@ export class Game {
     const momentum = this.liveMomentum();
     return {
       region: this.state.realm,
+      zone: this.state.zone,
+      zonesInRealm: zonesForRealm(this.state.realm),
       kills: this.state.killIndex,
       killProgress: progress,
       goldPerKill: this.goldPerKill,
@@ -306,8 +308,8 @@ export class Game {
    * instant as the tick would be silently swallowed. Bursts inside one frame
    * share a wall clock, so each is nudged past the one before it.
    */
-  strike(aim: ArcPoint | null): void {
-    this.cue('strike');
+  strike(aim: ArcPoint | null, missed = false): void {
+    this.cue(missed ? 'miss' : 'strike');
     const floor = clockAfter(this.state.timeSec, STRIKE_EPSILON_SEC);
     const last = this.pendingStrikes[this.pendingStrikes.length - 1];
     const atSec = Math.max(

@@ -12,11 +12,13 @@ import { createView, type View, type ViewHandlers, type ViewModel } from '../src
 vi.mock('../src/scene/scene', () => ({
   createScene: () => ({
     frame: () => {},
-    strikeAt: () => null,
+    strikeAt: () => ({ aim: null, missed: false }),
     catchArc: () => {},
     setSceneTop: () => {},
     setSceneRight: () => {},
     setCollectAnchor: () => {},
+    setComboAnchor: () => {},
+    probeAnchors: () => ({ killPoint: { x: 0, y: 0 }, landing: { x0: 0, x1: 0, y: 0 } }),
     dispose: () => {},
   }),
 }));
@@ -318,5 +320,19 @@ describe('a repaint of an unchanged panel costs no layout', () => {
     const measured = new Set(styles.mock.calls.map((c) => c[0]));
     expect(measured.has(must('hero-cost'))).toBe(true);
     expect(measured.has(must('region'))).toBe(false);
+  });
+});
+
+describe('the Ascendancy button shows what this realm has earned', () => {
+  it('reads banked alone while nothing is pending', () => {
+    const { view } = mount();
+    view.renderPanels(vm({ ascendancy: { banked: 12, pending: 0, victories: 1, earningsMult: 1.1, nodes: [] } }));
+    expect(must('asc-open-bank').textContent).toBe('12 A');
+  });
+
+  it('reads banked A · +pending once the run has cleared a zone', () => {
+    const { view } = mount();
+    view.renderPanels(vm({ ascendancy: { banked: 12, pending: 3, victories: 1, earningsMult: 1.1, nodes: [] } }));
+    expect(must('asc-open-bank').textContent).toBe('12 A · +3');
   });
 });

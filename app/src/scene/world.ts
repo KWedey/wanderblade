@@ -2,10 +2,9 @@
 // swing, particles, floaters, landed coins and the scroll of every parallax
 // band. Pure state and its step; nothing here touches a canvas.
 
-import { arcPositionAt, type ArcPoint } from '@wanderblade/core';
+import { arcHitIndex, arcPositionAt, type ArcPoint, type LootArc } from '@wanderblade/core';
 import { rosterAt, speciesIndexAt } from '../species';
 import {
-  ARC_FLIGHT_SEC,
   BLADE_REACH,
   BOSS_SCALE,
   LOOT_GLOW,
@@ -16,12 +15,13 @@ import {
   damagePerSwing,
   formatShort,
   hash01,
+  strideGain,
   swingInterval,
   type Frame,
   type SceneModel,
 } from './frame';
 import {
-  arcApexHeight,
+  ARC_UNIT_PX,
   arcSpaceFromScene,
   bodyPocket,
   decayTo,
@@ -38,7 +38,7 @@ import {
   type Particle,
   type PeakState,
 } from './fx';
-import { comboSpans } from './combo';
+import { comboSpans, type ComboAnchor } from './combo';
 import type { Viewport } from './geometry';
 import { NUMERAL_FONT, textWidth } from './pixels';
 import { LANE_BASE_OFFSET, LANE_COUNT, LANE_STEP, placeRun, type LaneSpan } from './textlane';
@@ -61,6 +61,7 @@ const TEXT_DAMAGE = '#ffffff';
 const SPARK_COLORS = ['#9badb7', '#696a6a', '#847e87'];
 /** Sparks at the gold readout when a streak lands. */
 const COLLECT_SPARKS = [LOOT_GLOW, '#ffffff'];
+const MISS_SPARKS = 5;
 /** Floor on the gap between damage numbers, whatever the tap rate. */
 const DAMAGE_TEXT_INTERVAL_SEC = 0.28;
 export const STREAK_SEC = 0.5;
@@ -68,8 +69,8 @@ const PARTICLE_CAP = 220;
 const FLOATER_CAP = 12;
 /** Scene units within which a second payout joins the run already there. */
 const MERGE_RADIUS = 26;
-/** How long a landed coin sits before it streaks to the gold readout. */
-const REST_SEC = 0.55;
+/** How long the zone banner hangs in the lane. */
+const ZONE_BANNER_SEC = 1.6;
 /**
  * How far behind the engaged monster the next one in line waits. Wide enough
  * that the third one rests clear of the docked panel's edge rather than being
@@ -79,6 +80,12 @@ const REST_SEC = 0.55;
 const QUEUE_GAP = 55;
 /** Monsters visible at once: the one being fought, plus the queue behind it. */
 const QUEUE_DEPTH = 5;
+/** Half a road creature past the blade's reach: where the engaged one stands, and so where its coins fly from. */
+const KILL_INSET = 10;
+/** Landed coins on the road at once; the oldest is collected early past this. */
+const REST_CAP = 40;
+/** A coin that left the list this long after landing was seen to land; an older one was an offline return. */
+const LANDED_WINDOW_SEC = 1;
 
 /** The guardian is baked after the realm's roster, so it owns the last slot. */
 const bossSlot = (region: number): number => rosterAt(region).length;
@@ -103,6 +110,25 @@ export interface Streak {
   gold: boolean;
   spin: number;
 }
+
+/** A zone marker riding the ground scroll past the hero. */
+export interface Signpost {
+  x: number;
+  /** 1-based, as the log names it. */
+  zone: number;
+}
+
+/** A creature in its death phase: still drawn, no longer fought. */
+export interface Fallen {
+  sprite: number;
+  x: number;
+  age: number;
+  /** Drawn at the size it died at; the phase may have flipped since. */
+  scale: number;
+}
+
+/** Seconds a corpse takes to go down — inside core's 0.35 s kill floor, so the next duel is never hidden behind the last. */
+export const DEATH_SEC = 0.14;
 
 export interface Monster {
   /** Slot in the realm's baked roster; the last slot is the Portal guardian. */
@@ -144,14 +170,23 @@ export interface World {
    * road looked like before, and it read as a paused screen.
    */
   queue: Monster[];
+  fallen: Fallen[];
+  signposts: Signpost[];
+  lastZone: number;
   lastKills: number;
   deathBurstQueued: boolean;
   particles: Particle[];
   floaters: Floater[];
   rests: Rest[];
   streaks: Streak[];
+  /** Arcs the last frame drew, so a coin that leaves the list can be told landed from caught. */
+  seenArcs: readonly LootArc[];
+  /** Catches the engine reported that the arc list has not yet been seen without. */
+  catchesToAbsorb: number;
   /** Scene point loot streaks fly to — the HUD's gold readout. */
   collectAnchor: { x: number; y: number };
+  /** Scene point the combo widget hangs from — the HUD's DPS readout. */
+  comboAnchor: ComboAnchor;
   /** Scene coords of the last aimed strike, so a catch pays out where it was earned. */
   lastAim: { x: number; y: number } | null;
   /** Lanes the engaged monster's health bar sat across last frame; floaters route around them. */
@@ -181,13 +216,19 @@ export function createWorld(): World {
     damageTextCooldown: 0,
     bossEnteredAtSec: 0,
     queue: [],
+    fallen: [],
+    signposts: [],
+    lastZone: -1,
     lastKills: -1,
     deathBurstQueued: false,
     particles: [],
     floaters: [],
     rests: [],
     streaks: [],
+    seenArcs: [],
+    catchesToAbsorb: 0,
     collectAnchor: { x: 0, y: 0 },
+    comboAnchor: null,
     lastAim: null,
     barSpans: [],
   };
@@ -222,7 +263,9 @@ function addFloater(w: World, input: WorldInput, raw: Omit<Floater, 'lane'>): vo
   const preferred = Math.max(0, Math.min(LANE_COUNT - 1, wish));
   const taken = floaters.map(floaterSpan);
   const evictable = taken.length;
-  if (w.heldMomentum.value > 0.02) taken.push(...comboSpans(w.heldMult.value, groundY));
+  if (w.heldMomentum.value > 0.02) {
+    taken.push(...comboSpans(w.heldMult.value, w.comboAnchor, input.view.worldRightX, groundY));
+  }
   taken.push(...w.barSpans);
   const { lane, evict } = placeRun(f.x - width / 2, width, taken, LANE_COUNT, 3, preferred, evictable);
   // Descending, so each splice leaves the lower indices valid.
@@ -358,7 +401,22 @@ function killMonster(w: World, input: WorldInput): void {
   burst(w, x, y - 12, 10, ['#ffffff', ...SPARK_COLORS], 62);
   w.shake = Math.min(MAX_SHAKE, w.shake + 2.1);
 
-  w.queue.shift();
+  const dead = w.queue.shift();
+  if (dead) w.fallen.push({ sprite: dead.sprite, x, age: 0, scale: leadScale(input.model) });
+  // The kill's own gold, rising off the corpse. The coins carry the catch
+  // bonus; this is the base pay the log line names, so the two agree.
+  if (input.model.goldPerKill > 0) {
+    payout(w, input, {
+      x,
+      y: y - 34,
+      life: FLOATER_LIFE,
+      value: input.model.goldPerKill,
+      label: (v) => `+${formatShort(v)}`,
+      color: LOOT_GLOW,
+      tier: 'payout',
+      owned: false,
+    });
+  }
   // Damage numbers belong to the thing that took the hit; a corpse's number
   // left hanging in the air reads as unowned UI.
   for (let i = w.floaters.length - 1; i >= 0; i--) {
@@ -366,14 +424,20 @@ function killMonster(w: World, input: WorldInput): void {
   }
 }
 
-function swing(w: World, input: WorldInput, fromStrike: boolean): void {
+/**
+ * Start the blade's stroke. At a maxed speed node and full momentum the
+ * cadence outruns a fixed 0.32s animation, and overlapping swings read as a
+ * blur rather than as faster hits. The stroke shortens to fit its own interval.
+ */
+function swing(w: World, input: WorldInput): void {
+  w.swingAnim = Math.min(SWING_ANIM_SEC, swingInterval(input.model.attackSpeedMult) * 0.9);
+}
+
+/** Land the stroke on the engaged creature. Returns whether one was in reach to take it. */
+function hitLead(w: World, input: WorldInput, fromStrike: boolean): boolean {
   const { model, view } = input;
-  // At a maxed speed node and full momentum the cadence outruns a fixed
-  // 0.32s animation, and overlapping swings read as a blur rather than as
-  // faster hits. The stroke shortens to fit its own interval instead.
-  w.swingAnim = Math.min(SWING_ANIM_SEC, swingInterval(model.attackSpeedMult) * 0.9);
   const lead = w.queue[0];
-  if (!lead || lead.x - engageInset(w, input) > view.heroX + BLADE_REACH + 16) return;
+  if (!lead || lead.x - engageInset(w, input) > view.heroX + BLADE_REACH + 16) return false;
 
   const leadSprite = input.sprites.skinned.monsters[lead.sprite];
   // Contact and damage-number placement have to land on the scaled silhouette, not the sprite's raw box.
@@ -390,14 +454,14 @@ function swing(w: World, input: WorldInput, fromStrike: boolean): void {
 
   // Only the player's own strikes get a number: auto-swings land several a
   // second and numbering them buries the one hit the player caused.
-  if (!fromStrike) return;
+  if (!fromStrike) return true;
   // A fast tapper out-runs the floater's lifetime and the numbers pile into
   // an illegible column; the flash and sparks already confirm every hit.
-  if (w.damageTextCooldown > 0) return;
+  if (w.damageTextCooldown > 0) return true;
   w.damageTextCooldown = DAMAGE_TEXT_INTERVAL_SEC;
   // Honest: real DPS across the interval this swing represents.
   const damage = damagePerSwing(model.dps, model.attackSpeedMult);
-  if (damage < 0.05) return;
+  if (damage < 0.05) return true;
   // Above the monster's head, not beside its ribs: the blade sweeps through
   // contact height and a number there is inside the arc.
   payout(w, input, {
@@ -410,21 +474,53 @@ function swing(w: World, input: WorldInput, fromStrike: boolean): void {
     tier: 'damage',
     owned: true,
   });
+  return true;
 }
 
-function toArcSpace(view: Viewport, px: number, py: number): ArcPoint {
-  return arcSpaceFromScene(px, py, view.heroX, view.arcBaseY, arcApexHeight(ARC_FLIGHT_SEC));
+/**
+ * A whiff: a short steel slash at the tap point, cut diagonally so it cannot
+ * be read as the round burst a hit makes. Kept out of the hero's pocket.
+ */
+function missAt(w: World, input: WorldInput, x: number, y: number): void {
+  const at = nudgeFromPocket(pocket(input), x, y);
+  for (let i = 0; i < MISS_SPARKS; i++) {
+    const along = i / (MISS_SPARKS - 1) - 0.5;
+    addParticle(w, {
+      x: at.x + along * 10,
+      y: at.y - along * 6,
+      vx: 70 + along * 40,
+      vy: -30 - along * 30,
+      age: 0,
+      life: 0.14 + hash01(i * 2.3 + w.clockSec) * 0.08,
+      size: 1,
+      color: SPARK_COLORS[i % SPARK_COLORS.length]!,
+      gravity: 0.2,
+    });
+  }
+}
+
+/** Scene x the engaged creature is killed at: arcs launch here and the road ahead runs right of it. */
+export function killPointX(view: Viewport): number {
+  return view.heroX + BLADE_REACH + KILL_INSET;
+}
+
+/** A tap's scene point into core's arc space. The exact inverse of fromArcSpace, which is what draws the coins. */
+export function toArcSpace(view: Viewport, px: number, py: number): ArcPoint {
+  return arcSpaceFromScene(px, py, killPointX(view), view.arcBaseY, ARC_UNIT_PX);
+}
+
+export function fromArcSpace(view: Viewport, ax: number, ay: number): { x: number; y: number } {
+  return sceneFromArcSpace(ax, ay, killPointX(view), view.arcBaseY, ARC_UNIT_PX);
 }
 
 /** Every live arc's scene position, straight from core's trajectory. */
 export function arcScreenPoints(input: WorldInput): { x: number; y: number; spin: number }[] {
   const { model, view } = input;
-  const apex = arcApexHeight(ARC_FLIGHT_SEC);
   const out: { x: number; y: number; spin: number }[] = [];
   for (const arc of model.arcs) {
     const a = arcPositionAt(arc, model.timeSec);
     if (!a) continue;
-    const p = sceneFromArcSpace(a.x, a.y, view.heroX, view.arcBaseY, apex);
+    const p = fromArcSpace(view, a.x, a.y);
     out.push({ x: p.x, y: p.y, spin: arc.expiresAtSec * 9 });
   }
   return out;
@@ -452,21 +548,47 @@ function autoAim(input: WorldInput): ArcPoint | null {
   return best ? toArcSpace(view, best.x, best.y) : null;
 }
 
-/** A Strike at scene point `at`, or unaimed when null. Returns where it landed in arc space. */
-export function strike(w: World, input: WorldInput, at: { x: number; y: number } | null): ArcPoint | null {
-  const { view } = input;
+export interface StrikeResult {
+  /** Where the strike landed in core's arc space, or null when it had no position. */
+  aim: ArcPoint | null;
+  /** No creature in reach and, by core's own hit test, no coin under the aim. */
+  missed: boolean;
+}
+
+/** Air above the ground line a tap on the fight may land in; a thumb aims at the body, not the feet. */
+const FIGHT_TAP_HEIGHT = 44;
+
+/** True when a tap's scene point sits on the duel: the strip between the hero and the engaged creature, up to head height. */
+function tapOnFight(w: World, input: WorldInput, at: { x: number; y: number }): boolean {
+  const band = fightBand(w, input);
+  const { groundY } = input.view;
+  return at.x >= band.x0 && at.x <= band.x1 && at.y >= groundY - FIGHT_TAP_HEIGHT && at.y <= groundY + 8;
+}
+
+/**
+ * A Strike at scene point `at`, or unaimed when null. An aimed strike lands
+ * where it was aimed: on the creature, on a coin, or on nothing. The engine
+ * decides the catch on its next tick; the whiff is read now off the same hit
+ * test on the arcs as drawn, because a miss that answers late is no answer.
+ */
+export function strike(w: World, input: WorldInput, at: { x: number; y: number } | null): StrikeResult {
+  const { model, view } = input;
   // Restart the auto-attack cadence rather than zeroing it — zero would go
   // negative on the very next step() and fire an immediate duplicate swing.
   w.swingCooldown = 1 / SWINGS_PER_SEC;
-  swing(w, input, true);
+  swing(w, input);
+  const connected = (at === null || tapOnFight(w, input, at)) && hitLead(w, input, true);
 
-  if (!at) {
-    const aim = autoAim(input);
-    if (aim) w.lastAim = sceneFromArcSpace(aim.x, aim.y, view.heroX, view.arcBaseY, arcApexHeight(ARC_FLIGHT_SEC));
-    return aim;
+  const aim = at ? toArcSpace(view, at.x, at.y) : autoAim(input);
+  const point = at ?? (aim ? fromArcSpace(view, aim.x, aim.y) : null);
+  w.lastAim = point;
+  const caught = aim !== null && arcHitIndex(model.arcs, aim, model.timeSec) >= 0;
+  const missed = !connected && !caught;
+  if (missed) {
+    const spark = point ?? { x: view.heroX + BLADE_REACH, y: view.groundY - 14 };
+    missAt(w, input, spark.x, spark.y);
   }
-  w.lastAim = at;
-  return toArcSpace(view, at.x, at.y);
+  return { aim, missed };
 }
 
 /**
@@ -476,6 +598,7 @@ export function strike(w: World, input: WorldInput, at: { x: number; y: number }
  */
 export function catchArc(w: World, input: WorldInput, bonusGold: number, upgraded: boolean): void {
   const { skin, view } = input;
+  w.catchesToAbsorb++;
   const guard = pocket(input);
   const aim = w.lastAim ?? { x: view.heroX + 24, y: view.groundY - 30 };
   const at = nudgeFromPocket(guard, aim.x, aim.y);
@@ -521,6 +644,40 @@ function advanceScroll(w: World, input: WorldInput, speed: number, dtSec: number
   w.scrollBirds = wrap(w.scrollBirds + (speed * 0.12 + 9) * dtSec, vw * 3);
 }
 
+/** The hero picks a landed coin up: it leaves the road and streaks to the counter. */
+function collectRest(w: World, r: Rest): void {
+  w.streaks.push({ x0: r.x, y0: r.y, age: 0, gold: r.gold, spin: r.spin });
+}
+
+/**
+ * Coins that left the engine's list since last frame. A catch was announced
+ * through catchArc and is absorbed; anything else landed, and sits on the road
+ * where core's trajectory put it down until the hero walks over it.
+ */
+function settleArcs(w: World, input: WorldInput): void {
+  const { model, view } = input;
+  const live = new Set(model.arcs);
+  const gone = w.seenArcs.filter((arc) => !live.has(arc));
+  // Latest expiry first: a caught coin left before it landed, so it takes the
+  // absorb before an older coin that landed in the same tick can.
+  gone.sort((a, b) => b.expiresAtSec - a.expiresAtSec);
+  for (const arc of gone) {
+    if (w.catchesToAbsorb > 0) {
+      w.catchesToAbsorb--;
+      continue;
+    }
+    const since = model.timeSec - arc.expiresAtSec;
+    if (since < 0 || since > LANDED_WINDOW_SEC) continue;
+    const at = fromArcSpace(view, arc.landingX, 0);
+    if (w.rests.length >= REST_CAP) collectRest(w, w.rests.shift()!);
+    w.rests.push({ x: at.x, y: at.y, age: 0, gold: arc.gear === null, spin: arc.expiresAtSec * 9 });
+  }
+  // A catch of a coin this list never held has nothing to absorb; carried, it would eat the next landing.
+  w.catchesToAbsorb = 0;
+  // A copy: the engine prunes its list in place, and the same array can never be seen to lose a member.
+  w.seenArcs = model.arcs.slice();
+}
+
 /** A kill landed in the engine — the scene never decides this. Offline returns jump thousands of kills; play one death. */
 function playKills(w: World, input: WorldInput): void {
   const { model } = input;
@@ -536,6 +693,35 @@ function playKills(w: World, input: WorldInput): void {
   }
 }
 
+/**
+ * The engine crossed a zone line — the scene never decides this. A signpost
+ * walks in from the road ahead and the lane announces it; an offline return
+ * that jumped forty zones plants one post, not forty.
+ */
+function playZone(w: World, input: WorldInput): void {
+  const { model, view } = input;
+  if (w.lastZone < 0 || model.boss) {
+    w.lastZone = model.zone;
+    return;
+  }
+  if (model.zone === w.lastZone) return;
+  const advanced = model.zone > w.lastZone;
+  w.lastZone = model.zone;
+  if (!advanced) return;
+  w.signposts.push({ x: view.worldRightX + 12, zone: model.zone + 1 });
+  addFloater(w, input, {
+    x: view.heroX + 30,
+    y: view.groundY - 60,
+    age: 0,
+    life: ZONE_BANNER_SEC,
+    text: `ZONE ${model.zone + 1}`,
+    color: '#ffffff',
+    tier: 'payout',
+    owned: false,
+    value: 0,
+  });
+}
+
 /** The road keeps QUEUE_DEPTH creatures walking in; the Portal holds one guardian, and it stays. */
 function fillQueue(w: World, input: WorldInput): void {
   const { model, view } = input;
@@ -543,6 +729,8 @@ function fillQueue(w: World, input: WorldInput): void {
   if (model.boss) {
     if (queue.length !== 1 || queue[0]!.sprite !== bossSlot(model.region)) {
       queue.length = 0;
+      // A road corpse still going down does not follow the hero into the dungeon.
+      w.fallen.length = 0;
       queue.push({ sprite: bossSlot(model.region), x: view.worldRightX + 30, flash: 0, recoil: 0, bob: 0, spread: 0 });
       w.bossEnteredAtSec = w.clockSec;
     }
@@ -604,11 +792,14 @@ function autoSwing(w: World, input: WorldInput, dtSec: number): void {
   w.swingCooldown -= dtSec * input.model.attackSpeedMult;
   if (w.swingCooldown <= 0) {
     w.swingCooldown += 1 / SWINGS_PER_SEC;
-    if (w.queue.length > 0) swing(w, input, false);
+    if (w.queue.length > 0) {
+      swing(w, input);
+      hitLead(w, input, false);
+    }
   }
 }
 
-function ageEffects(w: World, speed: number, dtSec: number): void {
+function ageEffects(w: World, heroX: number, speed: number, dtSec: number): void {
   const { particles, floaters, rests, streaks } = w;
   for (let i = particles.length - 1; i >= 0; i--) {
     if (!stepParticle(particles[i]!, dtSec)) particles.splice(i, 1);
@@ -624,12 +815,24 @@ function ageEffects(w: World, speed: number, dtSec: number): void {
     const r = rests[i]!;
     r.age += dtSec;
     r.spin += dtSec * 4;
-    // Landed coins ride the road backwards until they are collected.
+    // Landed coins ride the road back to the hero, who picks them up as he walks over them.
     r.x -= speed * dtSec;
-    if (r.age >= REST_SEC || r.x < -10) {
-      streaks.push({ x0: r.x, y0: r.y, age: 0, gold: r.gold, spin: r.spin });
+    if (r.x <= heroX || r.x < -10) {
+      collectRest(w, r);
       rests.splice(i, 1);
     }
+  }
+
+  for (let i = w.fallen.length - 1; i >= 0; i--) {
+    const c = w.fallen[i]!;
+    c.age += dtSec;
+    if (c.age >= DEATH_SEC) w.fallen.splice(i, 1);
+  }
+
+  for (let i = w.signposts.length - 1; i >= 0; i--) {
+    const sign = w.signposts[i]!;
+    sign.x -= speed * dtSec;
+    if (sign.x < -20) w.signposts.splice(i, 1);
   }
 
   for (let i = streaks.length - 1; i >= 0; i--) {
@@ -649,7 +852,7 @@ export function step(w: World, input: WorldInput, dtSec: number): void {
   w.heldMomentum = peakFollow(w.heldMomentum, model.momentum, dtSec);
   w.heldMult = peakFollow(w.heldMult, model.momentumMult, dtSec);
 
-  const speed = WALK_SPEED * model.momentumMult;
+  const speed = WALK_SPEED * strideGain(model.momentumMult);
   advanceScroll(w, input, speed, dtSec);
 
   w.shake = decayTo(w.shake, 0, SHAKE_DECAY, dtSec);
@@ -657,9 +860,11 @@ export function step(w: World, input: WorldInput, dtSec: number): void {
   w.swingAnim = Math.max(0, w.swingAnim - dtSec);
 
   playKills(w, input);
+  playZone(w, input);
+  settleArcs(w, input);
   fillQueue(w, input);
   placeQueue(w, input, dtSec);
   kickDust(w, input, dtSec);
   autoSwing(w, input, dtSec);
-  ageEffects(w, speed, dtSec);
+  ageEffects(w, input.view.heroX, speed, dtSec);
 }

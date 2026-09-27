@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import { comboBox, comboSpans } from '../src/scene/combo';
 import { NUMERAL_FONT, textWidth } from '../src/scene/pixels';
 import {
   boxesOverlap,
-  COMBO_LANE,
   FLOATER_GLYPH_H,
   FLOATER_RISE,
   laneBaseline,
@@ -138,18 +138,21 @@ describe('lane geometry makes overlap impossible', () => {
     expect(collisions).toBe(0);
   });
 
-  it('keeps the combo widget in its own lane above every floater lane', () => {
-    expect(COMBO_LANE).toBe(LANE_COUNT - 1);
-    const combo = laneLifeBox(COMBO_LANE, GROUND_Y, 0, 60);
-    for (let lane = 0; lane < COMBO_LANE; lane++) {
-      expect(boxesOverlap(combo, laneLifeBox(lane, GROUND_Y, 0, 60)), `lane ${lane}`).toBe(false);
+  it('reserves every lane the combo widget covers, wherever the view hangs it', () => {
+    const box = comboBox(1.5, { x: 180, y: 8 }, 200);
+    const spans = comboSpans(1.5, { x: 180, y: 8 }, 200, GROUND_Y);
+    expect(spans.map((s) => s.lane)).toEqual(lanesTouching(box.top, box.top + box.height, GROUND_Y, LANE_COUNT));
+    for (const span of spans) {
+      expect(span.x).toBe(box.x);
+      expect(span.w).toBe(box.w);
     }
   });
 
   it('routes a floater away from the combo widget it would have hit', () => {
-    const combo: LaneSpan = { x: 100, w: 50, lane: COMBO_LANE };
-    const placed = placeRun(105, 40, [combo], LANE_COUNT, 3, COMBO_LANE);
-    expect(placed.lane).not.toBe(COMBO_LANE);
+    const top = LANE_COUNT - 1;
+    const combo: LaneSpan = { x: 100, w: 50, lane: top };
+    const placed = placeRun(105, 40, [combo], LANE_COUNT, 3, top);
+    expect(placed.lane).not.toBe(top);
     expect(placed.evict).toEqual([]);
   });
 });

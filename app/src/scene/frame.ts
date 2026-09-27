@@ -13,6 +13,9 @@ import type { World } from './world';
 /** Everything the scene needs for one frame. All display values; no engine writes. */
 export interface SceneModel {
   region: number;
+  /** 0-based zone within the realm, and how many the realm holds; the backdrop drifts across them. */
+  zone: number;
+  zonesInRealm: number;
   /** Lifetime kill count — the scene edge-detects it to fire death FX. */
   kills: number;
   /** Display estimate [0,1] of progress through the current kill. */
@@ -94,8 +97,6 @@ export const BLADE_REACH = 20;
 export const BOSS_SCALE = 2;
 /** How far an actor's shadow is stepped toward night, against the props' 0.52. */
 export const ACTOR_SHADOW = 0.74;
-/** Seconds a thrown coin stays in the air, and so stays catchable. */
-export const ARC_FLIGHT_SEC = 1.5;
 export const LOOT_GLOW = '#fbf236';
 /** Length of every scrolling prop track, in scene units. */
 export const PROP_SPAN = 1400;
@@ -112,6 +113,17 @@ export const TIER_SCALE: Record<FloaterTier, number> = { payout: 1, catch: 1, da
 export function hash01(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
+}
+
+/**
+ * How much faster the hero walks on screen at a momentum multiplier. Steeper
+ * than the multiplier itself: core's x1.75 read as a slight hurry, and the
+ * stride is the one thing on screen that says a combo is running. Display
+ * only; it feeds no distance (DECISIONS.md #12).
+ */
+const STRIDE_STEEPEN = 2.2;
+export function strideGain(momentumMult: number): number {
+  return 1 + Math.max(0, momentumMult - 1) * STRIDE_STEEPEN;
 }
 
 /** Seconds one animated swing stands for, at `attackSpeedMult`. */

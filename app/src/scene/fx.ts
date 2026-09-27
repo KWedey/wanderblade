@@ -7,11 +7,7 @@
 //
 // All coordinates are *scene units* (virtual pixels), y growing downward.
 
-/**
- * Downward acceleration for gibs and sparks, units/s². Also sets the pixel
- * height of one unit of core's arc space, so a coin drawn along core's
- * trajectory rises to the same apex a thrown gib would.
- */
+/** Downward acceleration for gibs and sparks, units/s². */
 export const ARC_GRAVITY = 110;
 
 export interface Vec2 {
@@ -125,39 +121,38 @@ export function wrap(v: number, span: number): number {
 }
 
 /**
- * Pixel height of core's unit-high arc apex over `flightSec`: g*T^2/8. Derived
- * from the scene's own gravity rather than picked to look right, so loot and
- * gibs share one sense of weight.
+ * Scene pixels per unit of core's arc space. The apex is one unit up, so this
+ * is the height a coin clears: past a 30 px creature with room to read as a
+ * throw, not a hop. Presentation only; core's reach and catch window are
+ * measured in its own units.
  */
-export function arcApexHeight(flightSec: number, gravity = ARC_GRAVITY): number {
-  return Math.max(1, (gravity * flightSec * flightSec) / 8);
-}
+export const ARC_UNIT_PX = 50;
 
 /**
- * Scene pixels to the engine's arc space: hero at the origin, x along the
- * road, apex at y = 1. Scene units never cross the engine boundary, so a
- * resize or a pixel-scale change cannot move where a Strike lands.
+ * Scene pixels to the engine's arc space: the kill point at the origin, x
+ * along the road, apex at y = 1. Scene units never cross the engine boundary,
+ * so a resize or a pixel-scale change cannot move where a Strike lands.
  */
 export function arcSpaceFromScene(
   px: number,
   py: number,
-  heroX: number,
-  groundY: number,
-  apex: number,
+  originX: number,
+  baseY: number,
+  unit: number,
 ): Vec2 {
-  return { x: (px - heroX) / Math.max(1, apex), y: (groundY - py) / Math.max(1, apex) };
+  return { x: (px - originX) / Math.max(1, unit), y: (baseY - py) / Math.max(1, unit) };
 }
 
 /** Inverse of `arcSpaceFromScene`: core's arc space back onto the pixel grid. */
 export function sceneFromArcSpace(
   ax: number,
   ay: number,
-  heroX: number,
-  groundY: number,
-  apex: number,
+  originX: number,
+  baseY: number,
+  unit: number,
 ): Vec2 {
-  const k = Math.max(1, apex);
-  return { x: heroX + ax * k, y: groundY - ay * k };
+  const k = Math.max(1, unit);
+  return { x: originX + ax * k, y: baseY - ay * k };
 }
 
 /**

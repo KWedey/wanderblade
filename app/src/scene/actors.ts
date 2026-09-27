@@ -1,13 +1,13 @@
 // The figures on the ground plane: the hero and his blade, the monster queue,
 // coins in flight, and the contact shadows and light pools under them.
 
-import { ACTOR_SHADOW, LOOT_GLOW, SWING_ANIM_SEC, type Frame } from './frame';
+import { ACTOR_SHADOW, LOOT_GLOW, SWING_ANIM_SEC, strideGain, type Frame } from './frame';
 import { inAnyPocket } from './fx';
 import { OUTLINE_INK, glowRingRadii, lighten, momentumLift } from './palette';
 import { drawShadow } from './road';
 import { drawSprite, drawSpriteRotated } from './sprites';
 import { LANE_COUNT, lanesTouching, type LaneSpan } from './textlane';
-import { arcScreenPoints, leadScale, pockets } from './world';
+import { DEATH_SEC, arcScreenPoints, leadScale, pockets } from './world';
 
 /**
  * Concentric hard rings, not a dither: one world pixel is a 36px block at
@@ -72,7 +72,7 @@ export function drawHeroGround(f: Frame): void {
 export function drawHero(f: Frame): void {
   const { ctx, model, view, world } = f;
   const { heroA, heroB, sword } = f.sprites;
-  const stride = model.reduceMotion ? 0 : Math.floor(world.clockSec * 7 * model.momentumMult) % 2;
+  const stride = model.reduceMotion ? 0 : Math.floor(world.clockSec * 7 * strideGain(model.momentumMult)) % 2;
   const sprite = stride === 0 ? heroA : heroB;
   const bob = model.reduceMotion ? 0 : Math.floor(Math.sin(world.clockSec * 14) * 0.6);
   // No rim pass: a second ring of the darkest ink reads as a blob at thumbnail size.
@@ -111,11 +111,35 @@ export function drawHero(f: Frame): void {
   }
 }
 
+/**
+ * The death phase: the corpse flattens into the ground over DEATH_SEC, lit
+ * white as it goes. It is drawn behind the queue so the next creature walking
+ * in is never hidden behind the one that just fell.
+ */
+function drawFallen(f: Frame): void {
+  const { ctx, view, world } = f;
+  const sprites = f.sprites.skinned;
+  for (const c of world.fallen) {
+    const sprite = sprites.monsters[c.sprite] ?? sprites.monsters[0]!;
+    const t = Math.min(1, c.age / DEATH_SEC);
+    const w = sprite.width * c.scale;
+    const h = Math.max(1, Math.round(sprite.height * c.scale * (1 - t)));
+    const px = Math.floor(c.x - w / 2);
+    const py = view.groundY - h;
+    drawShadow(f, c.x, (sprite.width - 2) * c.scale, ACTOR_SHADOW);
+    ctx.drawImage(sprite.image, px, py, w, h);
+    ctx.globalAlpha = 0.55 * (1 - t);
+    ctx.drawImage(sprite.flash, px, py, w, h);
+    ctx.globalAlpha = 1;
+  }
+}
+
 /** Draws the queue back to front and returns the lanes the engaged creature's health bar covers. */
 export function drawMonsters(f: Frame): LaneSpan[] {
   const { ctx, model, view, world } = f;
   const sprites = f.sprites.skinned;
   let barSpans: LaneSpan[] = [];
+  drawFallen(f);
   // Back to front, so the one being fought overlaps the line behind it.
   for (let i = world.queue.length - 1; i >= 0; i--) {
     const m = world.queue[i]!;
