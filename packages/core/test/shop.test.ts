@@ -10,11 +10,13 @@ import {
   buyAscendancyNode,
   bestBuy,
   enterPortal,
+  nextBuy,
   heroDps,
   initialState,
   levelCost,
   pricedCount,
   purchaseOptions,
+  serialize,
   SKILLS,
   SKILL_IDS,
   skillCost,
@@ -251,5 +253,72 @@ describe('valuePerCost is the one ranking of what to buy', () => {
     const s = portalReady(1, 0);
     enterPortal(s);
     expect(bestBuy(s, 'gold')).toBeNull();
+  });
+});
+
+describe('nextBuy is bestBuy with the wallet ignored', () => {
+  it('names the same row as bestBuy whenever that row is affordable', () => {
+    for (const seed of [1, 7, 23]) {
+      for (const seconds of [60, 3600, 86_400]) {
+        const s = initialState(seed);
+        advance(s, seconds);
+        s.ascendancy.banked = 200;
+        for (const currency of ['gold', 'ascendancy'] as const) {
+          const best = bestBuy(s, currency);
+          const next = nextBuy(s, currency);
+          expect(next).not.toBeNull();
+          expect(next?.currency).toBe(currency);
+          expect(next?.unlocked).toBe(true);
+          if (best && best.valuePerCost === next?.valuePerCost) {
+            expect(next?.id).toBe(best.id);
+          }
+        }
+      }
+    }
+  });
+
+  it('still names a goal with an empty purse, and it is the row an unlimited purse would buy', () => {
+    const s = initialState(3);
+    advance(s, 3600);
+    s.gold = 0;
+    s.ascendancy.banked = 0;
+    expect(bestBuy(s, 'gold')).toBeNull();
+    for (const currency of ['gold', 'ascendancy'] as const) {
+      const rich = clone(s);
+      rich.gold = Infinity;
+      rich.ascendancy.banked = Infinity;
+      expect(nextBuy(s, currency)?.id).toBe(bestBuy(rich, currency)?.id);
+      expect(nextBuy(s, currency)?.affordable).toBe(false);
+    }
+  });
+
+  it('never names a locked skill, however much it would be worth', () => {
+    const s = initialState(3);
+    s.hero.level = 0;
+    const next = nextBuy(s, 'gold');
+    expect(next?.unlocked).toBe(true);
+    for (const row of purchaseOptions(s)) {
+      if (row.kind === 'skill' && !row.unlocked) expect(next?.id).not.toBe(row.id);
+    }
+  });
+
+  it('keeps naming a goal during a guardian attempt, when nothing is buyable', () => {
+    const s = portalReady(1, 0);
+    s.gold = 1e12;
+    enterPortal(s);
+    expect(bestBuy(s, 'gold')).toBeNull();
+    expect(nextBuy(s, 'gold')).not.toBeNull();
+  });
+
+  // Pure over state: no RNG draw, no clock read, so the same state names the
+  // same goal on every call and on both sides of a save.
+  it('is a pure function of state', () => {
+    const s = initialState(5);
+    advance(s, 7200);
+    const before = serialize(s);
+    const a = nextBuy(s, 'gold');
+    const b = nextBuy(clone(s), 'gold');
+    expect(serialize(s)).toBe(before);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });

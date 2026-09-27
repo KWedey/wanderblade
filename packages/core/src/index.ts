@@ -144,7 +144,7 @@ export {
 export type { AscNodeEffect } from './formulas';
 
 // --- Shop ----------------------------------------------------------------
-export { purchaseOptions, bestBuy, affordableCount, pricedCount } from './shop';
+export { purchaseOptions, bestBuy, nextBuy, affordableCount, pricedCount } from './shop';
 export type { PurchaseOption, PurchaseKind, PurchaseCurrency } from './shop';
 
 // --- Engine --------------------------------------------------------------

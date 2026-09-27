@@ -170,14 +170,15 @@ export function pricedCount(state: GameState): number {
   return n;
 }
 
-/**
- * The row worth buying next in `currency`, or null when nothing is affordable.
- * Ties go to the cheaper row, so the same state always names the same buy.
- */
-export function bestBuy(state: GameState, currency: PurchaseCurrency): PurchaseOption | null {
+/** The top-ranked row in `currency`; ties go to the cheaper row. */
+function topRanked(
+  state: GameState,
+  currency: PurchaseCurrency,
+  eligible: (o: PurchaseOption) => boolean,
+): PurchaseOption | null {
   let best: PurchaseOption | null = null;
   for (const o of purchaseOptions(state)) {
-    if (o.currency !== currency || !o.affordable || o.valuePerCost <= 0) continue;
+    if (o.currency !== currency || o.valuePerCost <= 0 || !eligible(o)) continue;
     if (
       best === null ||
       o.valuePerCost > best.valuePerCost ||
@@ -187,4 +188,22 @@ export function bestBuy(state: GameState, currency: PurchaseCurrency): PurchaseO
     }
   }
   return best;
+}
+
+/**
+ * The row worth buying next in `currency`, or null when nothing is affordable.
+ * Ties go to the cheaper row, so the same state always names the same buy.
+ */
+export function bestBuy(state: GameState, currency: PurchaseCurrency): PurchaseOption | null {
+  return topRanked(state, currency, (o) => o.affordable);
+}
+
+/**
+ * The row the player should be saving for: `bestBuy`'s ranking with the wallet
+ * and the guardian lock ignored, so a goal can be named while nothing is
+ * affordable. Locked skills still rank nowhere. Null only when no unlocked row
+ * in `currency` buys any damage.
+ */
+export function nextBuy(state: GameState, currency: PurchaseCurrency): PurchaseOption | null {
+  return topRanked(state, currency, (o) => o.unlocked);
 }
