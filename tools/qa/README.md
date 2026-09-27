@@ -9,7 +9,8 @@ instead of an opinion, plus two offline image tools. Each takes `--help`; this f
 | `npm run qa:mobile` | Does the layout hold on a phone, is the type on the world's pixel grid, and does anything load-bearing sit under the notch? |
 | `npm run qa:wiring` | Does the live page register the listeners a held strike depends on? Unit tests cover the rule; only this covers the wiring. |
 | `npm run qa:mobile -- --selftest` | Plants a decoy button under each inset and exits non-zero if the notch check misses them. Run it whenever that check reports clean. |
-| `npm run qa:loop` | Can a person get Road -> Portal -> Boss through the DOM, and does the projected fight land in the 15–90 minute band? |
+| `npm run qa:loop` | Can a person get Road -> Portal -> Boss through the DOM, and does the projected fight land in the staged realm's guardian band (3–6 min for realm 0)? |
+| `npm run qa:session` | Does a fresh run, tapped every 300 ms and buying what turns green, open the portal inside 20 min and ascend inside 30? |
 | `npm run qa:miss` | Does a tap on empty sky count as a miss, and does a tap along the coin landing span still catch? |
 | `npm run qa:pixels -- <png> <x> <y> <w> <h>` | What colour is that region, so a claim about the art can be settled? |
 | `npm run qa:speckle -- <png> --right <x>` | Which colour is speckling the world, and how much of it? |

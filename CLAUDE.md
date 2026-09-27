@@ -36,6 +36,7 @@ npm run qa:capture -- --label round17   # a judged desktop frame, mid-swing
 npm run qa:mobile                       # six phone/desktop viewports: layout, type grid, safe areas
 npm run qa:wiring                       # does the live page register the listeners a held strike needs
 npm run qa:loop                         # plays Road -> Portal -> Boss through the DOM, checks the fight band
+npm run qa:session                      # a fresh run tapped at a thumb's pace until ascension; ADR #63's exit as a probe
 npm run qa:pixels -- <png> <x> <y> <w> <h>   # colour of a crop, in numbers
 npm run qa:speckle -- <png> --right 1456     # which colour is speckling the world
 ```
