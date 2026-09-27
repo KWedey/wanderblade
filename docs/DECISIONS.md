@@ -890,3 +890,18 @@ Judges named the result twice without naming the cause: *"flat stepped colour ca
 - Gate: `npm run verify` — lint clean, typecheck clean, **Test Files 37 passed (37)**, **Tests 727 passed (727)**.
 
 **Not touched:** road scene, hero sprite/animation, economy constants, core rules, and `glowDisc`/`glowRingRadii` (loot-pickup glow, still deliberately left alone per ADR #53).
+
+## 62. The engine clock lives on an integer-millisecond grid — 2026-09-27
+
+**Decision:** `advance` snaps its `seconds` argument and every strike instant to whole milliseconds (`packages/core/src/clock.ts`: `clockMs`, `clockAfter`) and adds in integers. `timeSec` stays on that grid. `nextActionAtSec` stays absolute (#6). The client floors tick deltas and strike stamps the same way (`app/src/game.ts`).
+
+**Why:** float seconds add non-associatively. `(t + a) + b !== t + (a + b)` for 5,206 of 20,000 random triples, so the split-invariance contract in #6 only held for exactly-representable inputs. Live ticks feed raw wall-clock fractions; an offline replay of the same span could land one ulp off and flip a boundary kill. Integers add exactly.
+
+**Consequences:**
+- Strikes had to snap too, not just the target: the sim advances exactly to an off-grid strike instant, and snapping only the target dropped half its strikes (P1 fell to 1.44×).
+- Sim verdicts are unchanged (ALL PASS, 20 × 3 seeds) but 14-day trajectories moved: victories per seed 33/31/35 → 35/32/34, because strike instants now sit on the grid.
+- Two thumb tests were re-fixtured, not weakened: `catchRate` samples 4000 taps (400 saw only 26 coins), and `sim/src/thumb.ts` compares frame stamps in clock ms.
+
+**Evidence:** `packages/core/test/determinism.test.ts` adds 0.1+0.2+0.3 bracketing, a sub-ms no-op, 20 seeded random-split trials from a fractional start with strikes, and a boundary strike via `clockAfter`. Gate at merge: 44 files / 826 tests, exit 0.
+
+**Amends #6:** the clock is still event-stepped against an absolute `nextActionAtSec`; it is now also quantized.

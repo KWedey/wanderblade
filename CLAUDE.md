@@ -104,6 +104,7 @@ packages/core  ──►  app   (Vite client, DOM)
 
 - `advance(s, a + b)` must produce byte-identical state *and* events to `advance(advance(s, a), b)`.
 - All randomness flows through the seeded mulberry32 in `rng.ts`, consumed once per kill in kill-index order. The 32-bit stream position lives on `GameState.rngState` so a save reconstructs the stream exactly.
+- The clock lives on an integer-millisecond grid (`clock.ts`, Decision #62): `advance` snaps its span and every strike to whole ms and adds in integers, because float seconds add non-associatively.
 - The clock is event-stepped against an **absolute** `nextActionAtSec` — the next Road kill or the next boss swing, depending on `phase`. A relative "time remaining" carry would drift under float re-accumulation and break split-invariance — do not refactor it into one.
 - Strikes are `{ atSec, aim }` inputs merged into that same schedule. Momentum is a lazily-decayed `(value, atSec)` pair, and loot-arc positions are pure functions of stored numbers, so nothing is integrated across an interval and every split sees identical operands.
 - Offline progress is not a separate code path. A 10-day gap is the same `advance` call as a live tick, which is why `EVENT_CAP` (50,000) truncates the raw event stream while the aggregate `recap` attached to the returned array stays exact.
