@@ -259,6 +259,8 @@ export class Game {
     const momentum = this.liveMomentum();
     return {
       region: this.state.realm,
+      zone: this.state.zone,
+      zonesInRealm: zonesPerRealm,
       kills: this.state.killIndex,
       killProgress: progress,
       goldPerKill: this.goldPerKill,

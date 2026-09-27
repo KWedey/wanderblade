@@ -12,14 +12,17 @@ import {
   hillBaseInk,
   inFoliageLobe,
   inRun,
+  dayFraction,
   lighten,
   mixHex,
   momentumLift,
+  OUTLINE_INK,
   sunHaloBands,
   type FoliageLobe,
   type RealmSkin,
 } from './palette';
-import { drawSprite } from './sprites';
+import { drawSprite, drawText } from './sprites';
+import { NUMERAL_FONT } from './pixels';
 import { fightBand } from './world';
 
 interface Prop {
@@ -60,20 +63,24 @@ function buildMotes(): Mote[] {
   return motes;
 }
 
-function buildProps(): Prop[] {
+/** Each zone lays its own road: the hash seed and the prop count both turn on the zone index. */
+function buildProps(zone: number): Prop[] {
+  const seed = zone * 1013;
   const props: Prop[] = [];
-  for (let i = 0; i < 34; i++) {
+  const trees = 24 + Math.floor(hash01(seed + 0.5) * 20);
+  for (let i = 0; i < trees; i++) {
     props.push({
       kind: 'tree',
-      at: hash01(i) * PROP_SPAN,
+      at: hash01(i + seed) * PROP_SPAN,
       layer: 'tree',
-      variant: Math.floor(hash01(i * 3.7) * 3),
+      variant: Math.floor(hash01(i * 3.7 + seed) * 3),
     });
   }
-  for (let i = 0; i < 150; i++) {
-    const r = hash01(i + 500);
+  const ground = 110 + Math.floor(hash01(seed + 1.5) * 80);
+  for (let i = 0; i < ground; i++) {
+    const r = hash01(i + 500 + seed);
     const kind: Prop['kind'] = r < 0.11 ? 'rock' : r < 0.3 ? 'flower' : 'tuft';
-    props.push({ kind, at: hash01(i + 900) * PROP_SPAN, layer: 'ground', variant: 0 });
+    props.push({ kind, at: hash01(i + 900 + seed) * PROP_SPAN, layer: 'ground', variant: 0 });
   }
   return props;
 }
@@ -81,7 +88,14 @@ function buildProps(): Prop[] {
 /** Fence posts march at a fixed pitch so the rails between them line up. */
 const FENCE_PITCH = 74;
 
-const PROPS = buildProps();
+const propCache = new Map<number, Prop[]>();
+export function propsFor(zone: number): Prop[] {
+  const hit = propCache.get(zone);
+  if (hit) return hit;
+  const built = buildProps(zone);
+  propCache.set(zone, built);
+  return built;
+}
 const MOTES = buildMotes();
 
 interface GroundBlade { x0: number; y: number; toneAlt: boolean; tall: boolean; dot: boolean }
@@ -249,10 +263,15 @@ export function drawSky(f: Frame): void {
   band(f, hazeY, skyH - hazeY, skin.skyHaze);
 }
 
-/** Where the sun sits: far enough down that the widest halo band (sunHaloBands' 2.3x) clears the top edge. */
-export function sunAt(view: Viewport): { x: number; y: number; r: number } {
+/**
+ * Where the sun sits: far enough down that the widest halo band (sunHaloBands'
+ * 2.3x) clears the top edge, and sinking toward the hills as the realm's day
+ * wears on. It never reaches them: it paints over the treeline.
+ */
+export function sunAt(view: Viewport, day = 0): { x: number; y: number; r: number } {
   const r = Math.max(5, Math.floor(view.vw / 26));
-  return { x: Math.floor(view.vw * 0.6), y: Math.max(Math.ceil(r * 2.45), Math.floor(view.groundY * 0.13)), r };
+  const drop = Math.floor(view.groundY * (0.13 + Math.max(0, Math.min(1, day)) * 0.2));
+  return { x: Math.floor(view.vw * 0.6), y: Math.max(Math.ceil(r * 2.45), drop), r };
 }
 
 /**
@@ -261,8 +280,8 @@ export function sunAt(view: Viewport): { x: number; y: number; r: number } {
  * halo band overpaints the last, so the glow is carried by area and colour.
  */
 export function drawSun(f: Frame): void {
-  const { ctx, skin, view } = f;
-  const sun = sunAt(view);
+  const { ctx, model, skin, view } = f;
+  const sun = sunAt(view, dayFraction(model.zone, model.zonesInRealm));
   for (const band of sunHaloBands(sun.r)) {
     ctx.fillStyle = mixHex(skin.sun, skin.skyTop, band.skyMix);
     fillFlatDisc(ctx, sun.x, sun.y, band.r, 0, view.sceneBottomY);
@@ -510,7 +529,7 @@ export function drawTreeline(f: Frame): void {
   const sprites = f.sprites.skinned;
   const y = view.groundY + 1;
   const band = fightBand(world, f);
-  for (const prop of PROPS) {
+  for (const prop of propsFor(f.model.zone)) {
     if (prop.kind !== 'tree') continue;
     const x = Math.floor(wrap(prop.at - world.scrollTrees, PROP_SPAN));
     if (x < -24 || x > view.vw + 24) continue;
@@ -576,10 +595,10 @@ export function drawMotes(f: Frame): void {
 
 /** Birds working the upper sky — the cheapest life in an otherwise flat band. */
 export function drawBirds(f: Frame): void {
-  const { ctx, view, world } = f;
+  const { ctx, model, view, world } = f;
   const sprites = f.sprites.skinned;
   const span = view.vw * 3;
-  const sun = sunAt(view);
+  const sun = sunAt(view, dayFraction(model.zone, model.zonesInRealm));
   for (let i = 0; i < 9; i++) {
     const x = Math.floor(wrap(hash01(i * 4.7) * span - world.scrollBirds, span)) - view.vw;
     if (x < -12 || x > view.vw + 12) continue;
@@ -643,7 +662,7 @@ export function drawProps(f: Frame): void {
   const { ctx, view, world } = f;
   const sprites = f.sprites.skinned;
   const band = fightBand(world, f);
-  for (const prop of PROPS) {
+  for (const prop of propsFor(f.model.zone)) {
     if (prop.kind === 'tree') continue;
     const x = Math.floor(wrap(prop.at - world.scrollGround, PROP_SPAN));
     if (x < -30 || x > view.vw + 30) continue;
@@ -703,9 +722,44 @@ export function drawRoadBackdrop(f: Frame, far: RealmSkin, haze: string): void {
   drawSun(f);
 }
 
+export const SIGN_POST_H = 16;
+const SIGN_BOARD_W = 13;
+const SIGN_BOARD_H = 8;
+
+/**
+ * A board on a post at every zone line, carrying the zone number the log
+ * announced. It scrolls with the ground, so the road itself says where the
+ * hero has got to.
+ */
+export function drawSignposts(f: Frame): void {
+  const { ctx, skin, view, world } = f;
+  for (const sign of world.signposts) {
+    const x = Math.floor(sign.x);
+    if (x < -SIGN_BOARD_W || x > view.vw + SIGN_BOARD_W) continue;
+    const top = view.groundY - SIGN_POST_H;
+    drawShadow(f, x, 6);
+    ctx.fillStyle = OUTLINE_INK;
+    ctx.fillRect(x - 2, top - 1, 4, SIGN_POST_H + 1);
+    ctx.fillRect(x - Math.floor(SIGN_BOARD_W / 2) - 1, top - 1, SIGN_BOARD_W + 2, SIGN_BOARD_H + 2);
+    ctx.fillStyle = skin.bark;
+    ctx.fillRect(x - 1, top, 2, SIGN_POST_H);
+    ctx.fillStyle = lighten(skin.bark, 0.38);
+    ctx.fillRect(x - Math.floor(SIGN_BOARD_W / 2), top, SIGN_BOARD_W, SIGN_BOARD_H);
+    ctx.fillStyle = lighten(skin.bark, 0.55);
+    ctx.fillRect(x - Math.floor(SIGN_BOARD_W / 2), top, SIGN_BOARD_W, 1);
+    drawText(ctx, String(sign.zone), x, top + 2, {
+      scale: 1,
+      fill: OUTLINE_INK,
+      outline: null,
+      font: NUMERAL_FONT,
+    });
+  }
+}
+
 /** The turf and what stands on it, drawn inside the camera jolt. */
 export function drawRoadGround(f: Frame): void {
   drawGround(f);
   drawFence(f);
   drawProps(f);
+  drawSignposts(f);
 }

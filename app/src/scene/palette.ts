@@ -539,6 +539,36 @@ export function backdropSkin(skin: RealmSkin): RealmSkin {
   return graded;
 }
 
+/** Where the day ends: the sky, sun and cloud tones the last zone of a realm is graded toward. */
+const DUSK = { skyTop: '#4a2f6b', skyMid: '#d9784d', skyHaze: '#f0b26a', sun: '#ff7a3c', cloud: '#f2a58a', cloudShade: '#a35a6d' };
+/** How far toward DUSK the last zone goes; past this the sky floors would break and the realm stops reading. */
+const DUSK_DEPTH = 0.55;
+
+/** Fraction of the day a zone sits at: dawn at the realm's first zone, dusk at its last. */
+export function dayFraction(zone: number, zonesInRealm: number): number {
+  const span = Math.max(1, zonesInRealm - 1);
+  return Math.max(0, Math.min(1, zone / span));
+}
+
+/**
+ * The realm skin graded toward dusk by `day`. Only the light moves: turf,
+ * rock and every sprite bake keep the realm's authored colour so a creature
+ * is the same creature at zone 1 and zone 49 (DECISIONS.md #38).
+ */
+export function zoneSkin(skin: RealmSkin, day: number): RealmSkin {
+  const t = Math.max(0, Math.min(1, day)) * DUSK_DEPTH;
+  if (t <= 0) return skin;
+  return {
+    ...skin,
+    skyTop: mixHex(skin.skyTop, DUSK.skyTop, t),
+    skyMid: mixHex(skin.skyMid, DUSK.skyMid, t),
+    skyHaze: mixHex(skin.skyHaze, DUSK.skyHaze, t),
+    sun: mixHex(skin.sun, DUSK.sun, t),
+    cloud: mixHex(skin.cloud, DUSK.cloud, t),
+    cloudShade: mixHex(skin.cloudShade, DUSK.cloudShade, t),
+  };
+}
+
 /**
  * Largest height change one hill column may take from its neighbour. The raw
  * sine profile could jump 14px between 3-4px-wide columns — steeper than the

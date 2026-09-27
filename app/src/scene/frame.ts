@@ -13,6 +13,9 @@ import type { World } from './world';
 /** Everything the scene needs for one frame. All display values; no engine writes. */
 export interface SceneModel {
   region: number;
+  /** 0-based zone within the realm, and how many the realm holds; the backdrop drifts across them. */
+  zone: number;
+  zonesInRealm: number;
   /** Lifetime kill count — the scene edge-detects it to fire death FX. */
   kills: number;
   /** Display estimate [0,1] of progress through the current kill. */

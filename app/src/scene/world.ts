@@ -68,8 +68,8 @@ const PARTICLE_CAP = 220;
 const FLOATER_CAP = 12;
 /** Scene units within which a second payout joins the run already there. */
 const MERGE_RADIUS = 26;
-/** How long a landed coin sits before it streaks to the gold readout. */
-const REST_SEC = 0.55;
+/** How long the zone banner hangs in the lane. */
+const ZONE_BANNER_SEC = 1.6;
 /**
  * How far behind the engaged monster the next one in line waits. Wide enough
  * that the third one rests clear of the docked panel's edge rather than being
@@ -102,6 +102,13 @@ export interface Streak {
   age: number;
   gold: boolean;
   spin: number;
+}
+
+/** A zone marker riding the ground scroll past the hero. */
+export interface Signpost {
+  x: number;
+  /** 1-based, as the log names it. */
+  zone: number;
 }
 
 export interface Monster {
@@ -144,6 +151,8 @@ export interface World {
    * road looked like before, and it read as a paused screen.
    */
   queue: Monster[];
+  signposts: Signpost[];
+  lastZone: number;
   lastKills: number;
   deathBurstQueued: boolean;
   particles: Particle[];
@@ -181,6 +190,8 @@ export function createWorld(): World {
     damageTextCooldown: 0,
     bossEnteredAtSec: 0,
     queue: [],
+    signposts: [],
+    lastZone: -1,
     lastKills: -1,
     deathBurstQueued: false,
     particles: [],
@@ -536,6 +547,35 @@ function playKills(w: World, input: WorldInput): void {
   }
 }
 
+/**
+ * The engine crossed a zone line — the scene never decides this. A signpost
+ * walks in from the road ahead and the lane announces it; an offline return
+ * that jumped forty zones plants one post, not forty.
+ */
+function playZone(w: World, input: WorldInput): void {
+  const { model, view } = input;
+  if (w.lastZone < 0 || model.boss) {
+    w.lastZone = model.zone;
+    return;
+  }
+  if (model.zone === w.lastZone) return;
+  const advanced = model.zone > w.lastZone;
+  w.lastZone = model.zone;
+  if (!advanced) return;
+  w.signposts.push({ x: view.worldRightX + 12, zone: model.zone + 1 });
+  addFloater(w, input, {
+    x: view.heroX + 30,
+    y: view.groundY - 60,
+    age: 0,
+    life: ZONE_BANNER_SEC,
+    text: `ZONE ${model.zone + 1}`,
+    color: '#ffffff',
+    tier: 'payout',
+    owned: false,
+    value: 0,
+  });
+}
+
 /** The road keeps QUEUE_DEPTH creatures walking in; the Portal holds one guardian, and it stays. */
 function fillQueue(w: World, input: WorldInput): void {
   const { model, view } = input;
@@ -608,7 +648,7 @@ function autoSwing(w: World, input: WorldInput, dtSec: number): void {
   }
 }
 
-function ageEffects(w: World, speed: number, dtSec: number): void {
+function ageEffects(w: World, heroX: number, speed: number, dtSec: number): void {
   const { particles, floaters, rests, streaks } = w;
   for (let i = particles.length - 1; i >= 0; i--) {
     if (!stepParticle(particles[i]!, dtSec)) particles.splice(i, 1);
@@ -624,12 +664,18 @@ function ageEffects(w: World, speed: number, dtSec: number): void {
     const r = rests[i]!;
     r.age += dtSec;
     r.spin += dtSec * 4;
-    // Landed coins ride the road backwards until they are collected.
+    // Landed coins ride the road back to the hero, who picks them up as he walks over them.
     r.x -= speed * dtSec;
-    if (r.age >= REST_SEC || r.x < -10) {
+    if (r.x <= heroX || r.x < -10) {
       streaks.push({ x0: r.x, y0: r.y, age: 0, gold: r.gold, spin: r.spin });
       rests.splice(i, 1);
     }
+  }
+
+  for (let i = w.signposts.length - 1; i >= 0; i--) {
+    const sign = w.signposts[i]!;
+    sign.x -= speed * dtSec;
+    if (sign.x < -20) w.signposts.splice(i, 1);
   }
 
   for (let i = streaks.length - 1; i >= 0; i--) {
@@ -657,9 +703,10 @@ export function step(w: World, input: WorldInput, dtSec: number): void {
   w.swingAnim = Math.max(0, w.swingAnim - dtSec);
 
   playKills(w, input);
+  playZone(w, input);
   fillQueue(w, input);
   placeQueue(w, input, dtSec);
   kickDust(w, input, dtSec);
   autoSwing(w, input, dtSec);
-  ageEffects(w, speed, dtSec);
+  ageEffects(w, input.view.heroX, speed, dtSec);
 }

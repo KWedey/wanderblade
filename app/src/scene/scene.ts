@@ -16,11 +16,14 @@ import {
   LOOT_INK,
   REALM_SKIN_COUNT,
   backdropSkin,
+  dayFraction,
   depthHaze,
   foregroundInk,
   monsterInk,
   realmSkin,
   sceneryInk,
+  zoneSkin,
+  type RealmSkin,
 } from './palette';
 import {
   BIRD_DOWN,
@@ -127,6 +130,8 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
   let collectAnchorCss: { x: number; y: number } | null = null;
   const model: SceneModel = {
     region: 0,
+    zone: 0,
+    zonesInRealm: 1,
     kills: 0,
     killProgress: 0,
     goldPerKill: 0,
@@ -253,9 +258,20 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     blit();
   }
 
+  // One graded skin per zone, so the backdrop caches keyed on skin identity hold.
+  const zoneSkins = new Map<string, RealmSkin>();
+  function skinFor(next: SceneModel): RealmSkin {
+    const key = `${next.region}:${next.zone}:${next.zonesInRealm}`;
+    const hit = zoneSkins.get(key);
+    if (hit) return hit;
+    const graded = zoneSkin(realmSkin(next.region), dayFraction(next.zone, next.zonesInRealm));
+    zoneSkins.set(key, graded);
+    return graded;
+  }
+
   function frame(dtSec: number, next: SceneModel): void {
     f.model = next;
-    f.skin = realmSkin(next.region);
+    f.skin = skinFor(next);
     if (!next.paused) step(world, f, Math.min(dtSec, 0.1));
     draw();
   }
