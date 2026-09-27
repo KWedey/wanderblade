@@ -7,7 +7,7 @@ import { floaterOffsetY, inAnyPocket, lifeRemaining } from './fx';
 import { OUTLINE_INK, mixHex } from './palette';
 import { NUMERAL_FONT, textWidth } from './pixels';
 import { drawSprite, drawText } from './sprites';
-import { COMBO_LANE, FLOATER_RISE, laneBaseline } from './textlane';
+import { FLOATER_RISE, laneBaseline } from './textlane';
 import { STREAK_SEC, pockets } from './world';
 
 export function drawMomentumMeter(f: Frame): void {
