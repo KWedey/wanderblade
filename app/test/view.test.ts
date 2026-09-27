@@ -17,6 +17,7 @@ vi.mock('../src/scene/scene', () => ({
     setSceneRight: () => {},
     setCollectAnchor: () => {},
     setComboAnchor: () => {},
+    probeAnchors: () => ({ killPoint: { x: 0, y: 0 }, landing: { x0: 0, x1: 0, y: 0 } }),
     dispose: () => {},
   }),
 }));

@@ -422,13 +422,18 @@ function killMonster(w: World, input: WorldInput): void {
   }
 }
 
-/** Swing the blade. Returns whether a creature was in reach to take the hit. */
-function swing(w: World, input: WorldInput, fromStrike: boolean): boolean {
+/**
+ * Start the blade's stroke. At a maxed speed node and full momentum the
+ * cadence outruns a fixed 0.32s animation, and overlapping swings read as a
+ * blur rather than as faster hits. The stroke shortens to fit its own interval.
+ */
+function swing(w: World, input: WorldInput): void {
+  w.swingAnim = Math.min(SWING_ANIM_SEC, swingInterval(input.model.attackSpeedMult) * 0.9);
+}
+
+/** Land the stroke on the engaged creature. Returns whether one was in reach to take it. */
+function hitLead(w: World, input: WorldInput, fromStrike: boolean): boolean {
   const { model, view } = input;
-  // At a maxed speed node and full momentum the cadence outruns a fixed
-  // 0.32s animation, and overlapping swings read as a blur rather than as
-  // faster hits. The stroke shortens to fit its own interval instead.
-  w.swingAnim = Math.min(SWING_ANIM_SEC, swingInterval(model.attackSpeedMult) * 0.9);
   const lead = w.queue[0];
   if (!lead || lead.x - engageInset(w, input) > view.heroX + BLADE_REACH + 16) return false;
 
@@ -548,18 +553,30 @@ export interface StrikeResult {
   missed: boolean;
 }
 
+/** Air above the ground line a tap on the fight may land in; a thumb aims at the body, not the feet. */
+const FIGHT_TAP_HEIGHT = 44;
+
+/** True when a tap's scene point sits on the duel: the strip between the hero and the engaged creature, up to head height. */
+function tapOnFight(w: World, input: WorldInput, at: { x: number; y: number }): boolean {
+  const band = fightBand(w, input);
+  const { groundY } = input.view;
+  return at.x >= band.x0 && at.x <= band.x1 && at.y >= groundY - FIGHT_TAP_HEIGHT && at.y <= groundY + 8;
+}
+
 /**
- * A Strike at scene point `at`, or unaimed when null. The engine decides the
- * catch on its next tick; the whiff is read now off the same hit test, on the
- * arcs as drawn, because a miss that answers a tenth of a second late reads
- * as no answer at all.
+ * A Strike at scene point `at`, or unaimed when null. An aimed strike lands
+ * where it was aimed: on the creature, on a coin, or on nothing. The engine
+ * decides the catch on its next tick; the whiff is read now off the same hit
+ * test, on the arcs as drawn, because a miss that answers a tenth of a second
+ * late reads as no answer at all.
  */
 export function strike(w: World, input: WorldInput, at: { x: number; y: number } | null): StrikeResult {
   const { model, view } = input;
   // Restart the auto-attack cadence rather than zeroing it — zero would go
   // negative on the very next step() and fire an immediate duplicate swing.
   w.swingCooldown = 1 / SWINGS_PER_SEC;
-  const connected = swing(w, input, true);
+  swing(w, input);
+  const connected = (at === null || tapOnFight(w, input, at)) && hitLead(w, input, true);
 
   const aim = at ? toArcSpace(view, at.x, at.y) : autoAim(input);
   const point = at ?? (aim ? fromArcSpace(view, aim.x, aim.y) : null);
@@ -764,7 +781,10 @@ function autoSwing(w: World, input: WorldInput, dtSec: number): void {
   w.swingCooldown -= dtSec * input.model.attackSpeedMult;
   if (w.swingCooldown <= 0) {
     w.swingCooldown += 1 / SWINGS_PER_SEC;
-    if (w.queue.length > 0) swing(w, input, false);
+    if (w.queue.length > 0) {
+      swing(w, input);
+      hitLead(w, input, false);
+    }
   }
 }
 

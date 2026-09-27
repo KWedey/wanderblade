@@ -108,3 +108,12 @@ export function toScene(view: Viewport, canvas: HTMLCanvasElement, clientX: numb
     y: (clientY - rect.top) / view.pixelScale - view.sceneOffsetY,
   };
 }
+
+/** Scene units back to client coords: the inverse of toScene, for anything that has to point at the world from outside it. */
+export function toClient(view: Viewport, canvas: HTMLCanvasElement, sceneX: number, sceneY: number): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: rect.left + sceneX * view.pixelScale,
+    y: rect.top + (sceneY + view.sceneOffsetY) * view.pixelScale,
+  };
+}

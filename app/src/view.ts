@@ -577,6 +577,10 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     scene.setCollectAnchor(r.left + r.width / 2, r.top + r.height / 2);
     const d = dpsEl.getBoundingClientRect();
     scene.setComboAnchor(d.right, d.bottom);
+    // Landmarks for the browser probes, in client pixels: where a tap hits a coin and where it hits sky.
+    const { killPoint, landing } = scene.probeAnchors();
+    sceneCanvas.dataset['killPoint'] = `${Math.round(killPoint.x)},${Math.round(killPoint.y)}`;
+    sceneCanvas.dataset['landing'] = `${Math.round(landing.x0)},${Math.round(landing.x1)},${Math.round(landing.y)}`;
   }
   /**
    * The view owns layout, so it is the view that tells the scene how much

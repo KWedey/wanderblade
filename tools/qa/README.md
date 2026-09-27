@@ -1,6 +1,6 @@
 # QA tools
 
-Five browser probes that answer a question about the running game with numbers
+Six browser probes that answer a question about the running game with numbers
 instead of an opinion, plus two offline image tools. Each takes `--help`; this file only says which one to reach for.
 
 | Command | The question it answers |
@@ -10,6 +10,7 @@ instead of an opinion, plus two offline image tools. Each takes `--help`; this f
 | `npm run qa:wiring` | Does the live page register the listeners a held strike depends on? Unit tests cover the rule; only this covers the wiring. |
 | `npm run qa:mobile -- --selftest` | Plants a decoy button under each inset and exits non-zero if the notch check misses them. Run it whenever that check reports clean. |
 | `npm run qa:loop` | Can a person get Road -> Portal -> Boss through the DOM, and does the projected fight land in the 15–90 minute band? |
+| `npm run qa:miss` | Does a tap on empty sky count as a miss, and does a tap along the coin landing span still catch? |
 | `npm run qa:pixels -- <png> <x> <y> <w> <h>` | What colour is that region, so a claim about the art can be settled? |
 | `npm run qa:speckle -- <png> --right <x>` | Which colour is speckling the world, and how much of it? |
 

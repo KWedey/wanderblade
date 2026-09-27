@@ -150,12 +150,34 @@ describe('a strike that hits nothing is a miss the player can see', () => {
     expect(Math.abs(spark.y - 20)).toBeLessThan(8);
   });
 
-  it('is not a miss when the engaged creature is under the blade', () => {
+  function engaged() {
     const { f } = frame({ view, model: { kills: 3 } });
     step(f.world, f, 1 / 60);
     f.model.killProgress = 0.9;
     step(f.world, f, 1 / 60);
-    expect(strike(f.world, f, { x: 40, y: 20 }).missed).toBe(false);
+    return f;
+  }
+
+  it('is not a miss when the tap lands on the engaged creature', () => {
+    const f = engaged();
+    const lead = f.world.queue[0]!;
+    const r = strike(f.world, f, { x: lead.x, y: view.groundY - 8 });
+    expect(r.missed).toBe(false);
+    expect(lead.flash).toBeGreaterThan(0);
+  });
+
+  it('is a miss when the tap is in the sky, even with a creature under the blade: the blade swung at what was aimed at', () => {
+    const f = engaged();
+    const lead = f.world.queue[0]!;
+    const r = strike(f.world, f, { x: 40, y: 20 });
+    expect(r.missed).toBe(true);
+    expect(lead.flash).toBe(0);
+    expect(f.world.swingAnim).toBeGreaterThan(0);
+  });
+
+  it('is not a miss for an unaimed strike while a creature is under the blade', () => {
+    const f = engaged();
+    expect(strike(f.world, f, null).missed).toBe(false);
   });
 
   it('is not a miss when the tap sits on a drawn coin, even with no creature in reach', () => {

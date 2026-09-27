@@ -24,7 +24,8 @@
     "qa:speckle": "node tools/qa/speckle.mjs",
     "qa:mobile": "node tools/qa/mobile.mjs",
     "qa:wiring": "node tools/qa/wiring.mjs",
-    "qa:loop": "node tools/qa/loop.mjs"
+    "qa:loop": "node tools/qa/loop.mjs",
+    "qa:miss": "node tools/qa/miss.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

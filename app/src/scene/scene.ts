@@ -8,7 +8,8 @@ import { drawArcs, drawHero, drawHeroGround, drawMonsters } from './actors';
 import { drawDungeonBackdrop, drawDungeonFloor } from './dungeon';
 import { type Frame, type SceneModel, type SceneSprites, type SkinnedSprites } from './frame';
 import { shakeOffset } from './fx';
-import { createViewport, layoutViewport, toScene as toSceneAt, type Chrome } from './geometry';
+import { ARC_MAX_REACH, ARC_MIN_REACH } from '@wanderblade/core';
+import { createViewport, layoutViewport, toClient, toScene as toSceneAt, type Chrome } from './geometry';
 import { drawFloaters, drawMomentumMeter, drawParticles, drawRests, drawStreaks } from './overlay';
 import {
   HERO_INK,
@@ -45,7 +46,7 @@ import {
 } from './pixels';
 import { buildGroundTexture, drawForeground, drawMotes, drawRoadBackdrop, drawRoadGround } from './road';
 import { bakeSprite, context } from './sprites';
-import { catchArc, createWorld, step, strike, type StrikeResult } from './world';
+import { catchArc, createWorld, fromArcSpace, killPointX, step, strike, type StrikeResult } from './world';
 
 export type { SceneModel } from './frame';
 export type { StrikeResult } from './world';
@@ -75,7 +76,14 @@ export interface Scene {
   setCollectAnchor(clientX: number, clientY: number): void;
   /** Viewport point the combo widget hangs from — the DPS readout's bottom-right corner. */
   setComboAnchor(clientX: number, clientY: number): void;
+  /** Client-pixel landmarks a browser probe aims at: the kill point, and the span coins land on. */
+  probeAnchors(): ProbeAnchors;
   dispose(): void;
+}
+
+export interface ProbeAnchors {
+  killPoint: { x: number; y: number };
+  landing: { x0: number; x1: number; y: number };
 }
 
 const NO_JOLT = { x: 0, y: 0 };
@@ -189,6 +197,15 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     return toSceneAt(view, canvas, clientX, clientY);
   }
 
+  function probeAnchors(): ProbeAnchors {
+    const near = fromArcSpace(view, ARC_MIN_REACH, 0);
+    const far = fromArcSpace(view, ARC_MAX_REACH, 0);
+    const kill = toClient(view, canvas, killPointX(view), view.arcBaseY);
+    const x0 = toClient(view, canvas, near.x, near.y);
+    const x1 = toClient(view, canvas, far.x, far.y);
+    return { killPoint: kill, landing: { x0: x0.x, x1: x1.x, y: x0.y } };
+  }
+
   /** The view owns layout; it tells the scene how much chrome sits above the road. */
   function setSceneTop(cssPx: number): void {
     const next = Math.max(0, Math.round(cssPx));
@@ -296,6 +313,7 @@ export function createScene(canvas: HTMLCanvasElement): Scene {
     catchArc: (bonusGold, upgraded) => catchArc(world, f, bonusGold, upgraded),
     setCollectAnchor,
     setComboAnchor,
+    probeAnchors,
     setSceneTop,
     setSceneRight,
     dispose,
