@@ -583,8 +583,11 @@ export function deserialize(json: string): GameState {
   if (state.collection) state.collection.speciesKills ??= [];
   if (legacy.collection) delete legacy.collection.bossTrophies;
   if (legacy.lifetime) {
-    if (state.ascendancy && state.ascendancy.victories === undefined) {
-      state.ascendancy.victories = legacy.lifetime.ascensions ?? 0;
+    const ascensions = legacy.lifetime.ascensions ?? 0;
+    if (state.ascendancy === undefined) {
+      state.ascendancy = { pending: 0, banked: 0, nodes: {}, victories: ascensions };
+    } else {
+      state.ascendancy.victories ??= ascensions;
     }
     delete legacy.lifetime.kills;
     delete legacy.lifetime.ascensions;

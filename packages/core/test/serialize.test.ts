@@ -95,4 +95,13 @@ describe('serialize / deserialize', () => {
     advance(twin, 3600);
     expect(serialize(loaded)).toBe(serialize(twin));
   });
+
+  it('carries the ascension count of a save that predates the Ascendancy block', () => {
+    const legacy = JSON.parse(serialize(initialState(2))) as Record<string, Record<string, unknown>>;
+    delete legacy.ascendancy;
+    legacy.lifetime!.ascensions = 2;
+    const loaded = deserialize(JSON.stringify(legacy));
+    expect(loaded.ascendancy).toEqual({ pending: 0, banked: 0, nodes: {}, victories: 2 });
+    expect(() => advance(loaded, 60)).not.toThrow();
+  });
 });

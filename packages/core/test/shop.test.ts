@@ -110,6 +110,7 @@ describe('purchaseOptions', () => {
       expect(row.affordable).toBe(true);
       expect(Number.isFinite(row.cost)).toBe(true);
     }
+    expect(bestBuy(s, 'ascendancy')).not.toBeNull();
   });
 
   it('still prices a skill at every rank a realm can actually reach', () => {
