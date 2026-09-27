@@ -6,6 +6,7 @@ import {
   initialState,
   serialize,
   summarizeEvents,
+  zonesForRealm,
 } from '@wanderblade/core';
 import { clearSave, migrate, readSave, SAVE_VERSION, writeSave } from '../src/save';
 import { installMemoryStorage } from './helpers/memory-storage';
@@ -288,6 +289,25 @@ describe('a saved run resumes exactly where a live one would be', () => {
 
 // A phone that crosses a timezone, or a hand-set clock, hands the client a
 // negative gap. It must be a no-op, never a rewind or a NaN.
+// A save written when realm 0 had 50 zones names a zone that no longer
+// exists. It must load as a finished road with the portal open, not be
+// discarded as malformed.
+describe('a save from a longer road', () => {
+  it('loads clamped onto the last zone with the portal open', () => {
+    const state = initialState(5);
+    state.zone = 49;
+    state.killsInZone = 700;
+    writeSave(state);
+    const loaded = readSave();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.state.realm).toBe(0);
+    expect(loaded!.state.zone).toBe(zonesForRealm(0) - 1);
+    expect(loaded!.state.killsInZone).toBe(0);
+    expect(loaded!.state.portalReady).toBe(true);
+    expect(serialize(loaded!.state)).toBe(serialize(deserialize(serialize(state))));
+  });
+});
+
 describe('a clock that goes backwards', () => {
   it('advances nothing and changes nothing', () => {
     const state = initialState(5);
