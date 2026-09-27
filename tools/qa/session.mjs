@@ -14,8 +14,8 @@ if (argv.includes('--help') || argv.includes('-h')) {
   npm run qa:session -- [--port <n>] [--seed <n>] [--tap-ms <ms>] [--portal-max <min>] [--ascend-max <min>] [--budget <min>]
 
 Starts a fresh seed, presses Space every --tap-ms (default 300, about the
-momentum-sustaining rate), buys every affordable upgrade row every few
-seconds, enters the portal the moment it opens, and keeps striking until the
+momentum-sustaining rate), takes the game's own Best value pick every few
+seconds (any green row when it has none), enters the portal the moment it opens, and keeps striking until the
 realm name changes. Exits non-zero if the portal takes longer than
 --portal-max (default 20) or ascension longer than --ascend-max (default 30).`);
   process.exit(0);
@@ -60,6 +60,13 @@ try {
     const zoneLabel = async () => (await text()).match(/Zone \d+\/\d+/)?.[0] ?? null;
     const enter = page.locator('[data-role="enter-portal"]');
     const buyable = page.locator('.upgrades .upgrade-btn:not([disabled]):not(.asc-node)');
+    const bestBuy = page.locator('[data-role="best-buy"]:not([hidden]):not([disabled])');
+    const buyOne = async () => {
+      const b = (await bestBuy.isVisible().catch(() => false)) ? bestBuy : buyable.first();
+      if (!(await b.isVisible().catch(() => false))) return false;
+      await b.click();
+      return true;
+    };
 
     const start = Date.now();
     const sec = () => (Date.now() - start) / 1000;
@@ -83,8 +90,7 @@ try {
       if (enteredAt === null && sec() - lastBuy > 4) {
         lastBuy = sec();
         for (let i = 0; i < 12; i++) {
-          if (!(await buyable.first().isVisible().catch(() => false))) break;
-          await buyable.first().click();
+          if (!(await buyOne())) break;
           bought += 1;
         }
       }
@@ -92,8 +98,7 @@ try {
         portalAt = sec();
         steps.push(`portal opened at ${(portalAt / 60).toFixed(1)} min after ${bought} purchases`);
         for (let i = 0; i < 30; i++) {
-          if (!(await buyable.first().isVisible().catch(() => false))) break;
-          await buyable.first().click();
+          if (!(await buyOne())) break;
           bought += 1;
         }
         await enter.click();
