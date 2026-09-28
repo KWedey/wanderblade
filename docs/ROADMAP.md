@@ -97,7 +97,7 @@ Verdict on 2026-09-27: the game is not fun. Nothing on screen changes between zo
 - [x] Pending Ascendancy on the Road HUD
 - [x] Realm 0 portal-ready in 12–20 min active, guardian 3–6 min; realm length and boss band grow per realm (ADR #64)
 - [x] Upgrade scarcity: ≤ 2 affordable rows most of the time, never starved; P5/P6/P8 re-banded per realm, full sim quoted (ADR #64)
-- [ ] Real-phone playtest recorded in `docs/PLAYTESTS.md`: first session reaches ascension
+- [ ] Real-phone playtest recorded in `docs/PLAYTESTS.md`: first session reaches ascension — template and steps are in the file; headless reference passes on seeds 7 and 11
 
 **Exit:** a first-time player ascends inside one session and can say what tapping did.
 
