@@ -77,9 +77,11 @@ try {
     let portalAt = null;
     let enteredAt = null;
     const zones = [];
+    let taps = 0;
 
     while (sec() < budgetSec) {
       await page.keyboard.press('Space');
+      taps += 1;
       await page.waitForTimeout(tapMs);
 
       const z = await zoneLabel();
@@ -101,15 +103,17 @@ try {
           if (!(await buyOne())) break;
           bought += 1;
         }
+        const preview = await page.evaluate(() => document.querySelector('[data-role="portal-eta"]')?.textContent ?? null);
         await enter.click();
         enteredAt = sec();
-        steps.push(`entered at ${(enteredAt / 60).toFixed(1)} min with ${bought} purchases`);
+        steps.push(`entered at ${(enteredAt / 60).toFixed(1)} min with ${bought} purchases; blade-in-hand estimate ${preview}`);
       }
       if (enteredAt !== null) {
         const r = await realmName();
         if (r && r !== realm0) {
           const ascendAt = sec();
           steps.push(`ascended to ${r} at ${(ascendAt / 60).toFixed(1)} min; fight ${((ascendAt - enteredAt) / 60).toFixed(1)} min`);
+          steps.push(`real tap rate ${(taps / ascendAt).toFixed(2)}/s against a ${(1000 / tapMs).toFixed(2)}/s setting`);
           if (portalAt > portalMaxSec) fail(`portal took ${(portalAt / 60).toFixed(1)} min, over ${portalMaxSec / 60}`);
           if (ascendAt > ascendMaxSec) fail(`ascension took ${(ascendAt / 60).toFixed(1)} min, over ${ascendMaxSec / 60}`);
           if (consoleErrors.length > 0) fail(`${consoleErrors.length} console errors during the session`);
