@@ -103,8 +103,12 @@ export function stageFromQuery(search: string): GameState | null {
   return stageState({ ...preset, seed: seedFromQuery(search) ?? 20260825 });
 }
 
-/** `?seed=7` as a run seed, or null when it is absent or not a positive number. */
+/**
+ * `?seed=7` as a run seed, or null when it is absent or not a whole number in
+ * 1..2^32-1. Checked after flooring, and against the engine's uint32 seed, so
+ * `0.5` and `2^32` cannot slip through as seed 0.
+ */
 export function seedFromQuery(search: string): number | null {
-  const raw = Number(new URLSearchParams(search).get('seed'));
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null;
+  const seed = Math.floor(Number(new URLSearchParams(search).get('seed')));
+  return seed >= 1 && seed <= 0xffff_ffff ? seed : null;
 }

@@ -110,8 +110,21 @@ describe('seedFromQuery', () => {
     expect(seedFromQuery('?seed=7.9')).toBe(7);
   });
 
+  it('keeps the largest seed the engine can hold', () => {
+    expect(seedFromQuery('?seed=4294967295')).toBe(4294967295);
+  });
+
   it('returns null when there is no usable seed', () => {
-    for (const search of ['', '?seed=', '?seed=abc', '?seed=0', '?seed=-3', '?seed=Infinity']) {
+    for (const search of [
+      '',
+      '?seed=',
+      '?seed=abc',
+      '?seed=0',
+      '?seed=0.5',
+      '?seed=-3',
+      '?seed=Infinity',
+      '?seed=4294967296',
+    ]) {
       expect(seedFromQuery(search), search).toBeNull();
     }
   });
