@@ -55,7 +55,7 @@ A [Playwright Test](https://playwright.dev) suite in `e2e/` plays the walkthroug
 | 1. Strike | `strike.spec.ts` | Tap and Space both strike; momentum lifts the gold rate, then fades; a sky tap whiffs, a coin tap catches |
 | 2. Buy | `shop.spec.ts` | Levels and skills buy and rank up; locked skills unlock; "in ~1m 00s" is honest; Best value buys what it names and hides when nothing is affordable; gear drops |
 | 3. Portal and boss | `portal.spec.ts` | The portal opens; striking beats idling; a short press on Abandon does nothing, a full hold walks away, and the guardian heals to full |
-| 4. Ascension | `ascension.spec.ts` | Victory lands inside the panel's own ETA; the realm resets; Ascendancy banks and the tree spends it |
+| 4. Ascension | `ascension.spec.ts` | Victory lands no later than ten seconds past the panel's own ETA; the realm resets; Ascendancy banks and the tree spends it |
 | 5. Offline | `offline.spec.ts` | Cold load, a sleeping tab, and the time warp all reconcile; a cold load and a warp over the same hour agree to the coin; the recap takes keyboard focus |
 | 6. Staging | `staging.spec.ts` | `?stage=mid&seed=7` starts deep in a run and never touches the real save; `?seed=` seeds a fresh run |
 | Devices | `device.spec.ts` | Each project runs at its promised width and pointer; nothing scrolls sideways |
@@ -78,6 +78,7 @@ Projects:
 npx playwright install chromium   # once
 npm run e2e                       # the whole suite, all three projects
 npm run e2e -- --project phone    # one project
+E2E_PORT=5401 npm run e2e         # its servers on 5401-5402, if another checkout holds 5287
 npm run e2e -- --ui               # watch it play, step by step
 npm run e2e:docker                # in CI's Linux image (needs Docker)
 npm run e2e:docker -- --update-snapshots   # refresh the -linux screenshot baselines

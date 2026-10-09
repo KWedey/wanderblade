@@ -19,6 +19,7 @@ npm run build                # production build of app/
 npm run build:pages          # the same build under /wanderblade/, as GitHub Pages serves it
 npm run verify               # THE GATE: lint + typecheck + test
 npm run e2e                  # Playwright e2e: desktop Chromium, Pixel 7, and the Pages build
+E2E_PORT=5401 npm run e2e    # strict ports (5287-5288 by default): give each concurrent checkout its own
 npm run e2e:docker           # the same suite in CI's Linux image; `-- --update-snapshots` refreshes -linux baselines
 npm test                     # vitest across all workspaces; sim/test/gate.test.ts runs a 3-day sim and asserts ALL PASS
 npm run typecheck            # tsc --noEmit over core, sim, and app
