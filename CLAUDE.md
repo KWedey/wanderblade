@@ -29,7 +29,7 @@ npm run sim -- --help        # full flag list
 npm run thumb                # headless thumb model: catch rate vs latency and aim (ADR #43, #47)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm run verify`, `npm run build`, a 3-day sim that must print ALL PASS, and the e2e suite (`e2e.yml`, in the Playwright image pinned to `@playwright/test`). `pages.yml` deploys the Pages build with that run's report at `/report/` on every push to `feat/m1r-integration`.
+CI (`.github/workflows/ci.yml`) runs `npm run verify`, `npm run build`, a 3-day sim that must print ALL PASS, and the e2e suite in the Playwright image pinned to `@playwright/test`. On a push to `feat/m1r-integration`, a run with every job green also deploys the Pages build (`app/dist-pages`) with that run's report at `/report/`.
 
 E2E specs (`e2e/`) drive the game through `e2e/support/wanderblade.ts` on Playwright's fake clock, frozen at boot, with seeded runs. Screenshot baselines are per platform; CI compares the `-linux` ones.
 
