@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/m1r-integration]
   pull_request:
 
 jobs:
@@ -23,3 +23,6 @@ jobs:
         run: |
           npm run sim -- --quick --days 3 --seeds 1 | tee sim-ci.log
           grep -q '^ALL PASS' sim-ci.log || { echo '::error::sim reported a FAIL'; exit 1; }
+
+  e2e:
+    uses: ./.github/workflows/e2e.yml
