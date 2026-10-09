@@ -258,6 +258,25 @@ export class Wanderblade {
   recapTallies(): Locator {
     return this.recap.getByRole('listitem');
   }
+
+  /**
+   * Tab `presses` times and name every stop outside `dialog`. Leaving the
+   * document between laps is fine; landing on the page behind it is not.
+   */
+  async tabStopsOutside(dialog: Locator, presses: number): Promise<string[]> {
+    const handle = await dialog.elementHandle();
+    const strays: string[] = [];
+    for (let i = 0; i < presses; i++) {
+      await this.page.keyboard.press('Tab');
+      const stray = await this.page.evaluate((box) => {
+        const at = document.activeElement;
+        if (!at || at === document.body || box?.contains(at)) return null;
+        return at.getAttribute('aria-label') ?? at.textContent?.trim() ?? at.tagName;
+      }, handle);
+      if (stray !== null) strays.push(stray);
+    }
+    return strays;
+  }
 }
 
 /** A panel section, found by its heading. */

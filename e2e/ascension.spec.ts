@@ -34,6 +34,15 @@ test('the Ascendancy tree opens from the Road and closes again', async ({ game }
   await expect(game.ascendancy).toBeHidden();
 });
 
+test('the open tree keeps Tab inside it, so nothing behind it can be bought blind', async ({
+  game,
+}) => {
+  await game.openAscendancy.click();
+  await expect(game.ascendancy.getByRole('button', { name: 'Back to the Road' })).toBeFocused();
+
+  expect(await game.tabStopsOutside(game.ascendancy, 12)).toEqual([]);
+});
+
 test('felling the guardian ascends the realm and resets the run', async ({ game }) => {
   await expect(game.region).toHaveText('Greenwood');
 

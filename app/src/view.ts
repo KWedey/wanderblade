@@ -716,16 +716,26 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     });
     btn.addEventListener('click', () => handlers.onBuyAscendancyNode(id));
   }
+  /**
+   * aria-modal only tells a screen reader the page is behind glass. `inert` is
+   * what stops Tab walking onto a shop button the overlay covers and buying blind.
+   */
+  function setOverlayOpen(overlay: HTMLElement, open: boolean): void {
+    overlay.hidden = !open;
+    const top = [...root.querySelectorAll(':scope > .recap-overlay:not([hidden])')].at(-1);
+    for (const child of root.children) child.toggleAttribute('inert', top !== undefined && child !== top);
+  }
+
   const ascCloseBtn = q<HTMLButtonElement>(root, '[data-role="asc-close"]');
   q(root, '[data-role="asc-open"]').addEventListener('click', () => {
-    ascOverlay.hidden = false;
+    setOverlayOpen(ascOverlay, true);
     // Closed overlays sit out layout changes, so the tree measures afresh.
     markPixelDirty(ascOverlay);
     // A modal dialog takes focus, or a keyboard is left on the page behind it.
     ascCloseBtn.focus();
   });
   ascCloseBtn.addEventListener('click', () => {
-    ascOverlay.hidden = true;
+    setOverlayOpen(ascOverlay, false);
   });
 
   const recapOverlay = q(root, '[data-role="recap"]');
@@ -737,7 +747,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const recapBosses = q(root, '[data-role="recap-bosses"]');
   const recapCollectBtn = q<HTMLButtonElement>(root, '[data-role="recap-collect"]');
   recapCollectBtn.addEventListener('click', () => {
-    recapOverlay.hidden = true;
+    setOverlayOpen(recapOverlay, false);
     handlers.onCollectRecap();
   });
 
@@ -982,7 +992,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     recapGold.textContent = formatNumber(recap.goldEarned);
     recapDrops.textContent = formatNumber(recap.drops);
     recapBosses.textContent = formatNumber(recap.victories);
-    recapOverlay.hidden = false;
+    setOverlayOpen(recapOverlay, true);
     // Outside .screen, so it needs its own repaint or it keeps a webfont the
     // rest of the product does not use.
     repaintPixelText(recapOverlay);
