@@ -1,104 +1,207 @@
 # Wanderblade — Design (GDD-lite)
 
-Companion docs: [VISION.md](VISION.md) (why), [ECONOMY.md](ECONOMY.md) (numbers), [ROADMAP.md](ROADMAP.md) (when).
+Companion docs: [VISION.md](VISION.md) (why), [ECONOMY.md](ECONOMY.md) (numbers and simulation contract), [ROADMAP.md](ROADMAP.md) (when), [DECISIONS.md](DECISIONS.md) (decision history).
 
 ## Core loop
 
 ```mermaid
-graph LR
-  A[Hero auto-fights<br/>on the road] --> B[Loot + gold drop]
-  B --> C[Player spends:<br/>levels, gear, skills]
-  C --> D[Hero hits harder,<br/>marches faster]
-  D --> E[New country: tougher species,<br/>region boss gates]
-  E --> A
+stateDiagram-v2
+  [*] --> Road
+  Road --> Road: Slay minions / earn / upgrade
+  Road --> PortalBoss: Player manually enters portal
+  PortalBoss --> Road: Player abandons / boss HP resets
+  PortalBoss --> Ascension: Boss HP reaches zero
+  Ascension --> Road: Bank rewards / unlock realm / reset run power
 ```
+
+The hero is always in exactly one gameplay phase: **Road** or **Portal Boss**. Both phases progress online and offline and may last hours or days. Ascension is an atomic transition between them, not a third mode the player farms.
 
 ## World structure
 
-- The realm is **one long road**, west to east, divided into **regions** (biomes). Each region contains several **zones**; each zone has its own monster species mix; each region ends at a **named boss** whose fall opens the next region.
-- Headline progression number: **leagues traveled** (alongside gold). The road is a side-scrolling diorama that visibly transforms as you cross biome boundaries.
-- Region list v1 (working): Greenwood → Ruinfields → Mistmarsh → Ironhills → Ember Wastes → Dragon Peaks → **World's Edge** (v1 finale).
+- The world is divided into sequential **realms**. Each realm has its own road, threatened settlements, monster families, visual identity, and portal guardian.
+- Monsters are emerging from portals and besieging the wider world. Towns and villages establish stakes and may appear as scenery, story beats, or discoveries; there is no town-management game.
+- Road progress is divided into zones or waypoints for pacing and presentation. The portal becomes available when the realm's conditions are met, but entry is always manual.
+- Defeating the guardian closes that realm's threat, unlocks the next realm, and immediately triggers ascension.
+- The v1 realm sequence and exact portal conditions will be selected during content and economy design; they must not be encoded as lore-only assumptions in the engine.
 
-## Systems
+## Content and SRD boundary
 
-### Combat (automatic)
-Hero walks right; monsters spawn ahead; hero auto-attacks. Kill time = enemy HP / hero DPS. Fast kills read as marching; slow kills read as a fight. Deterministic rules only — combat must produce identical results in the offline simulator and live play; all randomness (drops) flows through a seeded PRNG keyed to kill index (see ECONOMY.md "Simulator & determinism contract" and DECISIONS.md #6).
+- The recognizable monster vocabulary is drawn from creatures explicitly present in **System Reference Document 5.2.1**, licensed under **CC-BY-4.0**.
+- SRD inclusion is a whitelist, not permission to use material from other D&D books, settings, adventures, brands, or art.
+- Wanderblade creates original creature art, animations, encounter groupings, stats, drops, portal lore, realm names, and boss presentation.
+- [SRD-CONTENT.md](SRD-CONTENT.md) lists every approved SRD-derived name or description and reproduces the required attribution. See DECISIONS.md #17.
+- Familiar examples include goblins, gnolls, and dragons only where the selected name/content is verified against the licensed SRD source.
 
-### Gear
-- Three slots in v1: **weapon, armor, trinket**. Drops have rarity tiers.
-- **No stat weighing**: a better item glows and one tap (or auto-equip) wears it. Bigger = better, always.
-- Each region has a **gear set** to complete (collection, not power puzzle).
+## Phase 1 — The Road
 
-### Skills
-- 3–5 **signature skills** total in v1, unlocked at milestones, auto-cast with a visible flourish. The only choice is which to upgrade next.
-- Economically, skills are steady DPS multipliers with their own cost curve (see ECONOMY.md) — the auto-cast flourish is presentation, not math, so the simulator can price them.
-- Each skill's multiplier is **bounded**: a fixed number of ranks (M0 prototype: `maxLevel` 10, ×1.5 each / ×2.25 both), so the multiplicative term is a finite ceiling that can never run away. A maxed skill shows **MAX** in the upgrade drawer.
+The road is where the hero builds all temporary realm power.
 
-### Road Play (optional active layer)
-The Idle Slayer lesson, adopted and inverted: active play lives in the grind stretches between decisions — and is **always a live-only, additive bonus**. The seeded kill/drop stream never changes; taps only layer extra on top. The idle baseline must hit every pacing target with zero taps (see ECONOMY.md "Active-play overlay"). Idle Slayer's failure mode — active play becoming near-mandatory for good rates — is the explicit anti-pattern.
+### Automatic progression
 
-- **Trailside Glints (v1):** kills spin loot into gentle arcs across the road; tap a glint before it fades for bonus gold. Density scales with kill speed. Occasionally an oversized **jackpot glint** (a gilded road champion dripping with loot) swaggers through. Uncaught glints simply fade — the idle player loses nothing.
-- **Roadside Discoveries (v1):** roughly once per check-in, a point of interest drifts into view — a wayside shrine, a half-buried chest, a lookout over the next biome. Tap to investigate for bonus gold, a small buff charm, or a **Wayfarer's Log** entry (a light second collection axis beside the Bestiary).
-- **Deferred candidates:** *Heroic Finisher* (tap to land killing blows on tough foes; small capped Momentum multiplier) — revisit once tap-feel is proven; *Focus the Hunt* (aim the grind at an unmastered species) — M2+, needs the Bestiary.
+- The hero walks forward and automatically fights endless portal minions.
+- Kills grant gold, gear opportunities, collection progress, and **pending Ascendancy** according to the tuned economy.
+- Offline and live auto-combat share the same deterministic engine path. Identical elapsed time, state, and player-action inputs must produce identical results.
+- Idle-only players progress meaningfully but more slowly than players who engage in active sessions.
 
-### Bestiary (the mastery spine)
-- Every species has kill-count mastery tiers. Completing a tier grants a small **permanent global damage bonus** and completion credit.
-- The fantasy: *"this region is mine now."*
+### Temporary realm build
 
-### Zone stars
-Per region, three stars: **boss slain ★ · gear set complete ★ · bestiary complete ★**. The whole-game completion meta is the star ledger.
+- **Resets on ascension:** gold, hero level, equipped gear, temporary skill ranks, road/zone position, and other realm-local upgrades.
+- Gear remains easy to evaluate: a stronger item is unambiguously stronger; collection completion must not require loadout math.
+- Current-realm upgrades prepare the hero for one purpose: sustained DPS against the portal guardian.
 
-### Offline travel
-- Deterministic simulation using the same rules as live play (same `packages/core` code path).
-- Return presents the **"Back on the Road"** recap: leagues traveled, kills, loot sack, notable events (boss reached, new region entered).
-- Cap policy: provisionally **generous/no cap** for the prototype (DECISIONS.md #8); revisit after M1 playtest.
+### Active road play
 
-### Region boss gates (opt-in)
-Bosses are opt-in set-piece events, not passive walls (DECISIONS.md #9).
+Active play is a first-class design surface. The intended session is 15–30 minutes, once or twice a day, and playing attentively must provide a noticeable but bounded acceleration over idle progress.
 
-- Clearing a region's last zone brings the hero to the **Gate**: the boss looms ahead while the hero farms the approach zone at **full trash income** (gold, gear, Bestiary progress) — a gate pauses leagues, never income. This eliminates the dead-stall failure mode where an offline session at a wall produced nothing visible.
-- A **Readiness meter** makes "am I ready?" a one-glance call: `Readiness = (hero DPS × 30 s enrage window) / boss HP`, rendered as a not-yet → glowing-**Ready** meter. No math exposed to the player.
-- Tapping **Challenge** locks the camera into a 10–30 s set-piece: the boss's HP bar fills the top, signature skills flash, the boss telegraphs (cosmetic) attacks — resolving deterministically to a cinematic kill (region ★, road opens) or the enrage timer expiring (*"too strong… for now"*).
-- **Failure is painless:** no death, no lost progress; the hero pulls back and resumes farming. A ~60 s retry cooldown keeps the fight a moment, not a slot machine.
-- **Auto-challenge (default on):** fires automatically — offline too — once Readiness crosses ~110%, so a zero-interaction idle player always breaks through eventually via farmed gear. Turning it off (pure opt-in) is a settings toggle.
-- **Gates continue beyond World's Edge.** In the M0 prototype every region ends at a gate, including the endless-scaling tail past the v1 finale — so the post–World's-Edge road stays paced (a readiness wall stops sprints; parked farming lets gear catch up) instead of running away. Until M2 prestige (New Road) resets the hero at World's Edge, this gates-forever structure is what keeps the tail from out-running its own gear.
-- Outcome is a pure function of DPS vs. HP, so gate fights are identical in the offline sim and live play.
+**The mechanic set is decided: Momentum + Loot Arcs, expressed through one input.** `docs/ACTIVE-PLAY.md` is the specification; the numbers live in `docs/ECONOMY.md` and are not duplicated here.
 
-### Prestige — "New Roads" (build in M2; design decided — DECISIONS.md #7, #11)
-**Rhythm: many roads.** The first New Road becomes attractive around **day 2–3**, at the first real wall; resets are frequent, light, and penalty-free. **World's Edge is a multi-run goal** — the journey is conquered across many roads, each pushed farther by the legend of the last.
+- **Strike** — tap, click, or hold `Space`/`Enter` — is the only verb in v1, and it is the same verb in both phases.
+- **Momentum** rises with each Strike and decays continuously toward zero. It multiplies **attack speed only**, never gold and never damage per swing, because an unbounded per-strike swing has no ceiling and no strike rate could then satisfy a bounded band (`docs/DECISIONS.md` #19).
+- **Loot Arcs** carry each kill's gold as several coins in flight. Uncaught coins still credit full base value, so idle forfeits only the catch increment. Catching pays a multiplier on that coin's own share, and a catch is a position hit test at the strike's timestamp — never a queue (`docs/DECISIONS.md` #25).
 
-- **Earn:** Legend is granted on reset from the run's frontier — draft `Legend = floor(L0 · (1.30^z_max − 1))`, presented as chunky per-boss nuggets in the reset recap (*"Ruinfields boss felled → +X Legend"*). Constants are an M2 sim task (ECONOMY.md).
-- **The preview IS the mechanic** (Idle Slayer's key lesson): an **unearned-Legend bar** is always visible, and the reset screen shows the concrete haul *before* committing — *"collect X Legend → Veteran's Edge +15% damage forever, start at Zone 12"* — so a reset reads as claiming a reward you can already see, never as wiping a save.
-- **Spend:** a small permanent tree (~6–8 nodes, single-tap ranks, rising Legend cost, **no re-buys, no respec math** — Idle Slayer's per-reset re-buy busywork is explicitly rejected). v1 node list: Veteran's Edge (+% global DPS), Wayfarer's Purse (+% gold), Roadwise (start each road at zone N), Traveler's Fortune (+% drop rate/rarity), Tireless March (+% offline income), Boss-Bane (+% boss damage / longer enrage window), Legend's Momentum (+% Legend earned next road), Quartermaster's Cache (starter gear + gold).
-- **Re-run feel target:** the second run re-reaches the prior frontier in ~20–30% of the original wall-clock.
-- **First-reset experience:** offered (never forced) at the first hard stall; the confirm screen foregrounds what persists; the reset immediately cashes into 1–2 chunky upgrades + Cache + head-start, so the first post-reset minute delivers the VISION fantasy in compressed form — one-shotting monsters that were walls minutes ago.
+The prior fixed bundle of Rally, Trailside Glints, and Roadside Discoveries is superseded. Its replacement, and any future one, obeys these contracts:
 
-**What survives a New Road (decided — DECISIONS.md #7):**
-- **Persists:** Bestiary records *and* mastery bonuses, gear-set completion records, zone stars, titles, Trophy Hall, Legend. Collection is the "forever" engine — it never resets.
-- **Resets:** hero level, gold, equipped gear power, road/zone progress.
+1. Active play is enjoyable in its own right, not repeated busywork.
+2. Rewards are materially valuable and visible within one session.
+3. Idle progress remains worthwhile and never becomes a punishment for closing the app.
+4. Active actions layer onto deterministic baseline progression through explicit, auditable inputs.
+5. The simulator must model representative idle and active player schedules before economy values ship.
 
-**M1 implication:** the save data model must separate prestige-persistent state from run-local state from day one, even though prestige itself ships in M2.
+## Phase 2 — Portal Boss
 
-## Screens (v1)
+The portal guardian is an opt-in, persistent DPS encounter and the expression of the build assembled on the road.
 
-1. **Road** (main) — diorama, hero, counters (gold, leagues), upgrade drawer; glints and discoveries drift through; boss gate + Readiness meter when parked.
-2. **Hero** — level, gear slots, skills.
-3. **Collection** — bestiary, gear sets, zone stars, Wayfarer's Log.
-4. **Map** — region progress, boss gates, the road so far; the between-run meta home for the unearned-Legend bar, the Legend tree, and the "Set Out on a New Road" flow (never part of a check-in).
-5. **Recap modal** — "Back on the Road" (shown on return after absence).
+### Entry
 
-## Open questions
+- Portal entry requires an explicit player action; there is no auto-challenge online or offline.
+- The UI previews the guardian, current estimated duration, pending Ascendancy that will bank on victory, and the consequences of entering.
+- Entering switches the hero out of road progression. Road kills, gold, loot, pending-Ascendancy accrual, and road movement stop.
 
-**Provisionally decided (revisit with evidence, don't relitigate casually):**
-- Offline earnings cap → generous/no cap for prototype (DECISIONS.md #8).
-- Prestige persistence split → collections persist, power resets (DECISIONS.md #7).
+### Combat
 
-**Genuinely open:**
-- Legend earn/spend constants (M2 sim task — extend the bot to prestige greedily and validate the flywheel).
-- Reset availability: New Road from anywhere via the Map screen (best relief valve) vs. only at gates (cleaner milestone). Lean: **anywhere**, guarded against prestige-spam by the frontier-based earn curve.
-- "Realm remixes" on a New Road: literal region reshuffling (big build) vs. a fresh power-run down the same road. Lean: **same road for v1**; remix is a v2 novelty lever.
-- Roadwise head-start tuning: does skipping early zones starve Bestiary/gear-set completion, and how do collections keep filling without forcing replay of trivial zones?
-- Materials/forging system — v1 leans **gold-only** for simplicity.
-- Art direction specifics — deferred; grey-box first (M1), art pass in M3.
+- Boss HP decreases from the hero's current sustained DPS and persists across sessions.
+- Base boss damage advances offline using the same deterministic core as live play.
+- Live tapping applies a bounded attack-speed boost through the **same momentum curve as the Road** — same input, same cap, same decay. Momentum multiplies boss DPS only, and the boss phase has no loot arcs because it pays nothing but damage.
+- **Accessibility equivalent: holding the input auto-strikes at the cap-sustaining rate**, reaching the same ceiling as tapping. Rapid repeated input is never required. Cadence, cap, and decay values are in `docs/ACTIVE-PLAY.md`.
+- What a committed fight *feels* like — hit reactions, damage readout, momentum display, victory beat — is client presentation and belongs to M3.
+- The fight has no enrage timer, death, retry cooldown, or automatic failure. A boss may take hours or days.
+- No gold, gear, or Ascendancy is earned while the boss fight is active.
+- Purchases and build changes are locked during boss combat; the fight tests the build committed at entry.
 
-*(Random road events graduated from this list into the shipped design as Roadside Discoveries.)*
+### Abandonment
+
+- The player may abandon at any time.
+- Abandoning resets that attempt's boss HP to full and returns the hero to the same realm road.
+- Existing temporary road power and the realm's pending Ascendancy are preserved. Only boss-damage progress is forfeited.
+
+### Victory
+
+Boss HP reaching zero triggers one atomic ascension transaction:
+
+1. Add the boss payout to the realm's pending Ascendancy.
+2. Transfer the entire pending amount into banked Ascendancy.
+3. Record the boss trophy, realm completion, and persistent collection progress.
+4. Apply the realm-completion bonus to future gold and passive/offline earnings.
+5. Unlock the next realm.
+6. Reset all temporary realm power and begin the next road at level 0.
+
+## Ascendancy and persistence
+
+### Two balances
+
+- **Banked Ascendancy** persists across realms and may be spent from the Ascendancy tree whenever the hero is on the road.
+- **Pending Ascendancy** is earned during the current realm and displayed as an unclaimed total. It cannot be spent or persist independently; portal victory transfers it into banked Ascendancy during ascension.
+- Abandoning a boss does not erase pending Ascendancy; victory is still required to bank it.
+- Ascendancy purchases are locked during portal-boss combat.
+
+### Permanent power
+
+- The Ascendancy tree unlocks combat skills and passives. It is the primary source of persistent combat power.
+- Every boss victory separately grants an automatic, persistent percentage bonus to gold and passive/offline earnings. It does **not** directly grant combat power.
+- This automatic economy bonus ensures moving forward is more productive than farming one completed realm forever.
+- Accrual, boss payout, node costs and effects, and the earnings-bonus rate are tuned and passing across seeds; the constants live in `packages/core/src/constants.ts` and the bands they satisfy in `docs/ECONOMY.md`.
+- The tree is **uncapped with a linear price curve** — a node always has a next rank, and depth is paced by cost rather than by a ceiling (`docs/DECISIONS.md` #27).
+
+### Persistence matrix
+
+| State | On boss abandonment | On boss victory / ascension |
+|---|---|---|
+| Gold, level, gear, temporary upgrades | Persist | Reset |
+| Road position | Persist | Reset into next realm |
+| Boss HP damage | Reset | Boss defeated |
+| Pending Ascendancy | Persist, still unbanked | Boss payout added, then banked |
+| Banked Ascendancy and purchased nodes | Persist | Persist |
+| Realm-completion economy bonuses | Persist | Persist and increase |
+| Bestiary, gear-set records, stars, trophies, titles | Persist | Persist and record victory |
+
+## Collections
+
+- **Bestiary:** persistent discovery and mastery records for monster species.
+- **Gear sets:** persistent records of realm gear found, independent of equipped items resetting.
+- **Realm stars:** boss defeated, gear set completed, and bestiary completed.
+- **Boss trophies:** permanent proof of portal guardians slain.
+- Collection records survive ascension. Any collection reward that affects combat must be implemented as an explicit Ascendancy-tree skill/passive; collections do not provide a separate or hidden DPS multiplier.
+
+## Presentation
+
+- The Road screen remains a side-scrolling pixel diorama with a visible hero, enemies, drops, goals, and upgrades.
+- The Portal Boss screen is **a dungeon**, not the road with a guardian standing in it (DECISIONS.md #58).
+  - **Enclosed.** Stone walls and a visible ceiling close the frame. No sky, no horizon, no parallax, no scrolling. The road's visual argument is travel; this one's is that there is nowhere left to go.
+  - **One monster, filling the space.** The guardian is drawn large enough to dominate, with the hero confronting it alone — the scale contrast is the point.
+  - **Lit from the fight.** The only light sources belong to the encounter, so the frame darkens toward its edges instead of resolving into distance.
+  - Centered on boss HP, hero DPS, estimated time remaining, and the active attack-speed input.
+- The art register remains vibrant 16-bit **Pixel & Parchment**: DB32 palette, hard edges, wood/parchment chrome, Pixelify Sans UI, and VT323 numerals (DECISIONS.md #13).
+- Display interpolation never feeds back into the engine. Affordability, rewards, boss HP, and ascension use authoritative core state.
+
+## Screens
+
+1. **Road** — diorama, hero, road encounters, gold, pending Ascendancy, temporary upgrades, and the manual portal-entry flow.
+2. **Portal Boss (the dungeon)** — an enclosed stone room with one guardian filling it (DECISIONS.md #58–#61). One HP bar, hero DPS, time remaining, the same Strike as the Road, and a hold-to-abandon button that fills before it fires.
+3. **Hero** — current realm level, gear, temporary skills, and persistent Ascendancy unlocks.
+4. **Collection** — Bestiary, gear-set records, realm stars, and boss trophies.
+5. **World** — completed realms, current realm, threatened settlements, next portal, banked Ascendancy, and the Ascendancy tree.
+6. **Return recap** — road earnings while away or boss damage dealt while away; never claims road income during boss combat.
+7. **Ascendancy** — a panel opened from the Road: pending and banked Ascendancy, the three tree nodes with rank and price, and the realm earnings bonus (DECISIONS.md #16, #27). Purchases are the only persistent combat power (guardrail 8).
+8. **World's Edge** — the state at the end of the realm ladder. Specified below.
+
+### Client mechanics decided outside this document
+
+| Mechanic | What it does | Where it is decided |
+|---|---|---|
+| Hold-to-autostrike aim (`app/src/hold.ts`) | A held thumb strikes at the cap rate. Sliding onto a coin aims at it; a keyboard hold aims at nothing | DECISIONS.md #19, #25 |
+| Feel (`app/src/feel.ts`) | Every hit, catch and purchase has a synthesized sound and a haptic pulse. No audio files; fed only by engine events | DECISIONS.md #12 |
+| Dev staging (`app/src/devstage.ts`) | `?stage=fresh\|mid\|late&seed=n` advances real engine time so a capture shows a deep run. Never writes a display value | DECISIONS.md #12; `tools/qa/README.md` |
+| Thumb harness (`npm run thumb`) | Models a late, loose human thumb against core and reports catch rate and aimed-coin share per latency | DECISIONS.md #43, #47 |
+
+### World's Edge — the state at realm 300
+
+**When it happens:** a steady active player reaches realm 300 around **day 76**, an idle player around **day 92** (`docs/DECISIONS.md` #48). This is a real player's third month, not a theoretical horizon, and it is how much time M4's ending has.
+
+**The requirement:** a player who finishes realm 300 must see something that reads as *the end of the current world*, never a portal button that quietly does nothing. `enterPortal` returning `reason: 'unwinnable'` is an engine value, not a design (`docs/DECISIONS.md` #34); this is the design it has to carry. Core work is done — the client work is `builder-visual-3`'s.
+
+**What the player sees, and what it must not be:**
+
+| The Road behaves normally | It keeps paying gold, dropping gear, and clearing zones. Nothing is taken away, and nothing hangs. |
+| The portal is visibly closed, not broken | It reads as sealed or spent — a thing that has ended — never as a greyed-out button or a failed tap. Tapping it explains, it does not shrug. |
+| The recap is a conclusion | Realms cleared, guardians felled, Bestiary completion, total banked Ascendancy. The run is *finished*, not stuck. |
+| The hero is at the edge of the map | `docs/VISION.md` already sells "World's Edge" as the long-horizon destination. This is that place, and it should look like arriving somewhere rather than hitting a limit. |
+
+**What it must never be:** a modal that says "maximum realm reached", a number that stops incrementing without comment, an error, or a portal that accepts a tap and does nothing. A player who cannot tell whether they finished the game or found a bug will conclude it is a bug, and they will be right to.
+
+**This is a placeholder for a real ending, and it is scheduled.** `docs/ROADMAP.md` M4 owes the world a designed conclusion — or a defined endless mode — at or before realm 300. Until that lands, World's Edge is what stands between a player and a wall.
+
+## Deferred expansion: companions
+
+A future major system may add companions inspired by the familiar fighter, mage, priest, and thief party shape. This is not a v1 commitment. If pursued, the player remains the central hero and companions must not turn the game into party administration, loadout spreadsheets, or a manager fantasy. Companion mechanics require their own design, economy simulation, and persistence decision.
+
+## Open design work
+
+These are explicit follow-up designs, not implied implementation details:
+
+- **The session arc.** The mechanic set, its cadence, and its uplift are decided and measured; how a 15–30-minute sitting is *shaped* — what opens it, what marks its middle, what makes it a satisfying place to stop — has never been designed. `P1` measures a flat 20-minute window, which is a rate, not an arc.
+- **Boss-fight feedback.** The input, cap, decay, and accessibility equivalent are specified; what the player sees and hears while committed is not. Client work, M3.
+- **Abandonment UX.** The rules are decided and simulated — abandoning forfeits only boss-damage progress, and `abandonProbe` measures what that costs. The protected flow that keeps it from being a mis-tap is undesigned. Client work, M3.
+- Realm sequence, SRD-verified monster roster, portal guardians, and original setting treatment.
+- **A designed ending, or a defined endless mode.** The realm-300 ceiling is a float64 artifact, not a chosen finale, and an active player meets it around day 76 (`docs/DECISIONS.md` #48). *World's Edge* above is the placeholder that keeps it from reading as a bug; the ending itself is M4's, alongside the big-number work of #34.
+- **What a gear slot means.** Partly answered: `SLOT_POWER` gives each slot a distinct mean-1 weight, so the three no longer read as one distribution (`docs/DECISIONS.md` #40). What is still open is a mechanical *role* — there is no defence stat for armor to feed and no utility layer for a trinket, so slots differ in magnitude but not in kind. Blocked on the M4 gear-set and Bestiary design.
+- **Per-zone monster identity.** Landed in core (ADR #37): a kill carries a species index, pays that species' share of the zone rate, and rolls its drop against that species' weight; `collection.speciesKills` records them. Enemy HP is still uniform, because kill time is the clock. What remains is M4 content — the SRD roster, names and provenance. *Superseded description of the old state:* The engine had none: `enemyHp(realm, zone)` and `enemyGold(realm, zone)` are pure functions of position, `GameState` carries no monster field, and a drop's rarity is rolled from the kill-keyed stream with no reference to what died. A Bestiary and differentiated drops therefore need core work before content: a monster identity on the kill, carried into the drop roll and into `collection`. Nothing about the current model blocks it — the RNG is already keyed per kill — but it is a core change, not a content table.

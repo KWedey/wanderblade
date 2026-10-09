@@ -1,9 +1,137 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Wanderblade (idle_game)
 
-A mobile idle RPG: a lone wandering swordfighter crosses a transforming fantasy realm on foot — auto-battle, loot, upgrades, region bosses — built for 30–90 second check-ins with offline progress at its heart.
+A mobile active-forward idle RPG: a lone wandering swordfighter builds power on monster-filled Roads and commits that build to persistent portal bosses—designed for 15–30-minute active sessions with meaningful offline progress.
 
-**Stack:** TypeScript + web UI (canvas diorama), wrapped with Capacitor for iOS/Android.
-**Current milestone:** M0 (economy simulator) — see `docs/ROADMAP.md`.
+**Stack:** TypeScript + web UI (canvas diorama). Capacitor wrapping for iOS/Android is planned (`docs/DECISIONS.md` #1), not yet added — there is no `@capacitor` dependency or config. npm workspaces, Node ≥ 20.
+**Current milestone:** M3 phone playtests, then M4 collections and content. The Road → Portal Boss → Ascension loop is built end to end in core, sim, and client (ADRs #14–#61); real-phone playtests and the save-migration chain remain. See `docs/ROADMAP.md`.
+
+## Commands
+
+```bash
+npm install
+npm run dev                  # Vite dev server at http://localhost:5173
+npm run dev -- --host        # expose on LAN for phone testing
+npm run build                # production build of app/
+npm run build:pages          # the same build under /wanderblade/, as GitHub Pages serves it
+npm run verify               # THE GATE: lint + typecheck + test
+npm run e2e                  # Playwright e2e: desktop Chromium, Pixel 7, and the Pages build
+E2E_PORT=5401 npm run e2e    # strict ports (5287-5288 by default): give each concurrent checkout its own
+npm run e2e:docker           # the same suite in CI's Linux image; `-- --update-snapshots` refreshes -linux baselines
+npm test                     # vitest across all workspaces; sim/test/gate.test.ts runs a 3-day sim and asserts ALL PASS
+npm run typecheck            # tsc --noEmit over core, sim, and app
+npm run lint                 # eslint (type-aware); --fix for the autofixable ones
+npm run sim                  # economy simulator, default 3 seeds × 14 days
+npm run sim -- --days 30 --seeds 5 --csv   # writes sim/out/run-<seed>.csv
+npm run sim -- --help        # full flag list
+npm run thumb                # headless thumb model: catch rate vs latency and aim (ADR #43, #47)
+```
+
+CI (`.github/workflows/ci.yml`) runs `npm run verify`, `npm run build`, a 3-day sim that must print ALL PASS, and the e2e suite in the Playwright image pinned to `@playwright/test`. On a push to `feat/m1r-integration`, a run with every job green also deploys the Pages build (`app/dist-pages`) with that run's report at `/report/`.
+
+E2E specs (`e2e/`) drive the game through `e2e/support/wanderblade.ts` on Playwright's fake clock, frozen at boot, with seeded runs. Screenshot baselines are per platform; CI compares the `-linux` ones.
+
+QA tools (`tools/qa/`, each takes `--help`; all need a dev server and print the
+port they used, defaulting to 5173 or `$WB_QA_PORT`):
+
+```bash
+npm run qa:capture -- --label round17   # a judged desktop frame, mid-swing
+npm run qa:mobile                       # six phone/desktop viewports: layout, type grid, safe areas
+npm run qa:wiring                       # does the live page register the listeners a held strike needs
+npm run qa:loop                         # plays Road -> Portal -> Boss through the DOM, checks the fight band
+npm run qa:session                      # a fresh run tapped at a thumb's pace until ascension; ADR #63's exit as a probe
+npm run qa:pixels -- <png> <x> <y> <w> <h>   # colour of a crop, in numbers
+npm run qa:speckle -- <png> --right 1456     # which colour is speckling the world
+```
+
+Single test file / single test:
+
+```bash
+npx vitest run packages/core/test/determinism.test.ts
+npx vitest run -t "split-advance determinism"
+npx vitest packages/core/test           # watch mode
+```
+
+**The gate is `npm run verify`.** All three stages must pass before any task is complete. `vitest.config.ts` sets only a 180 s `testTimeout` — the long-gap tests replay millions of kills on purpose — and vitest otherwise uses defaults, resolving `@wanderblade/core` through the npm-workspaces symlink, while `tsc` resolves it through `paths` in `app/tsconfig.json` and `sim/tsconfig.json`. Adding a path alias means updating both.
+
+**A fresh worktree needs its own `npm install`.** Without the local `node_modules/@wanderblade/*` symlinks, vitest silently resolves the core from the parent checkout and the tests grade someone else's code; `tsc` and `tsx` do not, because they follow tsconfig `paths`.
+
+**Lint is not a style checker.** `eslint.config.js` polices the two invariants `tsc` cannot express, and nothing else:
+
+- **Determinism** — `Math.random`, `Date.now`, and `performance.now` are banned in `packages/core/src` and `sim/src`. Randomness comes from `createRng`; the clock comes from `GameState.timeSec`. Wall time is an app-layer concern only.
+- **Boundaries** — core may not import `node:*` or any workspace package; app and sim may not deep-import `@wanderblade/core/*` past the public index.
+- Plus `switch-exhaustiveness-check` over the `GameEvent` union (an explicit `default` opts a switch out) and type-aware `typescript-eslint` recommended rules.
+
+`npm run sim` always exits 0: the harness succeeding is not the same as the pacing targets passing. Read the printed PASS/FAIL summary.
+
+**The gate exits 1 under load without a single failing test.** `Errors N`
+alongside `Tests <all> passed` is `[vitest-worker]: Timeout calling
+"onTaskUpdate"` — the reporter's RPC starving, not an assertion. Several agents
+share this machine. Read the `Test Files` and `Tests` lines, and say which you
+are quoting. Do not change the reporter to quiet it: that hides a real signal
+from every other agent.
+
+**High load here is usually leaked browsers, not agents.** Run `uptime` and
+`pgrep -f chrome-headless-shell | wc -l` *before* forming any theory. The QA
+tools drive Playwright constantly and strand it; 41 of them once held load at
+42, and `pkill -f chrome-headless-shell` took the same gate from 65 s and exit 1
+to 13 s and exit 0 with no config change. A/B-ing a suspect change against a
+clean tree without pinning load proves nothing.
+
+**Never merge, rebase or checkout in a worktree while its gate is running
+there.** Vitest reads from disk as it goes, so a mid-run merge collects new
+tests against an already-loaded old core. It produced 19 failures once, all
+`(0, bestBuy) is not a function`, none of them real.
+
+**Write gate logs inside the worktree, never `/tmp`.** Agents share `/tmp` and
+the names collide; one agent spent real time debugging a 246-file run out of
+another's `gate6.log`.
+
+**`cd` does not survive between shell calls, and the main checkout sits on a
+dead branch.** A drifted call has silently pointed `git log --follow` at
+`feat/m0-m1a-prototype`, committed there, and "found" a file missing from
+integration that was never missing. Use absolute paths, and check
+`git rev-parse --abbrev-ref HEAD` before believing anything a repo tells you.
+
+## Architecture
+
+Three workspaces around one pure rules package.
+
+```
+packages/core  ──►  app   (Vite client, DOM)
+       └────────►  sim   (tsx harness, Node)
+```
+
+**`packages/core` — the only place game math lives.** Pure TypeScript, no UI or platform imports. `index.ts` is the entire public surface; app and sim import from `@wanderblade/core` and never reach into `src/` files directly. Internal layering is `types.ts` (dependency-free) → `constants.ts` → `formulas.ts` → `engine.ts`.
+
+**The determinism contract is the load-bearing invariant** (`docs/DECISIONS.md` #6, enforced by `packages/core/test/determinism.test.ts`):
+
+- `advance(s, a + b)` must produce byte-identical state *and* events to `advance(advance(s, a), b)`.
+- All randomness flows through the seeded mulberry32 in `rng.ts`, consumed once per kill in kill-index order. The 32-bit stream position lives on `GameState.rngState` so a save reconstructs the stream exactly.
+- The clock lives on an integer-millisecond grid (`clock.ts`, Decision #62): `advance` snaps its span and every strike to whole ms and adds in integers, because float seconds add non-associatively.
+- The clock is event-stepped against an **absolute** `nextActionAtSec` — the next Road kill or the next boss swing, depending on `phase`. A relative "time remaining" carry would drift under float re-accumulation and break split-invariance — do not refactor it into one.
+- Strikes are `{ atSec, aim }` inputs merged into that same schedule. Momentum is a lazily-decayed `(value, atSec)` pair, and loot-arc positions are pure functions of stored numbers, so nothing is integrated across an interval and every split sees identical operands.
+- Offline progress is not a separate code path. A 10-day gap is the same `advance` call as a live tick, which is why `EVENT_CAP` (50,000) truncates the raw event stream while the aggregate `recap` attached to the returned array stays exact.
+
+**`app` — controller/view split, no game math in either.**
+
+- `main.ts` mounts `#app`, wires `ViewHandlers`, starts the loop. Only module touching the DOM entry point.
+- `game.ts` (`Game`) owns `GameState`, drives `advance` on a 100 ms tick, eases the gold count-up, saves every 5 s, and translates state into a `ViewModel`. Detects tab suspension (`SUSPEND_TICK_SEC`) and treats it as offline.
+- `view.ts` builds DOM once, then paints from the plain `ViewModel`. Owns no state.
+- `save.ts` wraps the core's serialized string in a versioned envelope with a wall-clock `savedAt`; a cold load computes the offline gap from it. Loads are validated field-by-field — a malformed save is discarded, not trusted.
+- `active.ts` turns taps and holds into `{ atSec, aim }` strikes for the engine; `hold.ts` is the rule for where a held strike lands (a thumb that slides onto a coin has aimed at it).
+- `scene/` is the canvas diorama: `scene.ts` composes the Road and the dungeon, `sprites.ts` / `pixels.ts` / `palette.ts` draw, `fx.ts` is hit and catch effects, `textlane.ts` is the scrolling log.
+- `species.ts` names the road creatures per realm (35 plus a fallback) and binds each to a silhouette the scene can draw. Provenance lives in `docs/SRD-CONTENT.md`.
+- `feel.ts` is synthesized audio and haptics, fed only by engine events. `pixeltext.ts` paints panel type as bitmap glyphs over the real DOM text (`docs/DECISIONS.md` #42).
+- `devstage.ts` is dev-only staging (`?stage=mid&seed=7`): it advances real engine time and makes real purchases so QA captures show a deep run.
+- `flavor.ts` / `format.ts` / `anim.ts` are display-only. Naming, number formatting, and interpolation never feed back into the economy (`docs/DECISIONS.md` #12).
+
+**`sim` — the economy evidence, consuming the same core.** `run.ts` → `simulate.ts` runs a deterministic bot (`bot.ts`) per seed, `ContractWatch` inside `simulate.ts` records milestones and phase-contract breaches, `validators.ts` holds the numbered PASS/FAIL pacing validators from `docs/ECONOMY.md`, `format.ts` prints the report and CSV. The simulator reports honest results; it never tunes constants.
+
+**The readiness-gate prototype is gone.** `GateState`, `readiness`, `challengeBoss`, and `autoChallengeReadiness` were deleted in M1R.3; the core is Road → Portal Boss → Ascension per Decisions #14–#18, with the active layer in #19–#25. `packages/core/test/phase.test.ts` is what replaced the old gate/boss/auto-challenge tests.
 
 ## Source of truth
 
@@ -14,18 +142,24 @@ A mobile idle RPG: a lone wandering swordfighter crosses a transforming fantasy 
 - `docs/ECONOMY.md` — formulas, pacing targets, simulator contract
 - `docs/ROADMAP.md` — milestones; keep checkboxes current
 - `docs/DECISIONS.md` — ADR log; add an entry when a decision lands, supersede rather than edit history
+- `docs/SRD-CONTENT.md` — SRD 5.2.1 licensing boundary, attribution, and monster provenance roster
+- `docs/superpowers/plans/` — implementation plans, gated by approved design/economy specs
 
 ## Design guardrails (binding — from explicit user corrections)
 
 1. The player IS the hero — one growing character. Never a manager, never a base/town to run.
 2. Heroic adventure tone — vibrant and dangerous. Never grimdark, never cozy-cute.
 3. Classic idle RPG structure, excellently executed — no gimmick-led design.
-4. Check-ins stay light: 30–90 s, no loadout math, no spreadsheet min-maxing.
+4. Active sessions target 15–30 minutes once or twice daily. Active play is fun and materially faster; idle-only play remains meaningfully productive at a slower rate.
 5. Numbers-go-up + collection/mastery (Bestiary, gear sets, zone stars) are the twin dopamine engines.
-6. Active play (Road Play, boss challenges) is always an optional, live-only, additive bonus — the idle baseline must hit every pacing target with zero taps.
+6. The hero occupies exactly one phase: Road or Portal Boss. Portal entry is manual; boss progress persists offline, grants no income, has no failure timer, and victory triggers realm ascension.
+7. Ascension resets gold, level, gear, temporary upgrades, and road position. Banked Ascendancy, its tree, realm-completion earnings bonuses, and collection records persist.
+8. Automatic realm bonuses accelerate gold and passive earnings only. Persistent combat power must be explicit in Ascendancy skills/passives.
+9. D&D-inspired monsters must come from the SRD 5.2.1 CC-BY-4.0 whitelist with provenance and attribution; Wanderblade art, lore, stats, and encounters remain original.
 
 ## Engineering conventions
 
 - Game rules live in `packages/core` — pure TypeScript, deterministic, no UI or platform imports. All randomness flows through a seeded, injectable PRNG keyed to kill index (DECISIONS.md #6). The game client and `sim/` both consume it; offline progress and live play must produce identical results from the same inputs.
-- Economy constants change only alongside a sim run that passes the pacing targets in `docs/ECONOMY.md`.
-- TypeScript strict mode; type-check must pass before any task is called complete.
+- Economy constants change only alongside a sim run that passes the pacing targets in `docs/ECONOMY.md`. Quote the seeds and the PASS/FAIL summary in the commit.
+- TypeScript strict mode, plus `noUncheckedIndexedAccess` and `noFallthroughCasesInSwitch` (`tsconfig.base.json`). Type-check must pass before any task is called complete.
+- New core behavior needs a determinism test alongside the behavior test — split-invariance is the thing that silently regresses.

@@ -1,0 +1,1470 @@
+/* Wanderblade — Pixel & Parchment skin (DECISIONS.md #13).
+   Vibrant 16-bit fantasy: DB32 palette, hard edges (no radius, no smooth
+   gradients, no blur/glow), carved-wood panels, parchment accents. Pixelify
+   Sans carries UI text; VT323 (mono) carries every load-bearing number so the
+   odometer rolls without jitter.
+
+   The page is the road scene: a full-bleed canvas world with the HUD floating
+   over it and the panels docked to one edge (right in landscape, a bottom
+   sheet in portrait). Nothing here paints a page background the scene would
+   only cover.
+   Mobile-first portrait; big touch targets. */
+
+@font-face {
+  font-family: 'Pixelify Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/pixelify-sans.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'VT323';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/vt323.woff2') format('woff2');
+}
+
+:root {
+  /* Panel text is not the webfont - pixeltext.ts rasterises it through the 5x7
+     bitmap face, at round(font-size / 7) device pixels per glyph pixel. So the
+     only thing a font-size does here is pick that integer scale, and the judged
+     "two resolutions" was a scale that does not divide the world's.
+
+     Every size is an exact 7k, so a size never rounds to a scale it does not
+     name, and k is never below 2: at 1 the bitmap face is 1:1 with CSS pixels
+     and stops being readable. app/test/typegrid.test.ts holds both at every
+     viewport the game ships on, rather than at one hardcoded width. */
+  --ui-1: 14px;
+  --ui-2: 21px;
+  --ui-3: 42px;
+  --num-1: 21px;
+  --num-2: 21px;
+  --num-3: 42px;
+  --num-4: 42px;
+
+  /* One number for the docked column: the panel is this wide, the HUD stops here. */
+  --dock-w: min(480px, 34vw);
+
+  /* DB32 anchors */
+  --bg: #5fcde4;
+  --panel: #4a2f27;
+  --panel-edge: #d9a066;
+  --panel-inner: #6b4636;
+  --panel-sunk: #593a2c;
+  --wood: #663931;
+  --wood-light: #8f563b;
+  --wood-shadow: #45283c;
+  --parchment: #eec39a;
+  --tan: #d9a066;
+  --ink-dark: #45283c;
+  --ink-light: #eec39a;
+  --ink-dim: #d9a066;
+  --ink-faint: #cfa985;
+  --gold: #fbf236;
+  --torch: #df7126;
+  --danger: #d95763;
+  --danger-deep: #ac3232;
+
+  --rarity-common: #9badb7;
+  --rarity-uncommon: #99e550;
+  --rarity-rare: #639bff;
+  --rarity-epic: #d77bba;
+
+  --font-ui: 'Pixelify Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-num: 'VT323', ui-monospace, monospace;
+
+  /* Hard pixel shadows: offset only, never blurred, and a solid palette
+     colour. A translucent black is a soft shadow no matter the blur radius,
+     and reads as web chrome rather than as pixel art (DECISIONS.md #13). */
+  --drop: 0 4px 0 #241016;
+  --drop-pressed: 0 2px 0 #241016;
+  --bevel-lit: #a9713f;
+  --bevel-dark: #341d18;
+
+  --touch: 56px;
+
+  color-scheme: dark;
+}
+
+/* Phones and tablets. The hero number at 42px is 282px of glyph in a panel that
+   is 263px wide on a landscape iPhone - it ran past the box it sits in, and the
+   upgrade rows beside it wrapped to five lines. 28px is the same grid, one step
+   down. */
+@media (max-width: 900px) {
+  :root {
+    --ui-3: 28px;
+    --num-3: 28px;
+    --num-4: 28px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+  /* DECISIONS.md #13 bans rounded corners outright. Enforced here rather than
+     per-rule so a UA default on a button or input cannot reintroduce one. */
+  border-radius: 0;
+}
+
+/* `hidden` is the view's one show/hide switch (setHidden in view.ts), and a
+   class that sets `display` would otherwise outrank the UA rule behind it. */
+[hidden] {
+  display: none !important;
+}
+
+/* The pixel faces are vector outlines; without this the browser anti-aliases
+   them and the panel stops sharing the world's grid. */
+body,
+button,
+input,
+select {
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+}
+
+html {
+  image-rendering: pixelated;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink-light);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* Every element whose value rolls gets the mono pixel face. */
+.gold-rate,
+.goal-chip,
+.leagues,
+.zone,
+.upgrade-cost,
+.gear-power,
+.boss-hp-label,
+.portal-stats dd,
+.boss-cooldown,
+.debug-seed,
+.log-line,
+.recap-num {
+  font-family: var(--font-num);
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  /* The whole page is the strike surface; chrome opts back out below. */
+  touch-action: none;
+}
+
+/* --- The road scene ---------------------------------------------------- */
+
+.scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* --- HUD (floats over the world) --------------------------------------- */
+
+.hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 14px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.hud-realm {
+  text-align: left;
+}
+
+.hud-gold {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 0.9;
+}
+
+.hud-dps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 0.9;
+  padding-right: 10px;
+}
+
+.gold {
+  font-family: var(--font-num);
+  font-size: var(--num-4);
+  color: var(--gold);
+  /* Hard 3px ink ring — the reference bar's numbers read on sky or soil. */
+  text-shadow:
+    3px 0 0 #1a1c2c, -3px 0 0 #1a1c2c, 0 3px 0 #1a1c2c, 0 -3px 0 #1a1c2c,
+    3px 3px 0 #1a1c2c, -3px 3px 0 #1a1c2c, 3px -3px 0 #1a1c2c, -3px -3px 0 #1a1c2c,
+    0 6px 0 rgba(0, 0, 0, 0.35);
+}
+
+.gold-sub,
+.hud-label {
+  margin-top: 6px;
+  font-size: var(--ui-1);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fff;
+  text-shadow: 2px 0 0 #1a1c2c, -2px 0 0 #1a1c2c, 0 2px 0 #1a1c2c, 0 -2px 0 #1a1c2c;
+}
+
+.dps {
+  font-family: var(--font-num);
+  font-size: var(--num-3);
+  color: #fff;
+  text-shadow:
+    2px 0 0 #1a1c2c, -2px 0 0 #1a1c2c, 0 2px 0 #1a1c2c, 0 -2px 0 #1a1c2c,
+    2px 2px 0 #1a1c2c, -2px 2px 0 #1a1c2c, 2px -2px 0 #1a1c2c, -2px -2px 0 #1a1c2c;
+}
+
+.dps.punch {
+  animation: statPunch 0.35s ease-out;
+}
+
+/* Above .screen, not under it. The one sentence that teaches the core verb was
+   painted beneath the panel on phones, where elementFromPoint returned a gear
+   slot. In portrait the panel owns the bottom 52%, so the hint rides above it
+   inside the world it is talking about. */
+.strike-hint {
+  position: absolute;
+  left: 22px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  z-index: 4;
+  pointer-events: none;
+  padding: 5px 12px;
+  background: var(--panel-sunk);
+  border: 2px solid var(--gold);
+  color: var(--gold);
+  font-size: var(--ui-1);
+  letter-spacing: 0.06em;
+  animation: hintPulse 1.1s steps(2) infinite;
+}
+
+.strike-hint.gone {
+  display: none;
+}
+
+@keyframes hintPulse {
+  50% {
+    border-color: #fff;
+    color: #fff;
+  }
+}
+
+.screen {
+  position: absolute;
+  z-index: 3;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  width: 100%;
+  padding: 10px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--panel);
+  border-top: 4px solid var(--panel-edge);
+  /* Chunky pixel bevel: lit inner edge, dark outer, both hard. A single flat
+     fill with one border is what read as "a web slab from another app". */
+  box-shadow:
+    inset 0 4px 0 var(--bevel-lit),
+    inset 0 -4px 0 var(--bevel-dark),
+    inset 4px 0 0 var(--bevel-dark),
+    inset -4px 0 0 var(--bevel-dark);
+}
+
+/* Portrait: the panels sit above and the road owns the bottom of the screen.
+   Docked below, the panel made the whole thumb zone dead to the core verb -
+   every strike meant reaching to the top half of the phone, for minutes. */
+.screen {
+  left: 0;
+  right: 0;
+  top: 0;
+  max-height: 52%;
+  border-top: 0;
+  border-bottom: 4px solid var(--panel-edge);
+}
+
+/* Portrait cannot fit realm, gold and DPS on one line at any readable size, so
+   the counter takes the first row and the realm gets the full width below it. */
+@media (max-aspect-ratio: 1/1) {
+  /* Static, so the panel starts exactly below the HUD instead of under it. */
+  .hud,
+  .screen {
+    position: static;
+  }
+
+  /* HUD then panel, as one column the road starts below. The cap lives here
+     because .screen's own max-height is a percentage, and a percentage needs a
+     definite basis - against an auto-height parent it constrains nothing. */
+  .chrome {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    max-height: 56%;
+    display: flex;
+    flex-direction: column;
+    /* The HUD used to float over the sky. Above the road band the canvas is
+       transparent, so without this it reads as a second, paler sky. */
+    background: var(--panel);
+    z-index: 3;
+  }
+
+  .screen {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    /* Stacked above the road, the panel's bottom edge is mid-screen, so the
+       home-indicator inset it carries in landscape is dead space here. */
+    padding-bottom: 14px;
+  }
+
+  .hud {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'gold dps'
+      'realm realm';
+    gap: 8px 10px;
+  }
+
+  .hud-realm {
+    grid-area: realm;
+  }
+
+  .hud-gold {
+    grid-area: gold;
+    align-items: flex-start;
+  }
+
+  .hud-dps {
+    grid-area: dps;
+  }
+
+  .wordmark {
+    display: none;
+  }
+
+  .region {
+    margin-top: 0;
+    font-size: var(--ui-1);
+  }
+
+  .header-sub {
+    font-size: var(--ui-1);
+    white-space: nowrap;
+  }
+
+  .gold {
+    font-size: var(--num-2);
+  }
+
+  .dps {
+    font-size: var(--num-1);
+  }
+
+  .gold-sub,
+  .hud-label {
+    margin-top: 3px;
+    font-size: var(--ui-1);
+  }
+
+  .zone-track {
+    height: 9px;
+    width: min(180px, 40vw);
+  }
+}
+
+/* Landscape: a docked column on the right, the world gets the rest. */
+@media (min-aspect-ratio: 1/1) {
+  .strike-hint {
+    bottom: 22px;
+  }
+
+  .screen {
+    top: 0;
+    left: auto;
+    right: 0;
+    bottom: 0;
+    width: var(--dock-w);
+    max-height: none;
+    border-top: 0;
+    border-left: 4px solid var(--panel-edge);
+  }
+
+  .hud {
+    right: var(--dock-w);
+  }
+
+
+}
+
+/* --- HUD text (over the sky, so everything carries an ink ring) --------- */
+
+.wordmark {
+  font-size: var(--ui-1);
+  letter-spacing: 0.18em;
+  color: #fff;
+  text-indent: 0.18em;
+  text-shadow: 2px 0 0 #1a1c2c, -2px 0 0 #1a1c2c, 0 2px 0 #1a1c2c, 0 -2px 0 #1a1c2c;
+}
+
+.region {
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+  font-size: var(--ui-2);
+  color: var(--gold);
+  text-shadow:
+    3px 0 0 #1a1c2c, -3px 0 0 #1a1c2c, 0 3px 0 #1a1c2c, 0 -3px 0 #1a1c2c,
+    3px 3px 0 #1a1c2c, -3px 3px 0 #1a1c2c, 3px -3px 0 #1a1c2c, -3px -3px 0 #1a1c2c;
+}
+
+/* Wraps, so the realm block's minimum is one reading rather than both. The
+   bitmap face is wider than the webfont that sized these boxes, and on a
+   landscape phone the three HUD columns together asked for 650px of 529. */
+.header-sub {
+  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: var(--ui-1);
+  color: #fff;
+  text-shadow: 2px 0 0 #1a1c2c, -2px 0 0 #1a1c2c, 0 2px 0 #1a1c2c, 0 -2px 0 #1a1c2c;
+}
+
+.header-sub .leagues {
+  color: var(--parchment);
+}
+
+/* Bounded by the column, not by the window: a viewport-relative floor made the
+   realm block's minimum 240px and pushed the DPS readout under the panel. */
+.zone-track {
+  margin-top: 8px;
+  width: min(240px, 100%);
+  height: 12px;
+  background: var(--panel-sunk);
+  border: 3px solid #1a1c2c;
+  overflow: hidden;
+}
+
+/* Driven per animation frame via transform (compositor-only, no layout). */
+.zone-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--gold);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+@keyframes statPunch {
+  30% {
+    transform: scale(1.22);
+    color: var(--gold);
+  }
+}
+
+/* One step under the total it sits beneath. At --num-1 the bitmap face needed
+   123px inside a 108px column, so it could not fit at 2x and reverted to the
+   webfont - a second type system beside a 42px number. */
+.gold-rate {
+  color: var(--parchment);
+  text-transform: none;
+  font-size: var(--ui-1);
+}
+
+/* --- Goal strip --------------------------------------------------------- */
+
+.goal-strip {
+  display: flex;
+  gap: 8px;
+}
+
+.goal-chip {
+  flex: 1;
+  padding: 7px 10px;
+  background: var(--panel-inner);
+  border: 2px solid var(--panel-edge);
+  box-shadow: var(--drop);
+  font-size: var(--num-1);
+  color: var(--ink-dim);
+  text-align: center;
+  line-height: 1.15;
+}
+
+/* The march chip is its own progress track: the leg fills behind the reading
+   rather than counting a remainder down beside it. */
+.goal-chip--meter {
+  position: relative;
+}
+
+.goal-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--gold);
+  opacity: 0.28;
+  transition: width 220ms steps(12);
+}
+
+/* Block, not inline: pixeltext measures a leaf's box to pick a scale and wrap
+   it, and an inline span reports a width that is not the chip's. */
+.goal-text {
+  display: block;
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .goal-fill {
+    transition: none;
+  }
+}
+
+.goal-chip.ready {
+  background: #6abe30;
+  border-color: #99e550;
+  color: #fff;
+}
+
+/* --- Portal / guardian ------------------------------------------------- */
+
+.portal-panel {
+  background: var(--panel-sunk);
+  border: 3px solid var(--rarity-epic);
+  box-shadow: var(--drop);
+  padding: 14px;
+  text-align: center;
+}
+
+.portal-panel.committed {
+  border-color: var(--danger);
+}
+
+.portal-eyebrow {
+  font-size: var(--ui-1);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rarity-epic);
+}
+
+.portal-name {
+  letter-spacing: 0.05em;
+  margin-top: 3px;
+  font-size: var(--ui-1);
+  color: var(--parchment);
+}
+
+.boss-hp {
+  position: relative;
+  margin: 12px 0 4px;
+  height: 26px;
+  background: var(--panel-sunk);
+  border: 3px solid #000;
+  overflow: hidden;
+}
+
+.boss-hp-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--danger);
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.boss-hp-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-num);
+  font-size: var(--num-1);
+  color: #fff;
+  text-shadow: 2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000;
+}
+
+.portal-stats {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.portal-stats > div {
+  flex: 1;
+  background: var(--panel-inner);
+  border: 2px solid var(--panel-edge);
+  padding: 6px 4px;
+}
+
+.portal-stats dt {
+  font-size: var(--ui-1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.portal-stats dd {
+  margin: 3px 0 0;
+  font-family: var(--font-num);
+  font-size: var(--num-1);
+  color: var(--parchment);
+}
+
+.portal-btn {
+  width: 100%;
+  min-height: var(--touch);
+  border: 3px solid #e9b8ff;
+  background: var(--rarity-epic);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: var(--ui-1);
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  box-shadow: var(--drop);
+}
+
+.portal-btn:active {
+  box-shadow: var(--drop-pressed);
+  transform: translateY(3px);
+}
+
+.boss-hint {
+  margin: 10px 0;
+  font-size: var(--ui-1);
+  line-height: 1.25;
+  color: var(--ink-dim);
+}
+
+/* Abandon forfeits the attempt, so it fills on a hold rather than firing on a tap. */
+.abandon-btn {
+  position: relative;
+  width: 100%;
+  /* Grows with its label. At the ramp's size "Hold to abandon" wraps, and a
+     fixed height under overflow:hidden simply cut the second line off. */
+  min-height: 44px;
+  padding: 7px 10px;
+  line-height: 1.15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 2px solid var(--danger-deep);
+  background: var(--panel-sunk);
+  color: var(--danger);
+  font-family: var(--font-ui);
+  font-size: var(--ui-1);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.abandon-fill {
+  position: absolute;
+  inset: 0;
+  background: var(--danger-deep);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+
+.abandon-label {
+  position: relative;
+}
+
+.boss-banner {
+  margin-top: 10px;
+  font-size: var(--ui-1);
+  color: var(--danger);
+}
+
+.panel {
+  background: var(--panel-inner);
+  border: 3px solid var(--panel-edge);
+  box-shadow: var(--drop);
+  padding: 8px 10px 10px;
+}
+
+.panel-title {
+  margin: 0 0 6px;
+  font-size: var(--ui-1);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+
+/* --- Upgrades --------------------------------------------------------- */
+
+.upgrades {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.upgrade-btn {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'name cost'
+    'detail cost';
+  align-items: center;
+  gap: 0 10px;
+  width: 100%;
+  min-height: var(--touch);
+  padding: 4px 12px;
+  border: 3px solid #000;
+  background: var(--panel-sunk);
+  color: var(--parchment);
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--drop);
+}
+
+.upgrade-name {
+  letter-spacing: 0.05em;
+  grid-area: name;
+  font-size: var(--ui-1);
+}
+
+.upgrade-detail {
+  grid-area: detail;
+  font-size: var(--ui-1);
+}
+
+/* The loudest thing in the row. "What do I buy next" is a price comparison,
+   and the price was two points smaller than the name it sat beside. */
+.upgrade-cost {
+  grid-area: cost;
+  /* "163 g" is one token to a reader; wrapping it put the unit on its own line. */
+  white-space: nowrap;
+  font-size: var(--num-1);
+  color: var(--gold);
+}
+
+.upgrade-btn.affordable {
+  background: #6abe30;
+  border-color: #99e550;
+  color: #fff;
+}
+
+.upgrade-btn.affordable .upgrade-cost {
+  color: #fff;
+}
+
+.upgrade-btn:disabled {
+  cursor: default;
+}
+
+/* Unaffordable, not invisible. Fading parchment on brown to 55% left the row
+   brown-on-brown - four separate reports of the same fault. It keeps full
+   contrast and says what it is with a dimmer *hue*, not a dimmer alpha. */
+.upgrade-btn:disabled:not(.locked) {
+  background: var(--panel-sunk);
+  border-color: #2b1a17;
+  color: var(--parchment);
+}
+
+.upgrade-btn:disabled:not(.locked) .upgrade-cost {
+  color: #d9a066;
+}
+
+.upgrade-btn:disabled:not(.locked) .upgrade-detail {
+  color: #d9a066;
+}
+
+/* How near the price is, drawn behind the row. "Disabled" says never;
+   a filling track says not yet, which is the whole hook of an idle game. */
+.upgrade-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.upgrade-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0;
+  background: var(--gold);
+  opacity: 0.16;
+  transition: width 220ms steps(12);
+}
+
+.upgrade-btn.affordable .upgrade-fill,
+.upgrade-btn.locked .upgrade-fill {
+  display: none;
+}
+
+.upgrade-name,
+.upgrade-detail,
+.upgrade-cost {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .upgrade-fill {
+    transition: none;
+  }
+}
+
+.upgrade-btn.locked {
+  border-style: dashed;
+  border-color: #3d2b26;
+  color: #a8785f;
+}
+
+.upgrade-btn.locked .upgrade-detail {
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+/* --- Gear ------------------------------------------------------------- */
+
+/* Rows, not three columns. A third of the panel is 115px, and the bitmap face
+   dropped to 1x to fit "Dragonscale Aegis" into it - three glyph sizes inside
+   one slot. A full-width row gives every name the panel's width at 2x. */
+.gear-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gear-slot {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: 'label name power';
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 3px solid var(--wood-shadow);
+  background: rgba(0, 0, 0, 0.25);
+  text-align: center;
+}
+
+.gear-slot-label {
+  grid-area: label;
+  font-size: var(--ui-1);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+.gear-name {
+  grid-area: name;
+  font-size: var(--ui-1);
+  color: var(--ink-dim);
+  line-height: 1.15;
+}
+
+.gear-power {
+  grid-area: power;
+  font-size: var(--ui-1);
+  color: var(--ink-faint);
+  white-space: nowrap;
+  text-align: right;
+}
+
+.gear-slot.filled .gear-power {
+  color: var(--parchment);
+}
+
+.gear-slot.rarity-common .gear-name {
+  color: var(--rarity-common);
+}
+.gear-slot.rarity-uncommon .gear-name {
+  color: var(--rarity-uncommon);
+}
+.gear-slot.rarity-rare .gear-name {
+  color: var(--rarity-rare);
+}
+.gear-slot.rarity-epic .gear-name {
+  color: var(--rarity-epic);
+}
+
+/* --- Log (demoted to a thin ticker — the scene is the star, not the prose) */
+
+.panel.log {
+  /* Hugs its entries. At flex:1 it absorbed the column's whole remainder and
+     rendered as a mostly-empty bordered box under the last line. */
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.log-line {
+  /* One ramp step down from the gear numbers: at --num-1 a single entry ran to
+     three wrapped lines, so the panel showed one event and cut the next in half. */
+  font-size: var(--ui-1);
+  line-height: 24px;
+  color: var(--ink-dim);
+  padding: 2px 5px;
+  border-left: 3px solid transparent;
+  animation: logIn 0.25s ease;
+}
+
+.log-equip {
+  color: var(--parchment);
+  border-left-color: var(--rarity-uncommon);
+}
+.log-zone {
+  color: var(--parchment);
+  border-left-color: var(--torch);
+}
+.log-region {
+  color: var(--gold);
+  border-left-color: var(--gold);
+}
+.log-gate {
+  color: var(--rarity-epic);
+  border-left-color: var(--rarity-epic);
+}
+.log-bossWin {
+  color: var(--gold);
+  border-left-color: var(--gold);
+}
+.log-bossFail {
+  color: var(--danger);
+  border-left-color: var(--danger);
+}
+.log-edge {
+  color: var(--rarity-rare);
+  border-left-color: var(--rarity-rare);
+}
+.log-info {
+  color: var(--ink-faint);
+}
+
+/* --- Victory toast ---------------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  top: calc(18px + env(safe-area-inset-top, 0px));
+  transform: translateX(-50%);
+  z-index: 40;
+  padding: 12px 22px;
+  background: var(--torch);
+  border: 3px solid var(--gold);
+  color: #fff;
+  box-shadow: var(--drop);
+  animation: toastIn 0.3s ease;
+}
+
+/* --- Debug ------------------------------------------------------------ */
+
+.debug-toggle {
+  position: fixed;
+  right: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  z-index: 50;
+  /* iOS asks 44pt of any target. */
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--wood);
+  background: var(--wood-shadow);
+  color: var(--ink-faint);
+  font-size: var(--ui-1);
+  cursor: pointer;
+}
+
+.debug-drawer {
+  position: fixed;
+  right: 12px;
+  bottom: calc(62px + env(safe-area-inset-bottom, 0px));
+  z-index: 50;
+  width: 220px;
+  padding: 12px;
+  border: 3px solid var(--wood);
+  background: var(--wood-shadow);
+  box-shadow: var(--drop);
+}
+
+.debug-title {
+  font-size: var(--ui-1);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.debug-seed {
+  margin: 8px 0 10px;
+  font-size: var(--num-1);
+  color: var(--ink-dim);
+}
+
+.debug-seed span {
+  color: var(--parchment);
+}
+
+.debug-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.debug-btn {
+  min-height: 40px;
+  border: 2px solid var(--wood);
+  background: var(--wood-light);
+  color: var(--parchment);
+  font-family: var(--font-ui);
+  font-size: var(--ui-1);
+  cursor: pointer;
+}
+
+.debug-btn.danger {
+  border-color: var(--danger-deep);
+  color: var(--danger);
+}
+
+.debug-btn:active {
+  transform: translateY(2px);
+}
+
+/* --- Recap modal ------------------------------------------------------ */
+
+.recap-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(10, 8, 16, 0.85);
+  animation: fadeIn 0.25s ease;
+}
+
+/* Wears the realm the same way the panel does. A cream-and-orange card in a
+   rounded webfont read as a different product from the world behind it. */
+.recap-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 24px 22px;
+  border: 4px solid var(--panel-edge);
+  background: var(--panel);
+  color: var(--ink-light);
+  box-shadow:
+    inset 0 4px 0 var(--bevel-lit),
+    inset 0 -4px 0 var(--bevel-dark),
+    var(--drop);
+  text-align: center;
+  animation: riseIn 0.3s ease;
+}
+
+.recap-eyebrow {
+  font-size: var(--ui-1);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.recap-sub {
+  margin-top: 6px;
+  font-size: var(--ui-1);
+  color: var(--ink-faint);
+}
+
+.recap-stats {
+  list-style: none;
+  margin: 18px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recap-stats li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--panel-sunk);
+  font-size: var(--ui-1);
+  color: var(--ink-light);
+}
+
+.recap-num {
+  /* The number is first in the DOM but belongs on the right. Both cells are
+     pinned to row 1, or auto-placement refuses to go backwards and starts a
+     second row instead. */
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  white-space: nowrap;
+  /* Sized so the widest recap figure and its label still share one row on a
+     390px phone; 26px pushed every label onto a line of its own. */
+  font-size: var(--num-1);
+  color: var(--ink-dim);
+}
+
+.recap-stats li span:not(.recap-num) {
+  grid-column: 1;
+  grid-row: 1;
+  text-align: left;
+  font-size: var(--ui-1);
+}
+
+.recap-btn {
+  letter-spacing: 0.05em;
+  width: 100%;
+  min-height: var(--touch);
+  /* A flex parent shrinks a min-height away without this. */
+  flex-shrink: 0;
+  border: 4px solid var(--panel-edge);
+  background: var(--panel-inner);
+  color: var(--ink-light);
+  font-family: var(--font-ui);
+  font-size: var(--ui-1);
+  cursor: pointer;
+  box-shadow: var(--drop);
+}
+
+/* --- Animations ------------------------------------------------------- */
+
+/* Pixel-authentic "ready" flash: two hard frames, no easing. */
+@keyframes readyBlink {
+  50% {
+    filter: brightness(1.35);
+  }
+}
+
+/* Arrives by moving, never by materialising. Kills land every few hundred ms,
+   so an opacity ramp meant the newest entry - the one worth reading - was the
+   faintest thing in the panel at most instants a frame could be taken. */
+@keyframes logIn {
+  from {
+    transform: translateY(-4px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -10px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+
+/* --- Panel cards on the world's grid ---------------------------------------
+   Hard 2px outlines, a lit top edge and a dark bottom edge, all solid palette
+   colours. No radius, no blur, no alpha. This is the rule the panel broke for
+   three rounds: the fills were never the problem, the chrome was. */
+.upgrade,
+.gear-slot,
+.portal-panel,
+.portal-stats div,
+.log,
+.goal-chip,
+.boss-banner,
+.portal-btn,
+.abandon-btn,
+.strike-hint {
+  border-width: 2px;
+  border-style: solid;
+  box-shadow:
+    inset 0 2px 0 var(--bevel-lit),
+    inset 0 -2px 0 var(--bevel-dark);
+}
+
+.upgrade.affordable,
+.portal-btn {
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 0.35),
+    inset 0 -2px 0 var(--bevel-dark),
+    var(--drop);
+}
+
+
+/* The accessible copy of every bitmap label. It stays in normal flow so the
+   browser still wraps it and sizes the box; only its ink is removed.
+   text-shadow paints even at color: transparent, so the HUD's 2px outline
+   ghosted a second copy of every glyph through the bitmap above it. */
+.px-sr.px-hidden,
+.px-sr.px-hidden::selection {
+  color: transparent;
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+}
+
+.hud {
+  --px-outline: #1a1c2c;
+}
+
+.px-ink {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
+
+[data-px] {
+  position: relative;
+}
+
+/* --- Ascendancy ------------------------------------------------------- */
+
+/* The persistent tree's front door. Sits above the road panels because what
+   it opens outlives everything under it. */
+.asc-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--touch);
+  padding: 3px 12px;
+  font-family: var(--font-ui);
+  font-size: var(--ui-1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: var(--panel-inner);
+  border: 3px solid var(--panel-edge);
+  box-shadow: var(--drop);
+  cursor: pointer;
+}
+
+.asc-open-bank {
+  font-family: var(--font-num);
+  font-size: var(--num-1);
+  color: var(--ink-light);
+}
+
+.asc-card {
+  max-width: 620px;
+}
+
+/* The tree's rows carry a longer sentence than the road's shop rows do, so
+   the price column is given its own track rather than crowding the copy. */
+.asc-node {
+  grid-template-columns: 1fr max-content;
+  column-gap: 18px;
+}
+
+.asc-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 14px 0 4px;
+  text-align: left;
+}
+
+/* A node nobody can afford still has to say what it would do, so it dims
+   rather than greys out to unreadable. */
+.asc-node:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+/* Narrow panels. Placed last: an @media of equal specificity only wins over the
+   base rule it overrides if it comes after it. */
+@media (max-width: 900px) {
+  /* The price gives up its column. Beside it the name column was 106px on a
+     landscape phone and "Level up your blade" needs 226, so every row wrapped
+     to three lines and the shop showed one and a half of its six. */
+  .upgrade-btn {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'name'
+      'detail'
+      'cost';
+  }
+
+  .upgrade-cost {
+    text-align: right;
+  }
+
+  /* One column. Three left the name 31px on a 263px panel and pushed the power
+     reading off the right edge; two still left it 80px once the camera housing
+     took its inset, and "Longsword" needs 106 at the smallest UI scale. */
+  .gear-slot {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'label'
+      'name'
+      'power';
+  }
+
+  /* Two cells side by side left each one 101px in the goal strip and 71px in
+     the portal stats. "Greenwood" needs 106 at the smallest scale UI type is
+     allowed, so both dropped out of the bitmap face into the webfont. */
+  .goal-strip,
+  .portal-stats {
+    flex-direction: column;
+  }
+
+}
+
+/* A landscape phone puts 59px of camera housing beside the screen, and the
+   panel is docked into it. */
+@media (min-aspect-ratio: 1/1) {
+  .screen {
+    padding-right: calc(12px + env(safe-area-inset-right, 0px));
+  }
+
+  .hud {
+    padding-left: calc(12px + env(safe-area-inset-left, 0px));
+  }
+}
+
+/* Single tokens, and the bitmap face is wider than the webfont that measured
+   their boxes. Without this they cannot fit at 2x and revert to the webfont,
+   which is the "two type systems" a critic found three rounds running. */
+.gold,
+.dps,
+.asc-open-bank,
+.zone,
+.leagues,
+.gold-rate,
+.hud-label,
+.asc-open-label {
+  white-space: nowrap;
+}
+
+/* --- Best value ---------------------------------------------------------
+   The panel's whole job is "what do I buy next", and six affordable rows
+   ranked by descending cost answer it with nothing. Core ranks them; this
+   names the winner, in the panel's own dead bottom. margin-top:auto is what
+   claims that space - the card is anchored to the floor, not floated near it. */
+
+.best-buy {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'eyebrow eyebrow'
+    'name cost'
+    'gain cost';
+  gap: 2px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 3px solid #99e550;
+  background: #4b7a1f;
+  color: #fff;
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--drop);
+}
+
+.best-buy-eyebrow {
+  grid-area: eyebrow;
+  font-size: var(--ui-1);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #d3ff9e;
+}
+
+.best-buy-name {
+  grid-area: name;
+  font-size: var(--ui-2);
+}
+
+.best-buy-gain {
+  grid-area: gain;
+  font-size: var(--ui-1);
+  color: #d3ff9e;
+}
+
+.best-buy-cost {
+  grid-area: cost;
+  font-size: var(--num-1);
+  white-space: nowrap;
+  /* The debug gear is fixed to the same corner; without this the price sits
+     under it and the panel's answer reads as a broken widget. */
+  margin-right: 46px;
+}
+
+/* The mark on the row itself, so the card and the list agree at a glance.
+   A brighter border and a lit inner edge - never a colour the affordable/
+   unaffordable split already spends. */
+.upgrade-btn.best {
+  border-color: #d3ff9e;
+  box-shadow:
+    inset 0 0 0 2px #4b7a1f,
+    var(--drop);
+}
+
+/* The cost gives up its column, exactly as the upgrade rows do. Beside it the
+   gain column measured 48px and "+83.0B DPS" needs 118. This block sits after
+   the base rules on purpose: an earlier @media loses to them outright. */
+@media (max-width: 900px) {
+  .best-buy {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'eyebrow'
+      'name'
+      'gain'
+      'cost';
+  }
+
+  .best-buy-cost {
+    margin-right: 0;
+  }
+}

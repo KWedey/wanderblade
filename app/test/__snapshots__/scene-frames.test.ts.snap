@@ -1,0 +1,22 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`scene frames are pixel-identical across refactors > dungeon: the guardian walks out of its portal and is struck (landscape) 1`] = `
+{
+  "calls": 185307,
+  "sha256": "0cba71e5ab35a8206e06d6330af9c3de105271ae5af8b9c8e7ef81ac941c935a",
+}
+`;
+
+exports[`scene frames are pixel-identical across refactors > reduce-motion road in portrait, with chrome above the band 1`] = `
+{
+  "calls": 625408,
+  "sha256": "943348097a54ea0658ae8167a8da805b1ac4f9d9cd50ffa15c301cb5d030e109",
+}
+`;
+
+exports[`scene frames are pixel-identical across refactors > road, mid-swing, with a strike, a catch and coins in flight (landscape, docked panel) 1`] = `
+{
+  "calls": 735185,
+  "sha256": "89c855de6319d1c9b5e8428a653ab3e0147bf6e8a465d67a90146fad6045c753",
+}
+`;

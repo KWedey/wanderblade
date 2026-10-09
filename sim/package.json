@@ -1,0 +1,14 @@
+{
+  "name": "@wanderblade/sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/run.ts",
+    "thumb": "tsx src/thumb-run.ts",
+    "shop": "tsx src/shop-run.ts"
+  },
+  "dependencies": {
+    "@wanderblade/core": "*"
+  }
+}

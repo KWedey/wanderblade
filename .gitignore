@@ -1,8 +1,44 @@
 node_modules/
 dist/
+dist-pages/
 coverage/
 *.tsbuildinfo
 .omc/
 .planning/
 sim/out/
 .DS_Store
+.ar-findings*
+.ar-verdict
+.playwright-mcp/
+.omx/
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**
+
+# git worktrees live inside the repo (CLAUDE.md), but are never part of it
+.worktrees/
+
+# gauntlet-loop scratch (bar screenshots, progress page)
+.gauntlet/
+
+# Scratch probes; see eslint.config.js
+wb_probe*.ts
+*.probe.ts
+
+# Gate and sim logs live in the worktree, never in /tmp: agents share /tmp
+# and the names collide.
+*.log
+
+# Playwright output; CI uploads the report as an artifact
+playwright-report/
+test-results/
+
+# gate logs written by agents working in this checkout
+.gate/
+TASKS.md
+.logs/

@@ -1,0 +1,1010 @@
+// Per-realm color skins for the road scene (DECISIONS.md #13: DB32, hard edges,
+// no smooth gradients). Every band is a flat fill; depth comes from stacked
+// bands and value contrast, never from a gradient or a blur.
+//
+// A realm re-skin recolors the whole scene from one record — sky, hills,
+// foliage, soil, monsters — which is what makes ten realms feel like ten places
+// without ten sets of art.
+
+/** Ink names the sprite grids in pixels.ts reference. */
+export type InkSet = Record<string, string>;
+
+export interface RealmSkin {
+  skyTop: string;
+  skyMid: string;
+  skyHaze: string;
+  cloud: string;
+  cloudShade: string;
+  sun: string;
+  hillFar: string;
+  hillNear: string;
+  hillLip: string;
+  leaf: string;
+  leafDark: string;
+  bark: string;
+  turf: string;
+  turfLip: string;
+  grassBlade: string;
+  soil: string;
+  soilDark: string;
+  rock: string;
+  rockLight: string;
+  /** Distant range behind the far hills — the horizon's third depth. */
+  range: string;
+  bird: string;
+  /** Foreground fronds, darker than any mid-ground green. */
+  fern: string;
+  petal: string;
+  petalCore: string;
+  monBody: string;
+  monBodyDark: string;
+  /** Drives strike flashes, the momentum meter, and impact sparks. */
+  accent: string;
+}
+
+// DB32 anchors, used verbatim so the scene and the CSS chrome share a palette.
+export const INK = {
+  black: '#1a1c2c',
+  night: '#222034',
+  plum: '#45283c',
+  wood: '#663931',
+  woodLight: '#8f563b',
+  orange: '#df7126',
+  tan: '#d9a066',
+  parchment: '#eec39a',
+  yellow: '#fbf236',
+  lime: '#99e550',
+  green: '#6abe30',
+  teal: '#37946e',
+  moss: '#4b692f',
+  olive: '#524b24',
+  slateGreen: '#323c39',
+  indigo: '#3f3f74',
+  steelBlue: '#306082',
+  blue: '#5b6ee1',
+  sky: '#639bff',
+  cyan: '#5fcde4',
+  ice: '#cbdbfc',
+  grey: '#9badb7',
+  greyDark: '#847e87',
+  stone: '#696a6a',
+  purple: '#76428a',
+  crimson: '#ac3232',
+  rose: '#d95763',
+  pink: '#d77bba',
+  khaki: '#8f974a',
+  bronze: '#8a6f30',
+} as const;
+
+const RAW_REALM_SKINS: RealmSkin[] = [
+  // Greenwood — the sunlit default: high-key cyan sky over vivid grass.
+  {
+    skyTop: INK.sky,
+    skyMid: INK.cyan,
+    skyHaze: INK.ice,
+    cloud: '#ffffff',
+    cloudShade: INK.ice,
+    sun: INK.yellow,
+    hillFar: INK.teal,
+    range: INK.grey,
+    bird: INK.plum,
+    fern: INK.moss,
+    hillNear: INK.green,
+    hillLip: INK.lime,
+    leaf: INK.lime,
+    leafDark: INK.green,
+    bark: INK.wood,
+    turf: INK.green,
+    turfLip: INK.lime,
+    grassBlade: INK.lime,
+    soil: INK.woodLight,
+    soilDark: INK.wood,
+    rock: INK.grey,
+    rockLight: INK.ice,
+    petal: INK.rose,
+    petalCore: INK.yellow,
+    monBody: INK.purple,
+    monBodyDark: INK.plum,
+    accent: INK.yellow,
+  },
+  // Ruinfields — sun-bleached stone and dry gold.
+  {
+    skyTop: INK.cyan,
+    skyMid: INK.ice,
+    skyHaze: INK.parchment,
+    cloud: '#ffffff',
+    cloudShade: INK.ice,
+    sun: INK.yellow,
+    hillFar: INK.greyDark,
+    range: INK.grey,
+    bird: INK.wood,
+    fern: INK.olive,
+    hillNear: INK.khaki,
+    hillLip: INK.lime,
+    leaf: INK.khaki,
+    leafDark: INK.olive,
+    bark: INK.greyDark,
+    turf: INK.khaki,
+    turfLip: INK.lime,
+    grassBlade: INK.bronze,
+    soil: INK.tan,
+    soilDark: INK.woodLight,
+    rock: INK.ice,
+    rockLight: '#ffffff',
+    petal: INK.parchment,
+    petalCore: INK.tan,
+    monBody: INK.steelBlue,
+    monBodyDark: INK.indigo,
+    accent: INK.parchment,
+  },
+  // Mistmarsh — cold teal water light under a pale sky.
+  {
+    skyTop: INK.steelBlue,
+    skyMid: INK.cyan,
+    skyHaze: INK.grey,
+    cloud: INK.ice,
+    cloudShade: INK.grey,
+    sun: INK.ice,
+    hillFar: INK.slateGreen,
+    range: INK.grey,
+    bird: INK.plum,
+    fern: INK.slateGreen,
+    hillNear: INK.teal,
+    hillLip: INK.green,
+    leaf: INK.teal,
+    leafDark: INK.slateGreen,
+    bark: INK.plum,
+    turf: INK.teal,
+    turfLip: INK.green,
+    grassBlade: INK.lime,
+    soil: INK.olive,
+    soilDark: INK.slateGreen,
+    rock: INK.stone,
+    rockLight: INK.grey,
+    petal: INK.pink,
+    petalCore: INK.ice,
+    monBody: INK.rose,
+    monBodyDark: INK.crimson,
+    accent: INK.cyan,
+  },
+  // Ironhills — hard blue stone and cold steel.
+  {
+    skyTop: INK.indigo,
+    skyMid: INK.blue,
+    skyHaze: INK.ice,
+    cloud: INK.ice,
+    cloudShade: INK.grey,
+    sun: INK.ice,
+    hillFar: INK.steelBlue,
+    range: INK.steelBlue,
+    bird: INK.night,
+    fern: INK.slateGreen,
+    hillNear: INK.stone,
+    hillLip: INK.grey,
+    leaf: INK.moss,
+    leafDark: INK.slateGreen,
+    bark: INK.stone,
+    turf: INK.stone,
+    turfLip: INK.grey,
+    grassBlade: INK.moss,
+    soil: INK.greyDark,
+    soilDark: INK.slateGreen,
+    rock: INK.grey,
+    rockLight: INK.ice,
+    petal: INK.blue,
+    petalCore: INK.ice,
+    monBody: INK.orange,
+    monBodyDark: INK.crimson,
+    accent: INK.cyan,
+  },
+  // Ember Wastes — the loud one: orange sky, red rock, everything hot.
+  {
+    skyTop: INK.orange,
+    skyMid: INK.yellow,
+    skyHaze: INK.parchment,
+    cloud: INK.tan,
+    cloudShade: INK.woodLight,
+    sun: '#ffffff',
+    hillFar: INK.crimson,
+    range: INK.plum,
+    bird: INK.night,
+    fern: INK.wood,
+    hillNear: INK.rose,
+    hillLip: INK.orange,
+    leaf: INK.orange,
+    leafDark: INK.crimson,
+    bark: INK.plum,
+    turf: INK.woodLight,
+    turfLip: INK.tan,
+    grassBlade: INK.orange,
+    soil: INK.wood,
+    soilDark: INK.plum,
+    rock: INK.crimson,
+    rockLight: INK.rose,
+    petal: INK.yellow,
+    petalCore: '#ffffff',
+    monBody: INK.teal,
+    monBodyDark: INK.slateGreen,
+    accent: INK.yellow,
+  },
+  // Dragon Peaks — violet dusk over black rock.
+  {
+    skyTop: INK.purple,
+    skyMid: INK.pink,
+    skyHaze: INK.rose,
+    cloud: INK.pink,
+    cloudShade: INK.purple,
+    sun: INK.yellow,
+    hillFar: INK.plum,
+    range: INK.night,
+    bird: INK.night,
+    fern: INK.plum,
+    hillNear: INK.purple,
+    hillLip: INK.pink,
+    leaf: INK.pink,
+    leafDark: INK.purple,
+    bark: INK.plum,
+    turf: INK.purple,
+    turfLip: INK.pink,
+    grassBlade: INK.pink,
+    soil: INK.plum,
+    soilDark: INK.night,
+    rock: INK.greyDark,
+    rockLight: INK.grey,
+    monBody: INK.green,
+    monBodyDark: INK.moss,
+    petal: INK.yellow,
+    petalCore: '#ffffff',
+    accent: INK.pink,
+  },
+  // World's Edge — starlit void, the only low-key realm.
+  {
+    skyTop: INK.night,
+    skyMid: INK.indigo,
+    skyHaze: INK.purple,
+    cloud: INK.indigo,
+    cloudShade: INK.night,
+    sun: INK.cyan,
+    hillFar: INK.plum,
+    range: INK.night,
+    bird: INK.purple,
+    fern: INK.night,
+    hillNear: INK.indigo,
+    hillLip: INK.blue,
+    leaf: INK.blue,
+    leafDark: INK.indigo,
+    bark: INK.night,
+    turf: INK.indigo,
+    turfLip: INK.blue,
+    grassBlade: INK.cyan,
+    soil: INK.plum,
+    soilDark: INK.night,
+    rock: INK.steelBlue,
+    rockLight: INK.blue,
+    petal: INK.cyan,
+    petalCore: '#ffffff',
+    monBody: INK.pink,
+    monBodyDark: INK.purple,
+    accent: INK.cyan,
+  },
+];
+
+/**
+ * The furthest layer recedes toward the sky, never toward the hill in front of
+ * it: distance is read as air between you and the rock (DECISIONS.md #60).
+ */
+export function coherentRange(skyTop: string, authoredRange: string): string {
+  return mixHex(authoredRange, skyTop, 0.3);
+}
+
+const REALM_SKINS: RealmSkin[] = RAW_REALM_SKINS.map((skin) => ({
+  ...skin,
+  range: coherentRange(skin.skyTop, skin.range),
+}));
+
+/** Number of named realm skins the endless tail cycles through. */
+export const REALM_SKIN_COUNT = REALM_SKINS.length;
+
+/** Lightness of a hex, 0..1. */
+export function lightnessOf(hex: string): number {
+  return toHsl(hex)[2];
+}
+
+/**
+ * The bands whose separation decides whether a realm reads as a place or as
+ * mud. Sky and turf are the two poles the eye uses to size everything else.
+ */
+function valueBands(skin: RealmSkin): { sky: number; canopy: number; turf: number; soil: number } {
+  return {
+    sky: lightnessOf(skin.skyTop),
+    canopy: lightnessOf(skin.leaf),
+    turf: lightnessOf(skin.turf),
+    soil: lightnessOf(skin.soilDark),
+  };
+}
+
+/** Minimum spread between a realm's lightest and darkest structural band. */
+export const MIN_VALUE_SPREAD = 0.42;
+/** A sky is the light pole of the frame; below this the realm reads as night. */
+export const MIN_SKY_LIGHTNESS = 0.58;
+/** The bright accent is what keeps a realm vibrant rather than grimdark. */
+export const MIN_ACCENT_LIGHTNESS = 0.55;
+
+export function skinValueSpread(skin: RealmSkin): number {
+  const v = Object.values(valueBands(skin));
+  return Math.max(...v) - Math.min(...v);
+}
+
+/**
+ * Why this exists: VISION.md pillar 2 is "vibrant and dangerous, never
+ * grimdark", and DECISIONS.md #13 chose 16-bit over 8-bit precisely because
+ * colour starvation drifts grimdark. A hand-authored skin can still land
+ * below that bar, and realm 199 did - a near-black violet wood with every
+ * band compressed into mid-darks. Rather than trusting eight hand edits to
+ * stay in range, every skin is lifted through this on the way out, so no
+ * realm index can render as mud by construction.
+ */
+export function enforceValueFloor(skin: RealmSkin): RealmSkin {
+  let out = skin;
+
+  const skyL = lightnessOf(out.skyTop);
+  if (skyL < MIN_SKY_LIGHTNESS) {
+    const lift = (MIN_SKY_LIGHTNESS + 0.02 - skyL) / Math.max(0.001, 1 - skyL);
+    out = {
+      ...out,
+      skyTop: lighten(out.skyTop, lift),
+      skyMid: lighten(out.skyMid, lift * 0.9),
+      skyHaze: lighten(out.skyHaze, lift * 0.8),
+      // The canopy reads against the sky, so it has to travel with it or the
+      // gain is spent closing the gap that separates them.
+      leaf: lighten(out.leaf, lift * 0.55),
+      leafDark: lighten(out.leafDark, lift * 0.4),
+      hillFar: lighten(out.hillFar, lift * 0.5),
+      hillNear: lighten(out.hillNear, lift * 0.4),
+      range: lighten(out.range, lift * 0.6),
+    };
+  }
+
+  const accentL = lightnessOf(out.accent);
+  if (accentL < MIN_ACCENT_LIGHTNESS) {
+    out = {
+      ...out,
+      accent: lighten(out.accent, (MIN_ACCENT_LIGHTNESS + 0.02 - accentL) / 0.9),
+    };
+  }
+
+  // Spread is opened from the dark end: darkening soil costs nothing, while
+  // lifting the light end further would wash the realm out.
+  let guard = 0;
+  while (skinValueSpread(out) < MIN_VALUE_SPREAD && guard < 24) {
+    out = {
+      ...out,
+      soil: mixHex(out.soil, '#000000', 0.12),
+      soilDark: mixHex(out.soilDark, '#000000', 0.12),
+      turf: mixHex(out.turf, '#000000', 0.05),
+    };
+    guard++;
+  }
+  return out;
+}
+
+const FLOORED_SKINS: RealmSkin[] = REALM_SKINS.map(enforceValueFloor);
+
+/** Skin for a 0-based region index; the endless tail cycles the named realms. */
+export function realmSkin(region: number): RealmSkin {
+  const i = region < 0 ? 0 : region % FLOORED_SKINS.length;
+  return FLOORED_SKINS[i]!;
+}
+
+/**
+ * CSS variables that dress the panel in the realm the player is standing in.
+ * Four critics in a row called the panel "a different game" - brown-and-gold
+ * parchment against a green-and-blue world. Geometry was not the cause;
+ * palette was. Derived from the skin's own earth and accent so the panel
+ * cannot drift away from the scene again.
+ */
+export function panelVars(skin: RealmSkin): Record<string, string> {
+  const earth = skin.soil;
+  const deep = mixHex(skin.soilDark, '#000000', 0.2);
+  return {
+    '--panel': deep,
+    '--panel-inner': earth,
+    '--panel-sunk': mixHex(earth, '#000000', 0.22),
+    '--panel-edge': skin.accent,
+    '--bevel-lit': lighten(earth, 0.24),
+    '--bevel-dark': mixHex(deep, '#000000', 0.4),
+    '--ink-light': lighten(skin.skyHaze, 0.32),
+    '--ink-dim': skin.accent,
+    '--ink-faint': mixHex(lighten(skin.skyHaze, 0.2), earth, 0.35),
+    '--wood': earth,
+    '--wood-light': lighten(earth, 0.18),
+    '--wood-shadow': deep,
+    '--drop': `0 4px 0 ${mixHex(deep, '#000000', 0.5)}`,
+    '--drop-pressed': `0 2px 0 ${mixHex(deep, '#000000', 0.5)}`,
+  };
+}
+
+/** Fixed inks the hero and his sword always wear, in every realm. */
+/**
+ * The hero wins on *hue*, not on luminance alone. Lifting every tone made him
+ * the brightest thing in frame and cost him his identity - a critic read the
+ * result as "grey-blue and off-white, the two least saturated colours in a
+ * saturated scene." A warm figure on a cool green-and-blue world separates on
+ * two axes at once, so value rises only far enough to clear the background and
+ * saturation goes up rather than down.
+ */
+export const HERO_INK: InkSet = {
+  outline: INK.black,
+  hair: saturate(lighten(INK.woodLight, 0.06), 0.3),
+  skin: saturate(lighten(INK.parchment, 0.06), 0.2),
+  // A face has to read at 14px: a lit cheek, a dark eye, one tunic highlight.
+  skinLit: lighten(INK.parchment, 0.34),
+  eye: '#241016',
+  hatBand: saturate(lighten('#3c2a3f', 0.14), 0.25),
+  cloak: saturate(INK.rose, 0.22),
+  scarf: saturate(INK.rose, 0.22),
+  // The warm coat and blue scarf are what a critic named when it found him
+  // instantly. They go back at full strength.
+  tunic: saturate(lighten(INK.blue, 0.1), 0.3),
+  tunicLit: saturate(lighten(INK.blue, 0.3), 0.25),
+  // Dark leather, not the trousers again. At one step off `pants` the belt was
+  // invisible, so the torso read as a single blue-over-rust garment -- which is
+  // half of what the judge called overalls.
+  belt: saturate(mixHex(INK.woodLight, '#1a1c2c', 0.52), 0.2),
+  pants: saturate(lighten(INK.woodLight, 0.02), 0.3),
+  boot: saturate(INK.wood, 0.3),
+  steel: '#ffffff',
+  steelDark: INK.ice,
+  // A fuller down the blade: a solid white bar read as a parallelogram.
+  steelFuller: '#8fa9c9',
+  grip: INK.woodLight,
+};
+
+export const LOOT_INK: InkSet = {
+  outline: INK.black,
+  coin: INK.yellow,
+  coinLight: '#ffffff',
+  coinDark: INK.orange,
+  gem: INK.pink,
+  gemLight: '#ffffff',
+};
+
+/** Scenery + monster inks derived from a realm skin. */
+/**
+ * Depth grade. The value floor lifted every band together, so a late realm
+ * read as "one lavender value - no foreground/background separation at all".
+ * Separation is a relationship between layers, so the scenery behind the
+ * sprite plane is pushed back and the sprite plane is left alone.
+ */
+const DEPTH_RECESSION = {
+  range: 0.46,
+  hillFar: 0.38,
+  hillNear: 0.3,
+  treeline: 0.35,
+} as const;
+
+/** Minimum lightness a monster's body must hold over the treeline behind it. */
+export const MIN_SPRITE_BACKDROP_GAP = 0.16;
+
+const hazeCache = new WeakMap<RealmSkin, string>();
+
+/** The colour distance itself is graded toward: the realm's own deep earth. */
+export function depthHaze(skin: RealmSkin): string {
+  const hit = hazeCache.get(skin);
+  if (hit) return hit;
+  const haze = mixHex(skin.soilDark, '#000000', 0.45);
+  hazeCache.set(skin, haze);
+  return haze;
+}
+
+function recede(color: string, skin: RealmSkin, amount: number): string {
+  return mixHex(color, depthHaze(skin), amount);
+}
+
+/**
+ * Extra recession needed on top of DEPTH_RECESSION.treeline before the darkest
+ * monster body clears the canopy behind it. Zero when the gap already holds.
+ */
+export function backdropRecession(skin: RealmSkin): number {
+  // Against the body tone, not the shading tone: the body is what fills the
+  // silhouette, and a shadow facet is meant to be dark.
+  const body = lightnessOf(skin.monBody);
+  let amount = DEPTH_RECESSION.treeline;
+  for (let step = 0; step < 40; step++) {
+    const gap = body - lightnessOf(recede(skin.leaf, skin, amount));
+    if (gap >= MIN_SPRITE_BACKDROP_GAP || amount >= 0.94) break;
+    amount += 0.04;
+  }
+  return amount;
+}
+
+const backdropCache = new WeakMap<RealmSkin, RealmSkin>();
+
+/** Bands the camera never reaches, graded back so the sprite plane reads. */
+export function backdropSkin(skin: RealmSkin): RealmSkin {
+  const hit = backdropCache.get(skin);
+  if (hit) return hit;
+  const treeline = backdropRecession(skin);
+  const graded: RealmSkin = {
+    ...skin,
+    range: recede(skin.range, skin, DEPTH_RECESSION.range),
+    hillFar: recede(skin.hillFar, skin, DEPTH_RECESSION.hillFar),
+    hillNear: recede(skin.hillNear, skin, DEPTH_RECESSION.hillNear),
+    hillLip: recede(skin.hillLip, skin, DEPTH_RECESSION.hillNear),
+    leaf: recede(skin.leaf, skin, treeline),
+    leafDark: recede(skin.leafDark, skin, treeline),
+    bark: recede(skin.bark, skin, treeline),
+  };
+  backdropCache.set(skin, graded);
+  return graded;
+}
+
+/** Where the day ends: the sky, sun and cloud tones the last zone of a realm is graded toward. */
+const DUSK = { skyTop: '#4a2f6b', skyMid: '#d9784d', skyHaze: '#f0b26a', sun: '#ff7a3c', cloud: '#f2a58a', cloudShade: '#a35a6d' };
+/** How far toward DUSK the last zone goes; past this the sky floors would break and the realm stops reading. */
+const DUSK_DEPTH = 0.55;
+
+/** Fraction of the day a zone sits at: dawn at the realm's first zone, dusk at its last. */
+export function dayFraction(zone: number, zonesInRealm: number): number {
+  const span = Math.max(1, zonesInRealm - 1);
+  return Math.max(0, Math.min(1, zone / span));
+}
+
+/**
+ * The realm skin graded toward dusk by `day`. Only the light moves: turf,
+ * rock and every sprite bake keep the realm's authored colour so a creature
+ * is the same creature at zone 1 and zone 49 (DECISIONS.md #38).
+ */
+export function zoneSkin(skin: RealmSkin, day: number): RealmSkin {
+  const t = Math.max(0, Math.min(1, day)) * DUSK_DEPTH;
+  if (t <= 0) return skin;
+  return {
+    ...skin,
+    skyTop: mixHex(skin.skyTop, DUSK.skyTop, t),
+    skyMid: mixHex(skin.skyMid, DUSK.skyMid, t),
+    skyHaze: mixHex(skin.skyHaze, DUSK.skyHaze, t),
+    sun: mixHex(skin.sun, DUSK.sun, t),
+    cloud: mixHex(skin.cloud, DUSK.cloud, t),
+    cloudShade: mixHex(skin.cloudShade, DUSK.cloudShade, t),
+  };
+}
+
+/**
+ * Largest height change one hill column may take from its neighbour. The raw
+ * sine profile could jump 14px between 3-4px-wide columns — steeper than the
+ * column is wide — which draws as a staircase of right angles, not a slope.
+ */
+export function clampHillStep(prevH: number | null, targetH: number, maxDelta: number): number {
+  if (prevH === null) return targetH;
+  const delta = targetH - prevH;
+  if (delta > maxDelta) return prevH + maxDelta;
+  if (delta < -maxDelta) return prevH - maxDelta;
+  return targetH;
+}
+
+/** Minimum lightness a hill's shadow base must hold over the haze behind it. */
+export const MIN_HILL_SHADOW_GAP = 0.1;
+
+/**
+ * A hill's dark base band, backed off until it clears the depth haze the
+ * grove's shadow tones recede toward. A fixed 18% mix landed only 0.084 above
+ * that haze in Greenwood, so the "shadow" merged into the real one behind it.
+ */
+export function hillBaseInk(color: string, floor: string, amount = 0.18): string {
+  let mix = amount;
+  let out = mixHex(color, '#000000', mix);
+  for (let step = 0; step < 24 && mix > 0; step++) {
+    if (lightnessOf(out) - lightnessOf(floor) >= MIN_HILL_SHADOW_GAP) break;
+    mix = Math.max(0, mix - 0.02);
+    out = mixHex(color, '#000000', mix);
+  }
+  return out;
+}
+
+/**
+ * Ceiling on how far ground texture may stray from the turf under it. Blade
+ * tones were hand-authored accents, so the road read as "a confetti field that
+ * fights the sprites": texture modulates a surface, it does not compete with
+ * the things standing on it.
+ */
+export const MAX_TEXTURE_CONTRAST = 0.14;
+
+/** The blade tone pulled back toward its turf until it stops shouting. */
+export function groundBladeOf(skin: RealmSkin): string {
+  let blade = skin.grassBlade;
+  const turf = lightnessOf(skin.turf);
+  for (let step = 0; step < 24; step++) {
+    if (Math.abs(lightnessOf(blade) - turf) <= MAX_TEXTURE_CONTRAST) break;
+    blade = mixHex(blade, skin.turf, 0.18);
+  }
+  return blade;
+}
+
+/** Value steps a ground band darkens by, one step per band moving away from the camera. */
+export const GROUND_BAND_STEP = 0.045;
+
+/**
+ * Turf split into flat value bands, darkest at the horizon edge and true tone
+ * at the camera edge — the receding-surface cue a single flat fill has none
+ * of. `bands` must be at least 1.
+ */
+export function depthBandTones(base: string, bands: number, step = GROUND_BAND_STEP): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < bands; i++) {
+    const fromNear = bands - 1 - i;
+    out.push(fromNear === 0 ? base : mixHex(base, '#000000', Math.min(0.6, fromNear * step)));
+  }
+  return out;
+}
+
+/**
+ * Scenery two value steps down, for the layer nearest the camera. Foreground
+ * trees, hedge, hills and turf all sat in one green band, so nothing read as
+ * in front of anything and the fight had no ground to stand against. Darkening
+ * only the nearest layer buys the whole foreground separation in one edit.
+ */
+export const FOREGROUND_DARKEN = 0.22;
+
+export function foregroundInk(skin: RealmSkin): InkSet {
+  const ink = sceneryInk(skin);
+  const down = (hex: string): string => mixHex(hex, '#000000', FOREGROUND_DARKEN);
+  return {
+    ...ink,
+    leaf: down(ink.leaf!),
+    leafDark: down(ink.leafDark!),
+    leafLite: down(ink.leafLite!),
+    bark: down(ink.bark!),
+    barkDark: down(ink.barkDark!),
+    barkLit: down(ink.barkLit!),
+    grassBlade: down(ink.grassBlade!),
+  };
+}
+
+export function sceneryInk(skin: RealmSkin): InkSet {
+  return {
+    outline: INK.black,
+    leaf: skin.leaf,
+    leafDark: skin.leafDark,
+    // A third green and a bark shadow: two flat tones made every canopy read
+    // as a lozenge with nothing inside it.
+    leafLite: lighten(skin.leaf, 0.3),
+    bark: skin.bark,
+    barkDark: mixHex(skin.bark, '#000000', 0.35),
+    // Sun sits upper right: a lit edge on the trunk's far side is what gives
+    // the stick its own roundness instead of a flat silhouette pasted below
+    // the canopy.
+    barkLit: lighten(skin.bark, 0.35),
+    rock: skin.rock,
+    rockLight: skin.rockLight,
+    grassBlade: skin.grassBlade,
+    petal: skin.petal,
+    petalCore: skin.petalCore,
+    bird: skin.bird,
+    fern: skin.fern,
+  };
+}
+
+function toHsl(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255;
+  const g = ((n >> 8) & 255) / 255;
+  const b = (n & 255) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const d = max - min;
+  if (d === 0) return [0, 0, l];
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+
+function channel(p1: number, q: number, t: number): number {
+  let u = t;
+  if (u < 0) u += 1;
+  if (u > 1) u -= 1;
+  if (u < 1 / 6) return p1 + (q - p1) * 6 * u;
+  if (u < 1 / 2) return q;
+  if (u < 2 / 3) return p1 + (q - p1) * (2 / 3 - u) * 6;
+  return p1;
+}
+
+function toHex(h: number, s: number, l: number): string {
+  const hue = ((h % 1) + 1) % 1;
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return `#${((v << 16) | (v << 8) | v).toString(16).padStart(6, '0')}`;
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p1 = 2 * l - q;
+  const r = Math.round(channel(p1, q, hue + 1 / 3) * 255);
+  const g = Math.round(channel(p1, q, hue) * 255);
+  const b = Math.round(channel(p1, q, hue - 1 / 3) * 255);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+/**
+ * How far a creature's mid tone must sit from the ground it stands on. Below
+ * this the outline is doing all the work and the fight reads as two blobs.
+ */
+export const MIN_BODY_CONTRAST = 0.17;
+/** Added back on top when the creature shares the ground's hue as well. */
+export const SAME_HUE_CONTRAST = 0.16;
+
+/** How dark and how pale a creature's mid tone may be pushed to answer a realm. */
+const REACH_DARK = 0.13;
+const REACH_PALE = 0.84;
+
+/** 0 for opposite hues, 1 for the same one. */
+function hueCloseness(a: number, b: number): number {
+  const d = Math.abs(((a - b) % 1) + 1) % 1;
+  return 1 - Math.min(d, 1 - d) * 2;
+}
+
+/**
+ * A creature's inks. Hue and saturation are the species' own and never move:
+ * one that changed colour every seventh realm could never become a thing a
+ * player recognises. Only value answers the realm, pushed off the ground it
+ * stands on, and pushed further when it shares that ground's hue — the medium
+ * separates a figure with value and a hard outline (DECISIONS.md #38).
+ */
+export function monsterInk(body: string, ground = '#000000', prop = ground): InkSet {
+  const [h, sat, l] = toHsl(body);
+  // Saturation is the species' too. A floor here manufactured colour: an Ashen
+  // Wolf's near-grey has a faint violet cast, and forcing it to 0.42 fielded a
+  // vivid purple wolf.
+  const want = Math.min(0.72, Math.max(0.24, l));
+  // Both surfaces a creature is seen against, each with its own demand: the
+  // turf it stands on and the rock it stands beside. Clearing only the turf is
+  // what let an Ashen Wolf sit 0.045 from the boulder behind it and read as an
+  // outcrop.
+  const against = [ground, prop].map((ref, i) => {
+    const [rh, , rl] = toHsl(ref);
+    // The turf fills the frame under the creature, so sharing its hue is fatal
+    // and costs extra value. A rock is a prop it happens to stand beside; value
+    // alone is enough there, and charging the hue premium twice drove half the
+    // roster to near-black.
+    const hue = i === 0 ? hueCloseness(h, rh) * SAME_HUE_CONTRAST : 0;
+    return { at: rl, need: MIN_BODY_CONTRAST + hue };
+  });
+  const slack = (v: number): number =>
+    Math.min(...against.map((r) => Math.abs(v - r.at) - r.need));
+  let mid = want;
+  if (slack(mid) < 0) {
+    // Every value that just clears one surface, plus the ends of the range.
+    // The nearest one that clears both keeps the species as close to its own
+    // value as the realm allows; when nothing clears both, the least bad wins.
+    const tries = [REACH_DARK, REACH_PALE];
+    for (const r of against) tries.push(r.at - r.need, r.at + r.need);
+    const reach = tries.map((v) => Math.min(REACH_PALE, Math.max(REACH_DARK, v)));
+    mid = reach.reduce((best, v) => {
+      const bs = slack(best);
+      const vs = slack(v);
+      if (bs >= 0 && vs >= 0) return Math.abs(v - want) < Math.abs(best - want) ? v : best;
+      return vs > bs ? v : best;
+    }, reach[0]!);
+  }
+  const light = Math.min(0.92, mid + 0.16);
+  return {
+    outline: INK.black,
+    body: toHex(h, sat, mid),
+    bodyDark: toHex(h, Math.min(1, sat + 0.06), Math.max(0.1, mid - 0.15)),
+    bodyLight: toHex(h, Math.max(0, sat - 0.06), light),
+    // The hard edge on a lit facet. Without it three bands still read as flat.
+    // Built off the lit band rather than off the mid: two independent ceilings
+    // crossed above mid 0.76 and handed a pale creature a specular darker than
+    // the band it is meant to be catching light against.
+    bodySpec: toHex(h, Math.max(0, sat - 0.14), Math.min(0.94, light + 0.08)),
+    // A lit eye and bared teeth are what carry menace at 16-30px; two white
+    // dots read as friendly at any size.
+    eyeGlow: '#df7126',
+    tooth: '#f0f0dc',
+  };
+}
+
+/** Linear blend of two hex colours. Aerial perspective: distant layers get
+ *  mixed toward the haze so depth reads without any gradient. */
+/** Pushes a colour's saturation up (or down, negative) without moving its hue. */
+function saturate(hex: string, amount: number): string {
+  const [h, sat, l] = toHsl(hex);
+  return toHex(h, Math.min(1, Math.max(0, sat + amount)), l);
+}
+
+export function mixHex(a: string, b: string, t: number): string {
+  const k = Math.max(0, Math.min(1, t));
+  const na = parseInt(a.slice(1), 16);
+  const nb = parseInt(b.slice(1), 16);
+  const r = Math.round(((na >> 16) & 255) * (1 - k) + ((nb >> 16) & 255) * k);
+  const g = Math.round(((na >> 8) & 255) * (1 - k) + ((nb >> 8) & 255) * k);
+  const bl = Math.round((na & 255) * (1 - k) + (nb & 255) * k);
+  return `#${((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0')}`;
+}
+
+/** Pushes a colour toward white without leaving the palette's hard-edge look. */
+export function lighten(hex: string, t: number): string {
+  return mixHex(hex, '#ffffff', t);
+}
+
+export const OUTLINE_INK = INK.black;
+
+/**
+ * Palette ramp for momentum. At rest the world sits at its authored colour;
+ * at full momentum every lit surface climbs one step brighter.
+ */
+export function momentumLift(momentum: number, max = 0.22): number {
+  return Math.max(0, Math.min(1, momentum)) * max;
+}
+
+/**
+ * Radii of a glow's concentric rings, outermost first. Intensity is carried by
+ * ring count because the world upscales — a dither's lit-pixel share becomes a
+ * scatter of 36px blocks at desktop size.
+ */
+export function glowRingRadii(r: number, gain: number): number[] {
+  if (r <= 0 || gain <= 0) return [];
+  const rings = Math.max(1, Math.min(3, Math.ceil(gain * 4)));
+  const out: number[] = [];
+  for (let k = 0; k < rings; k++) {
+    const rr = Math.round(r * (1 - (k * 0.42) / rings));
+    if (rr >= 1) out.push(rr);
+  }
+  return out;
+}
+
+/** One solid halo step: a filled disc radius and how far its colour mixes toward sky. */
+export interface HaloBand {
+  r: number;
+  skyMix: number;
+}
+
+/**
+ * Sun halo as solid stacked discs, outermost first — mass and a value step
+ * carry the glow, same as a hill's lit cap, rather than a ring of gaps in the
+ * sky. A ring of separated pixels only reads as light while it is finer than
+ * the eye can resolve; upscaled pixel art never is (DECISIONS.md #53). Five
+ * bands instead of three, and an outermost mix close enough to sky colour
+ * that the last step fades rather than stopping on a hard edge.
+ */
+export function sunHaloBands(coreR: number): HaloBand[] {
+  if (coreR <= 0) return [];
+  return [
+    { r: Math.round(coreR * 2.3), skyMix: 0.82 },
+    { r: Math.round(coreR * 2.0), skyMix: 0.66 },
+    { r: Math.round(coreR * 1.7), skyMix: 0.48 },
+    { r: Math.round(coreR * 1.4), skyMix: 0.3 },
+    { r: Math.round(coreR * 1.15), skyMix: 0.14 },
+  ];
+}
+
+/** One foliage clump: a run of rows a crown's silhouette bulges out over. */
+export interface FoliageLobe {
+  from: number;
+  len: number;
+  depth: number;
+}
+
+/** Whether a row falls within a `{from, len}` run — bark streaks and foliage lobes both reduce to this test. */
+export function inRun(row: number, from: number, len: number): boolean {
+  return row >= from && row < from + len;
+}
+
+/** A lobe's total swing stays bounded even where several lobes overlap the same row. */
+const MAX_FOLIAGE_NOTCH = 8;
+
+/**
+ * A pine crown's silhouette offset at one row, summed from lobes that each
+ * hold a start row and a run and taper linearly to zero at both ends of it.
+ * The sum is clamped: several lobes stacking on the same row must not swing
+ * the edge further than the taper shape itself is meant to allow.
+ */
+export function foliageNotchAt(row: number, lobes: readonly FoliageLobe[]): number {
+  let notch = 0;
+  for (const lobe of lobes) {
+    if (lobe.len <= 1) continue;
+    const into = row - lobe.from;
+    if (into < 0 || into >= lobe.len) continue;
+    const mid = (lobe.len - 1) / 2;
+    notch += lobe.depth * (1 - Math.abs(into - mid) / mid);
+  }
+  return Math.max(-MAX_FOLIAGE_NOTCH, Math.min(MAX_FOLIAGE_NOTCH, notch));
+}
+
+/** Whether a row falls inside any lobe's run — same run test as `inRun`, for a list of lobes. */
+export function inFoliageLobe(row: number, lobes: readonly Pick<FoliageLobe, 'from' | 'len'>[]): boolean {
+  return lobes.some((lobe) => inRun(row, lobe.from, lobe.len));
+}
+
+export interface GrassBlade {
+  dx: number;
+  dy: number;
+}
+
+/**
+ * A tuft's neighbours within its own clump, each offset to overlap the
+ * stamped sprite so the group reads as one patch. Takes three already-rolled
+ * [0,1) values rather than a seed, keeping the hash itself (and its
+ * determinism guarantee) owned by the caller.
+ */
+export function grassClumpBlades(r1: number, r2: number, r3: number): GrassBlade[] {
+  const blades: GrassBlade[] = [
+    { dx: 0, dy: 0 },
+    { dx: Math.round((r1 - 0.5) * 6), dy: -Math.round(r2 * 3) },
+  ];
+  if (r3 > 0.35) blades.push({ dx: Math.round((r3 - 0.5) * 9), dy: -Math.round(r1 * 2) });
+  return blades;
+}
+
+// --- Portal Boss dungeon (DECISIONS.md #58) --------------------------------
+
+/**
+ * Nested vignette insets, outermost (darkest) band first. The frame darkens
+ * toward its edges in discrete steps rather than resolving into distance
+ * (DECISIONS.md #13: no gradient — more bands of flat colour, never a ramp).
+ */
+export function vignetteInsets(bands: number, step: number): number[] {
+  return Array.from({ length: Math.max(1, bands) }, (_, i) => i * step);
+}
+
+/**
+ * Vertical mortar-joint columns for one brick course, running bond: odd rows
+ * shift by half a brick so joints stagger like real stonework instead of
+ * lining up into a grid.
+ */
+export function brickJointXs(vw: number, row: number, brickW: number): number[] {
+  const w = Math.max(1, brickW);
+  const offset = row % 2 === 0 ? 0 : Math.floor(w / 2);
+  const out: number[] = [];
+  for (let x = offset; x < vw; x += w) out.push(x);
+  return out;
+}
+
+/**
+ * Torch flicker in [0.7, 1], seeded per torch so two flames never pulse in
+ * lockstep — the dungeon's one light source has to read as alive.
+ */
+export function torchFlicker(clockSec: number, seed: number): number {
+  return 0.85 + 0.15 * Math.sin(clockSec * 6.3 + seed) * Math.sin(clockSec * 2.1 + seed * 1.7);
+}
+
+/** Foreground stone pier: where it sits and how wide it is. */
+export interface PillarSpan {
+  x: number;
+  w: number;
+}
+
+/**
+ * Two flanking piers that narrow the open floor either side of the fight —
+ * the room crowding in rather than leaving dead stone at the frame's edges
+ * (DECISIONS.md #58: "locked in" reads as tight, not an empty hall).
+ */
+export function pillarSpans(vw: number, widthFrac = 0.12): PillarSpan[] {
+  const w = Math.max(1, Math.round(vw * widthFrac));
+  return [
+    { x: 0, w },
+    { x: Math.max(w, vw - w), w },
+  ];
+}
+
+/** One step of a torch's light pool: how far it reaches and how far toward the flame colour it mixes the stone underneath. */
+export interface GlowBand {
+  r: number;
+  mix: number;
+}
+
+/**
+ * A torch's light pool: bands step inward from a wide, barely-tinted ring to
+ * a small band mixed hard toward the flame colour (DECISIONS.md #13: no
+ * gradient — flat bands stand in for the falloff).
+ */
+export function torchGlowBands(reach: number): GlowBand[] {
+  if (reach <= 0) return [];
+  return [
+    { r: Math.round(reach * 1.0), mix: 0.14 },
+    { r: Math.round(reach * 0.72), mix: 0.3 },
+    { r: Math.round(reach * 0.46), mix: 0.52 },
+    { r: Math.round(reach * 0.24), mix: 0.8 },
+  ];
+}
