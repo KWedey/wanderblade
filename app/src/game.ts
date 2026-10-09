@@ -352,7 +352,7 @@ export class Game {
     this.renderAll();
   }
 
-  /** Forfeit nothing but the walk back: the guardian keeps its wounds. */
+  /** Walk away from the fight: the Road build stays, the guardian heals to full (DESIGN.md §Abandonment). */
   abandonBoss(): void {
     const { abandoned, events } = coreAbandonBoss(this.state);
     this.ingestEvents(events);

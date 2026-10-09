@@ -103,7 +103,7 @@ try {
     await enter.click();
     steps.push('entered the portal');
 
-    // The guardian never resets and has no failure timer, so the only way out is
+    // The guardian never heals mid-fight and has no failure timer, so the only way out is
     // through: strike until the realm name changes, which is what ascension does.
     // The guardian is designed to take minutes (core's bossBand(realm): 3-6 in
     // realm 0, 15-90 from realm 5), so waiting for it to die is not a check, it

@@ -336,7 +336,7 @@ function template(dev: boolean): string {
       <button class="portal-btn" type="button" data-role="enter-portal">Enter the Portal</button>
 
       <div class="boss-live" data-role="boss-live" hidden>
-        <p class="boss-hint">Strike to drive the blade faster. The guardian never resets.</p>
+        <p class="boss-hint">Strike to drive the blade faster. Its wounds hold until you abandon.</p>
         <button class="abandon-btn" type="button" data-role="abandon">
           <span class="abandon-fill" data-role="abandon-fill"></span>
           <span class="abandon-label">Hold to abandon</span>
