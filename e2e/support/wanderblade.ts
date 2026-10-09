@@ -32,6 +32,7 @@ export class Wanderblade {
   readonly log: Locator;
   readonly gear: Locator;
 
+  readonly upgrades: Locator;
   readonly heroLevel: Locator;
   readonly bestValue: Locator;
 
@@ -67,6 +68,7 @@ export class Wanderblade {
     this.log = panel(page, 'On the Road').getByRole('listitem');
     this.gear = panel(page, 'Gear');
 
+    this.upgrades = panel(page, 'Upgrades').getByRole('button');
     this.heroLevel = page.getByRole('button', { name: /^Hero Lv \d+/ });
     this.bestValue = page.getByRole('button', { name: /^Best value/ });
 
@@ -218,7 +220,7 @@ export class Wanderblade {
     while (await this.bestValue.isVisible()) {
       await this.bestValue.click();
       bought += 1;
-      if (bought > 500) throw new Error('Best value never ran out of affordable rows');
+      if (bought > 100) throw new Error('Best value still showing after 100 purchases');
     }
     return bought;
   }

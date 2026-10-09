@@ -64,6 +64,25 @@ test('the Best value card buys the row it names', async ({ game }) => {
   await expect(game.skill('Cleave')).toContainText('Level 1');
 });
 
+test('the Best value card is hidden while nothing is affordable', async ({ game }) => {
+  await game.start({ seed: 7 });
+  await expect(game.heroLevel).toBeDisabled();
+
+  await expect(game.bestValue).toBeHidden();
+});
+
+test('spending down to the last affordable row takes the Best value card away', async ({
+  game,
+}) => {
+  await game.start({ stage: 'mid', seed: 7 });
+  await expect(game.bestValue).toBeVisible();
+
+  await game.spendGold();
+
+  await expect(game.bestValue).toBeHidden();
+  for (const row of await game.upgrades.all()) await expect(row).toBeDisabled();
+});
+
 test('gear drops from kills and fills the empty slots', async ({ game }) => {
   await game.start({ seed: 7 });
   for (const slot of ['weapon', 'armor', 'trinket'] as const) {
