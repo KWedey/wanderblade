@@ -47,9 +47,21 @@ export const test = base.extend<Fixtures>({
   },
 
   secondGame: async (
-    { browser, baseURL, viewport, hasTouch, isMobile, deviceScaleFactor, userAgent, pageErrors },
+    {
+      browser,
+      baseURL,
+      viewport,
+      hasTouch,
+      isMobile,
+      deviceScaleFactor,
+      userAgent,
+      locale,
+      timezoneId,
+      pageErrors,
+    },
     use,
   ) => {
+    // Everything `game` gets from the project, or the two runs differ in more than their save.
     const context = await browser.newContext({
       baseURL,
       viewport,
@@ -57,6 +69,8 @@ export const test = base.extend<Fixtures>({
       isMobile,
       deviceScaleFactor,
       userAgent,
+      locale,
+      timezoneId,
     });
     const page = await context.newPage();
     collectErrors(page, pageErrors);
