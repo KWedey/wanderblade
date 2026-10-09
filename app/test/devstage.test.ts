@@ -8,7 +8,13 @@ import {
   zonesForRealm,
 } from '@wanderblade/core';
 
-import { spendDown, STAGE_PRESETS, stageFromQuery, stageState } from '../src/devstage';
+import {
+  seedFromQuery,
+  spendDown,
+  STAGE_PRESETS,
+  stageFromQuery,
+  stageState,
+} from '../src/devstage';
 import { readSave, writeSave } from '../src/save';
 import { installMemoryStorage } from './helpers/memory-storage';
 
@@ -91,6 +97,23 @@ describe('stageFromQuery', () => {
 
   it('exposes a late preset that is longer than mid', () => {
     expect(STAGE_PRESETS['late']!.totalSec).toBeGreaterThan(STAGE_PRESETS['mid']!.totalSec);
+  });
+});
+
+describe('seedFromQuery', () => {
+  it('reads a seed without a stage, so a fresh run can repeat', () => {
+    expect(seedFromQuery('?seed=7')).toBe(7);
+    expect(seedFromQuery('?stage=mid&seed=11')).toBe(11);
+  });
+
+  it('floors a fractional seed', () => {
+    expect(seedFromQuery('?seed=7.9')).toBe(7);
+  });
+
+  it('returns null when there is no usable seed', () => {
+    for (const search of ['', '?seed=', '?seed=abc', '?seed=0', '?seed=-3', '?seed=Infinity']) {
+      expect(seedFromQuery(search), search).toBeNull();
+    }
   });
 });
 
