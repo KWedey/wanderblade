@@ -33,6 +33,10 @@ wb_probe*.ts
 # and the names collide.
 *.log
 
+# Playwright output; CI uploads the report as an artifact
+playwright-report/
+test-results/
+
 # gate logs written by agents working in this checkout
 .gate/
 TASKS.md

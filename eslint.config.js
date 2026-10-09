@@ -57,6 +57,8 @@ export default tseslint.config(
       'wb_probe*.ts',
       '*.probe.ts',
       'app/public/**',
+      'playwright-report/**',
+      'test-results/**',
     ],
   },
 
@@ -66,7 +68,14 @@ export default tseslint.config(
   {
     languageOptions: {
       parserOptions: {
-        projectService: { allowDefaultProject: ['eslint.config.js', 'vitest.config.ts'] },
+        projectService: {
+          allowDefaultProject: [
+            'eslint.config.js',
+            'vitest.config.ts',
+            'playwright.config.ts',
+            'app/vite.config.ts',
+          ],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -124,11 +133,12 @@ export default tseslint.config(
     extends: [tseslint.configs.disableTypeChecked],
   },
 
-  // QA scripts under tools/ are Node programs that drive a browser against the
-  // built app. Neither invariant this file guards can reach them, and they carry
-  // no types, so the type-checked ruleset only reports the absence of types.
+  // QA scripts under tools/ (and e2e's Docker runner) are Node programs that
+  // drive a browser against the built app. Neither invariant this file guards can
+  // reach them, and they carry no types, so the type-checked ruleset only reports
+  // the absence of types.
   {
-    files: ['tools/**/*.mjs'],
+    files: ['tools/**/*.mjs', 'e2e/**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       globals: { console: 'readonly', process: 'readonly', fetch: 'readonly' },

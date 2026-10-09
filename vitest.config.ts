@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
@@ -12,5 +12,7 @@ export default defineConfig({
     // test passes and `verify` still exits 1. Here rather than in the npm script
     // so `npm test -- --maxWorkers=N` can still override it.
     maxWorkers: '50%',
+    // e2e/ is Playwright's: its specs need a browser and the dev server.
+    exclude: [...configDefaults.exclude, 'e2e/**'],
   },
 });

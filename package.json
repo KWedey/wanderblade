@@ -11,14 +11,17 @@
     "app"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p sim && tsc --noEmit -p app",
+    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p sim && tsc --noEmit -p app && tsc --noEmit -p e2e",
     "lint": "eslint .",
     "verify": "npm run lint && npm run typecheck && npm test",
     "test": "vitest run --exclude '**/node_modules/**' --exclude '**/.worktrees/**'",
     "sim": "npm run -w sim start --",
     "thumb": "npm run -w sim thumb --",
     "dev": "npm run -w app dev",
+    "e2e": "playwright test",
+    "e2e:docker": "node e2e/docker.mjs",
     "build": "npm run -w app build",
+    "build:pages": "npm run -w app build:pages",
     "qa:capture": "node tools/qa/capture.mjs",
     "qa:pixels": "node tools/qa/pixels.mjs",
     "qa:speckle": "node tools/qa/speckle.mjs",
@@ -31,14 +34,15 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.63.0",
     "@types/node": "^22.20.1",
     "eslint": "^10.9.1",
     "jsdom": "^29.1.1",
+    "playwright": "1.63.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.68.0",
     "vite": "^6.0.0",
-    "vitest": "^3.0.0",
-    "playwright": "^1.58.2"
+    "vitest": "^3.0.0"
   }
 }
