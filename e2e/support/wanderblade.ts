@@ -236,10 +236,20 @@ export class Wanderblade {
   async holdAbandon(ms: number): Promise<void> {
     const box = await this.abandon.boundingBox();
     if (!box) throw new Error('the Abandon button has no box');
-    await this.page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await this.page.mouse.down();
+    const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+    if (!this.touch) {
+      await this.page.mouse.move(x, y);
+      await this.page.mouse.down();
+      await this.play(ms);
+      await this.page.mouse.up();
+      return;
+    }
+    // A phone holds with a thumb, and Playwright's touchscreen can only tap.
+    const cdp = await this.page.context().newCDPSession(this.page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
     await this.play(ms);
-    await this.page.mouse.up();
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await cdp.detach();
   }
 
   /** The panel's own estimate of the fight, in seconds. */

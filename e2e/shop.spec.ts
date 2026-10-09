@@ -40,10 +40,11 @@ test('a row that is not yet affordable says when, and is affordable by then', as
 test('a locked skill names the hero level that unlocks it', async ({ game }) => {
   await game.start({ seed: 7 });
   const riposte = game.skill('Riposte');
-  await expect(riposte).toContainText('Unlocks at Level 2');
-  await expect(riposte).toBeDisabled();
 
+  // The "Hero Lv N" row buys level N, so the second purchase reaches level 2.
   for (const level of [1, 2]) {
+    await expect(riposte).toContainText('Unlocks at Level 2');
+    await expect(riposte).toBeDisabled();
     await game.playUntilReady(game.heroLevel, { within: 10 * MINUTE });
     await expect(game.heroLevel).toHaveAccessibleName(new RegExp(`^Hero Lv ${level} `));
     await game.heroLevel.click();
