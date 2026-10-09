@@ -18,9 +18,9 @@ const PAGES_PORT = DEV_PORT + 1;
 
 export default defineConfig({
   testDir: 'e2e',
-  // Baselines come only from the Linux image CI runs in (npm run e2e:docker),
-  // so the path carries no platform.
-  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}{ext}',
+  // Pixel text lands a device pixel apart on macOS and Linux. CI compares the
+  // -linux baselines, made in its own image by `npm run e2e:docker`.
+  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}-{platform}{ext}',
   fullyParallel: true,
   forbidOnly: CI,
   // The clock is fake and every run is seeded: a retry could only hide a flake.
