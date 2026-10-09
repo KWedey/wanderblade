@@ -122,21 +122,35 @@ export class Wanderblade {
   }
 
   /**
-   * Play until `target` shows, `step` at a time, and fail if it has not
-   * shown by `within`. The bound is the assertion: a road that never opens
-   * its portal, or a fight that outlasts its own ETA, fails here.
+   * Play `step` at a time until `target` is visible and enabled. The bound is
+   * the assertion: a portal that never opens, or a fight that outlasts its own
+   * ETA, fails here rather than in a timeout.
    */
-  async playUntilVisible(
+  async playUntilReady(
     target: Locator,
     { within, step = LIVE_STEP }: { within: number; step?: number },
   ): Promise<void> {
     for (let elapsed = 0; elapsed < within; elapsed += step) {
-      if (await target.isVisible()) return;
+      if ((await target.isVisible()) && (await target.isEnabled())) return;
       await (step >= LIVE_STEP ? this.playFast(step) : this.play(step));
     }
-    await expect(target, `still hidden after ${within / SECOND}s of game time`).toBeVisible({
-      timeout: 1,
-    });
+    const why = `not ready after ${within / SECOND}s of game time`;
+    await expect(target, why).toBeVisible({ timeout: 1 });
+    await expect(target, why).toBeEnabled({ timeout: 1 });
+  }
+
+  // --- Readouts ----------------------------------------------------------
+
+  /** A HUD or panel number, e.g. "5.42K" or "+117/s". */
+  async amount(readout: Locator): Promise<number> {
+    return parseAmount(await readout.textContent());
+  }
+
+  /** What a shop row costs: the "5.42K G" its button ends with. */
+  async price(row: Locator): Promise<number> {
+    const cost = /([\d.,]+[A-Za-z]*) G\s*$/.exec((await row.textContent()) ?? '');
+    if (!cost?.[1]) throw new Error(`${row.toString()} shows no price`);
+    return parseAmount(cost[1]);
   }
 
   // --- Striking ----------------------------------------------------------
@@ -193,6 +207,11 @@ export class Wanderblade {
     return this.page.getByRole('button', { name: new RegExp(`^${name} `) });
   }
 
+  /** A gear slot. They have no role, so this keys on the slot id the markup carries. */
+  gearSlot(slot: 'weapon' | 'armor' | 'trinket'): Locator {
+    return this.gear.locator(`[data-slot="${slot}"]`);
+  }
+
   /** Take the game's own Best value pick until nothing is affordable. */
   async spendGold(): Promise<number> {
     let bought = 0;
@@ -208,7 +227,7 @@ export class Wanderblade {
 
   /** Walk the Road until the portal opens. Realm 0 is tuned to open inside 80 minutes. */
   async walkToPortal(): Promise<void> {
-    await this.playUntilVisible(this.enterPortal, { within: 80 * MINUTE });
+    await this.playUntilReady(this.enterPortal, { within: 80 * MINUTE });
   }
 
   /** Press and hold the Abandon button for `ms` of game time, then let go. */
@@ -219,10 +238,6 @@ export class Wanderblade {
     await this.page.mouse.down();
     await this.play(ms);
     await this.page.mouse.up();
-  }
-
-  async remaining(): Promise<number> {
-    return parseAmount(await this.bossRemaining.textContent());
   }
 
   /** The panel's own estimate of the fight, in seconds. */
