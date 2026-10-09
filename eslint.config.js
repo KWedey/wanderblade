@@ -41,6 +41,7 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
+      '**/dist-pages/**',
       '**/node_modules/**',
       // A git worktree is a second checkout of this repo: linting it double-
       // reports every finding and makes one agent's WIP fail another's gate.

@@ -83,7 +83,7 @@ npm run e2e:docker                # in CI's Linux image (needs Docker)
 npm run e2e:docker -- --update-snapshots   # refresh the -linux screenshot baselines
 ```
 
-CI runs the suite on every pull request in the pinned Playwright image and uploads the HTML report as the `playwright-report` artifact. On every push to `feat/m1r-integration`, the Pages workflow runs it again and deploys the game with that report.
+CI runs the suite on every pull request in the pinned Playwright image and uploads the HTML report as the `playwright-report` artifact. On a push to `feat/m1r-integration`, a run that passes every job also deploys the game with that report.
 
 ## Layout
 
