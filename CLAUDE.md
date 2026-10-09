@@ -16,7 +16,10 @@ npm install
 npm run dev                  # Vite dev server at http://localhost:5173
 npm run dev -- --host        # expose on LAN for phone testing
 npm run build                # production build of app/
+npm run build:pages          # the same build under /wanderblade/, as GitHub Pages serves it
 npm run verify               # THE GATE: lint + typecheck + test
+npm run e2e                  # Playwright e2e: desktop Chromium, Pixel 7, and the Pages build
+npm run e2e:docker           # the same suite in CI's Linux image; `-- --update-snapshots` refreshes -linux baselines
 npm test                     # vitest across all workspaces; sim/test/gate.test.ts runs a 3-day sim and asserts ALL PASS
 npm run typecheck            # tsc --noEmit over core, sim, and app
 npm run lint                 # eslint (type-aware); --fix for the autofixable ones
@@ -26,7 +29,9 @@ npm run sim -- --help        # full flag list
 npm run thumb                # headless thumb model: catch rate vs latency and aim (ADR #43, #47)
 ```
 
-CI (`.github/workflows/ci.yml`) runs `npm run verify`, `npm run build`, and a 3-day sim that must print ALL PASS.
+CI (`.github/workflows/ci.yml`) runs `npm run verify`, `npm run build`, a 3-day sim that must print ALL PASS, and the e2e suite (`e2e.yml`, in the Playwright image pinned to `@playwright/test`). `pages.yml` deploys the Pages build with that run's report at `/report/` on every push to `feat/m1r-integration`.
+
+E2E specs (`e2e/`) drive the game through `e2e/support/wanderblade.ts` on Playwright's fake clock, frozen at boot, with seeded runs. Screenshot baselines are per platform; CI compares the `-linux` ones.
 
 QA tools (`tools/qa/`, each takes `--help`; all need a dev server and print the
 port they used, defaulting to 5173 or `$WB_QA_PORT`):
