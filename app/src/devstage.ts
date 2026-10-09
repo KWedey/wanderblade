@@ -100,7 +100,11 @@ export function stageFromQuery(search: string): GameState | null {
   if (!name) return null;
   const preset = STAGE_PRESETS[name];
   if (!preset) return null;
-  const rawSeed = Number(params.get('seed'));
-  const seed = Number.isFinite(rawSeed) && rawSeed > 0 ? Math.floor(rawSeed) : 20260825;
-  return stageState({ ...preset, seed });
+  return stageState({ ...preset, seed: seedFromQuery(search) ?? 20260825 });
+}
+
+/** `?seed=7` as a run seed, or null when it is absent or not a positive number. */
+export function seedFromQuery(search: string): number | null {
+  const raw = Number(new URLSearchParams(search).get('seed'));
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : null;
 }

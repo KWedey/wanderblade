@@ -36,7 +36,7 @@ import {
   type GearSlot,
   type Strike,
 } from '@wanderblade/core';
-import { stageFromQuery } from './devstage';
+import { seedFromQuery, stageFromQuery } from './devstage';
 import { createFeel, type Cue } from './feel';
 import { killProgress, smoothStep, zoneSweep } from './anim';
 import { bossName, describeEvent, gearName, regionName, type LogEntry } from './flavor';
@@ -135,7 +135,10 @@ export class Game {
       const elapsedSec = Math.max(0, (Date.now() - loaded.savedAt) / 1000);
       this.applyOfflineReturn(elapsedSec);
     } else {
-      this.state = initialState(randomSeed());
+      // Dev-only, like staging: `?seed=7` makes a fresh run repeatable. A save
+      // still wins, so reloading the same URL continues the run.
+      const seed = import.meta.env.DEV ? seedFromQuery(window.location.search) : null;
+      this.state = initialState(seed ?? randomSeed());
       this.view.pushLog([{ kind: 'info', text: 'The road opens ahead. One blade, one long walk.' }]);
     }
     this.displayGold = this.state.gold;
