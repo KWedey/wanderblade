@@ -166,7 +166,7 @@ export function describeEvent(e: GameEvent): LogEntry | null {
     case 'abandon':
       return {
         kind: 'bossFail',
-        text: `Withdrew from ${bind(bossName(e.realm))} ${bind('—', 'its wounds keep')}`,
+        text: `Withdrew from ${bind(bossName(e.realm))} ${bind('—', 'its wounds close')}`,
       };
     case 'bossVictory':
       return {

@@ -1,5 +1,5 @@
 import { expect, test } from './support/fixtures';
-import { SECOND } from './support/wanderblade';
+import { MINUTE, SECOND } from './support/wanderblade';
 
 // README walkthrough, steps 2-3: the Road reaches its portal, the hero commits
 // to the guardian, and a deliberate hold walks away from it.
@@ -58,4 +58,20 @@ test('a tap on Abandon does nothing; a full hold walks away', async ({ game }) =
   await expect(game.bossHolds).toBeVisible();
   await expect(game.zone).toHaveText('Portal reached');
   await expect(game.enterPortal).toBeVisible();
+});
+
+// DESIGN.md §Abandonment: walking away resets that attempt's guardian HP to full.
+test('abandoning heals the guardian to full, and the game says so', async ({ game }) => {
+  await game.walkToPortal();
+  await game.enterPortal.click();
+  const fullHealth = await game.bossRemaining.textContent();
+  await expect(game.page.getByText('Its wounds hold until you abandon.')).toBeVisible();
+  await game.playFast(MINUTE);
+  await expect(game.bossRemaining).not.toHaveText(fullHealth!);
+
+  await game.holdAbandon(SECOND);
+  await expect(game.log.first()).toContainText('Withdrew from the Greenwood Warden — its wounds close');
+  await game.enterPortal.click();
+
+  await expect(game.bossRemaining).toHaveText(fullHealth!);
 });
