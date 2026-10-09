@@ -4,6 +4,7 @@
 // Linux node_modules live in a named volume: the host's are built for the host.
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -16,6 +17,13 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) {
 }
 const image = `mcr.microsoft.com/playwright:v${version}-noble`;
 const quoted = process.argv.slice(2).map((arg) => `'${arg.replaceAll("'", "'\\''")}'`);
+// One volume per checkout. Shared, two worktrees (or two agents) would `npm ci`
+// into the same node_modules at once, each from its own lockfile.
+const volume = `wanderblade-e2e-node-modules-${createHash('sha256').update(repo).digest('hex').slice(0, 12)}`;
+// Reinstall only when the lockfile changed; under amd64 emulation `npm ci` is most of the run.
+const install =
+  'sum=$(sha256sum package-lock.json); [ "$(cat node_modules/.e2e-lock 2>/dev/null)" = "$sum" ] ' +
+  '|| { npm ci --no-audit --no-fund && echo "$sum" > node_modules/.e2e-lock; }';
 
 const { status, error } = spawnSync(
   'docker',
@@ -24,10 +32,10 @@ const { status, error } = spawnSync(
     // CI runs on x86-64; Skia rasterises differently on arm64.
     '--platform', 'linux/amd64',
     '-v', `${repo}:/work`,
-    '-v', 'wanderblade-e2e-node-modules:/work/node_modules',
+    '-v', `${volume}:/work/node_modules`,
     '-w', '/work',
     image,
-    'bash', '-c', `npm ci --no-audit --no-fund && npx playwright test ${quoted.join(' ')}`,
+    'bash', '-c', `${install} && npx playwright test ${quoted.join(' ')}`,
   ],
   { stdio: 'inherit' },
 );
