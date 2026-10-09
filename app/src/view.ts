@@ -390,9 +390,9 @@ function template(dev: boolean): string {
 ${drawerMarkup(dev)}
 
   <div class="recap-overlay asc-overlay" data-role="asc" hidden>
-    <div class="recap-card asc-card">
-      <div class="recap-eyebrow">Ascendancy</div>
-      <div class="recap-sub" data-role="asc-sub">What you keep when the realm ends.</div>
+    <div class="recap-card asc-card" role="dialog" aria-modal="true" aria-labelledby="asc-title" aria-describedby="asc-sub">
+      <div class="recap-eyebrow" id="asc-title">Ascendancy</div>
+      <div class="recap-sub" id="asc-sub" data-role="asc-sub">What you keep when the realm ends.</div>
       <ul class="recap-stats">
         <li><span class="recap-num" data-role="asc-banked">0</span><span>banked to spend</span></li>
         <li><span class="recap-num" data-role="asc-pending">0</span><span>earned this realm</span></li>
@@ -405,9 +405,9 @@ ${drawerMarkup(dev)}
   </div>
 
   <div class="recap-overlay" data-role="recap" hidden>
-    <div class="recap-card">
-      <div class="recap-eyebrow">Back on the Road</div>
-      <div class="recap-sub" data-role="recap-sub">You were away for a while.</div>
+    <div class="recap-card" role="dialog" aria-modal="true" aria-labelledby="recap-title" aria-describedby="recap-sub">
+      <div class="recap-eyebrow" id="recap-title">Back on the Road</div>
+      <div class="recap-sub" id="recap-sub" data-role="recap-sub">You were away for a while.</div>
       <ul class="recap-stats">
         <li><span class="recap-num" data-role="recap-leagues">0</span><span>leagues traveled</span></li>
         <li><span class="recap-num" data-role="recap-kills">0</span><span>monsters felled</span></li>
@@ -716,12 +716,15 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     });
     btn.addEventListener('click', () => handlers.onBuyAscendancyNode(id));
   }
+  const ascCloseBtn = q<HTMLButtonElement>(root, '[data-role="asc-close"]');
   q(root, '[data-role="asc-open"]').addEventListener('click', () => {
     ascOverlay.hidden = false;
     // Closed overlays sit out layout changes, so the tree measures afresh.
     markPixelDirty(ascOverlay);
+    // A modal dialog takes focus, or a keyboard is left on the page behind it.
+    ascCloseBtn.focus();
   });
-  q(root, '[data-role="asc-close"]').addEventListener('click', () => {
+  ascCloseBtn.addEventListener('click', () => {
     ascOverlay.hidden = true;
   });
 
@@ -732,7 +735,8 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
   const recapGold = q(root, '[data-role="recap-gold"]');
   const recapDrops = q(root, '[data-role="recap-drops"]');
   const recapBosses = q(root, '[data-role="recap-bosses"]');
-  q(root, '[data-role="recap-collect"]').addEventListener('click', () => {
+  const recapCollectBtn = q<HTMLButtonElement>(root, '[data-role="recap-collect"]');
+  recapCollectBtn.addEventListener('click', () => {
     recapOverlay.hidden = true;
     handlers.onCollectRecap();
   });
@@ -982,6 +986,7 @@ export function createView(root: HTMLElement, handlers: ViewHandlers): View {
     // Outside .screen, so it needs its own repaint or it keeps a webfont the
     // rest of the product does not use.
     repaintPixelText(recapOverlay);
+    recapCollectBtn.focus();
   }
 
   let dressedRegion = -1;
