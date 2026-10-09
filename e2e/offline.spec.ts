@@ -34,6 +34,13 @@ test.describe('a cold load from the save', () => {
     await expect.poll(() => game.amount(game.gold)).toBeGreaterThan(gold);
   });
 
+  test('keeps Tab inside the card until it is collected', async ({ game }) => {
+    await game.leaveAndReturnAfter(8 * HOUR);
+    await expect(game.recap.getByRole('button', { name: 'Collect & Continue' })).toBeFocused();
+
+    expect(await game.tabStopsOutside(game.recap, 6)).toEqual([]);
+  });
+
   test('under a minute away catches up quietly in the log', async ({ game }) => {
     await game.leaveAndReturnAfter(45 * SECOND);
 
