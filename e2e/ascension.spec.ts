@@ -22,6 +22,18 @@ test.beforeEach(async ({ game }) => {
   await game.start({ stage: 'mid', seed: 7 });
 });
 
+test('the Ascendancy tree opens from the Road and closes again', async ({ game }) => {
+  await game.openAscendancy.click();
+
+  await expect(game.ascendancy).toBeVisible();
+  await expect(game.ascendancy.getByRole('listitem').filter({ hasText: 'realms completed' })).toHaveText(
+    /^0\s*realms completed$/,
+  );
+
+  await game.ascendancy.getByRole('button', { name: 'Back to the Road' }).click();
+  await expect(game.ascendancy).toBeHidden();
+});
+
 test('felling the guardian ascends the realm and resets the run', async ({ game }) => {
   await expect(game.region).toHaveText('Greenwood');
 
@@ -34,4 +46,27 @@ test('felling the guardian ascends the realm and resets the run', async ({ game 
   await expect(game.zone).toHaveText(/^Zone 1\/\d+$/);
   await expect(game.heroLevel).toHaveAccessibleName(/^Hero Lv 1 /);
   await expect(game.gearSlot('weapon')).toContainText('empty');
+});
+
+test('victory banks the pending Ascendancy, and the tree spends it', async ({ game }) => {
+  await expect(game.openAscendancy).toHaveAccessibleName(/^Ascendancy 0 A · \+\d+$/);
+
+  await fellTheGuardian(game);
+  await expect(game.openAscendancy).toHaveAccessibleName(/^Ascendancy [1-9]\d* A$/);
+  await game.openAscendancy.click();
+
+  const tally = (label: string) => game.ascendancy.getByRole('listitem').filter({ hasText: label });
+  await expect(tally('realms completed')).toHaveText(/^1\s*realms completed$/);
+  await expect(tally('gold multiplier')).not.toHaveText(/^1\.00x/);
+  const banked = await game.amount(tally('banked to spend').locator('span').first());
+  expect(banked).toBeGreaterThan(0);
+
+  const edge = game.ascendancy.getByRole('button', { name: /^Wanderer's Edge/ });
+  await expect(edge).toContainText('not yet');
+  await edge.click();
+
+  await expect(edge).toContainText(/rank 1, \d+\.\d\dx/);
+  await expect
+    .poll(() => game.amount(tally('banked to spend').locator('span').first()))
+    .toBeLessThan(banked);
 });
